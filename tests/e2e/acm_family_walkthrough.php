@@ -31,7 +31,10 @@ if (!is_file($envFile)) {
 require $envFile;
 require __DIR__ . '/destructive_guard.php';
 require_once $root . '/acm/autoload.php';
+require_once $root . '/admin/backend/services/GuardianMatchService.php';
+require_once $root . '/admin/backend/services/GuardianService.php';
 
+use App\Services\GuardianService;
 use SSMS\Acm\Accounts\AcmTicketService;
 use SSMS\Acm\Identity\AcmPersonService;
 
@@ -103,6 +106,89 @@ $ticketM = $tickets->create(['person_id' => $personM['id'], 'account_type' => 'm
 $gotM = $tickets->get((int)$ticketM['id']);
 check('G3 guardian-less ticket: empty', [], $gotM['suggestions']);
 
+echo "== G2: link verification ==\n";
+$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, $dbName);
+if ($mysqli->connect_errno) {
+    fwrite(STDERR, "mysqli connect failed: {$mysqli->connect_error}\n");
+    exit(3);
+}
+$mysqli->set_charset('utf8mb4');
+$pdo->exec("INSERT INTO users(username,full_name,role,password_hash,is_active) VALUES('fam_g2_e2e','Fam G2','hr_dept','x',1)");
+$uid2 = (int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO members(full_name_am,student_name,father_name,gender) VALUES('ሰላም ገብረ','ሰላም','ገብረ','male')");
+$mid2 = (int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO guardians(display_name,phone_primary,status) VALUES('አቶ ገብረ','0922000001','active'),('ወሮ ገብረ','0922000002','active')");
+$gid2a = (int)$pdo->query("SELECT id FROM guardians WHERE phone_primary='0922000001'")->fetchColumn();
+$gid2b = (int)$pdo->query("SELECT id FROM guardians WHERE phone_primary='0922000002'")->fetchColumn();
+$_SESSION['admin_id'] = $uid2;
+$_SESSION['admin_username'] = 'fam_g2_e2e';
+GuardianService::linkMember($mysqli, $gid2a, $mid2, 'father', 1, true, true, true);
+$link = $pdo->query("SELECT verified_by, verified_at FROM member_guardians WHERE member_id={$mid2} AND guardian_id={$gid2a}")->fetch();
+check('G2 office link stamped', $uid2, (int)$link['verified_by']);
+check('G2 stamp has timestamp', true, $link['verified_at'] !== null);
+$_SESSION['admin_id'] = 0;
+$pdo->exec("INSERT INTO members(full_name_am,student_name,father_name,gender) VALUES('ጽጌ ገብረ','ጽጌ','ገብረ','female')");
+$mid3 = (int)$pdo->lastInsertId();
+GuardianService::linkMember($mysqli, $gid2a, $mid3, 'other', 1, false);
+$auto = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 derived link stays unverified', null, $auto);
+GuardianService::linkMember($mysqli, $gid2a, $mid2, 'father', 1, true);
+$kept = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid2} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 relink never clears stamp', $uid2, (int)$kept);
+$_SESSION['admin_id'] = $uid2;
+GuardianService::linkMember($mysqli, $gid2a, $mid3, 'other', 1, false, true, true);
+$late = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 office relink stamps', $uid2, (int)$late);
+GuardianService::clearVerification($mysqli, $gid2a, $mid3, $uid2);
+$cleared = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 clear removes stamp, link stays', null, $cleared);
+check('G2 link row survives clear', 1, (int)$pdo->query("SELECT COUNT(*) FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn());
+GuardianService::verifyLink($mysqli, $gid2a, $mid3, $uid2);
+GuardianService::verifyLink($mysqli, $gid2a, $mid3, $uid2);
+$restamped = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 verify re-stamp safe', $uid2, (int)$restamped);
+try {
+    GuardianService::verifyLink($mysqli, $gid2b, $mid3, $uid2);
+    check('G2 verify missing link throws', 'throw', 'no-throw');
+} catch (InvalidArgumentException $e) {
+    check('G2 verify missing link throws', true, true);
+}
+$kids = GuardianService::childrenOf($mysqli, $gid2a, 50);
+$flags = [];
+foreach ($kids as $k) {
+    $flags[(int)$k['id']] = (int)$k['is_verified'];
+}
+check('G2 childrenOf count', 2, count($flags));
+check('G2 childrenOf flag mid2', 1, $flags[$mid2] ?? -1);
+check('G2 childrenOf flag mid3', 1, $flags[$mid3] ?? -1);
+GuardianService::clearVerification($mysqli, $gid2a, $mid3, $uid2);
+$picked = GuardianService::attachFromLegacy($mysqli, $mid3, $gid2a, 'hr');
+check('G2 picked mode', 'picked', $picked['mode']);
+$rePick = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 picked path stamps', $uid2, (int)$rePick);
+/* Grandfather: legacy office row vs legacy system row. */
+$pdo->exec("INSERT INTO member_guardians(member_id,guardian_id,relation,contact_priority,is_primary,created_by,created_at) VALUES({$mid2},{$gid2b},'mother',2,0,{$uid2},'2026-01-05 10:00:00'),({$mid3},{$gid2b},'other',2,0,NULL,'2026-01-05 10:00:00')");
+$sql092 = implode("\n", array_filter(
+    explode("\n", file_get_contents($root . '/sql/092_acm_guardian_link_verification.sql')),
+    fn($line) => !str_starts_with(ltrim($line), '--')
+));
+$pdo->exec($sql092);
+$grand = $pdo->query("SELECT verified_by, verified_at FROM member_guardians WHERE member_id={$mid2} AND guardian_id={$gid2b}")->fetch();
+check('G2 grandfather stamps office row', [$uid2, '2026-01-05 10:00:00'], [(int)$grand['verified_by'], $grand['verified_at']]);
+$sysRow = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid3} AND guardian_id={$gid2b}")->fetchColumn();
+check('G2 system row stays unverified', null, $sysRow);
+$pdo->exec($sql092);
+check('G2 migration re-run safe', 1, (int)$pdo->query("SELECT COUNT(*) FROM member_guardians WHERE member_id={$mid2} AND guardian_id={$gid2b}")->fetchColumn());
+$stats = GuardianService::stats($mysqli);
+check('G2 stats counts unverified', true, $stats['links_unverified'] >= 1);
+/* Merge preserves verification on moved links (loser-only member). */
+$pdo->exec("INSERT INTO members(full_name_am,student_name,father_name,gender) VALUES('ሄኖክ ገብረ','ሄኖክ','ገብረ','male')");
+$mid4 = (int)$pdo->lastInsertId();
+GuardianService::linkMember($mysqli, $gid2b, $mid4, 'other', 1, true, true, true);
+GuardianService::merge($mysqli, $gid2b, $gid2a, $uid2);
+$moved = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid4} AND guardian_id={$gid2a}")->fetchColumn();
+check('G2 merge keeps verified stamp', $uid2, (int)$moved);
+
 echo "== cleanup + residue ==\n";
 try {
     $pdo->exec("DELETE FROM acm_ticket_events WHERE ticket_id IN (" . (int)$ticket['id'] . ',' . (int)$ticketM['id'] . ')');
@@ -115,10 +201,16 @@ try {
     $pdo->exec("DELETE FROM guardians WHERE id IN ({$gidA},{$gidB})");
     $pdo->exec("DELETE FROM members WHERE id={$mid}");
     $pdo->exec("DELETE FROM users WHERE id={$uid}");
+    $pdo->exec("DELETE FROM member_guardians WHERE guardian_id IN ({$gid2a},{$gid2b}) OR member_id IN ({$mid2},{$mid3},{$mid4})");
+    $pdo->exec("DELETE FROM guardian_aliases WHERE guardian_id IN ({$gid2a},{$gid2b})");
+    $pdo->exec("DELETE FROM guardians WHERE id IN ({$gid2a},{$gid2b})");
+    $pdo->exec("DELETE FROM members WHERE id IN ({$mid2},{$mid3},{$mid4})");
+    $pdo->exec("DELETE FROM users WHERE id={$uid2}");
+    $pdo->exec("DELETE FROM activity_logs WHERE action LIKE 'Guardian%' AND (details LIKE 'Member {$mid2}%' OR details LIKE 'Member {$mid3}%' OR details LIKE 'Member {$mid4}%' OR details LIKE 'Guardian {$gid2a}%' OR details LIKE 'Guardian {$gid2b}%')");
     $residue = (int)$pdo->query(
-        "SELECT (SELECT COUNT(*) FROM users WHERE username='fam_e2e')"
-        . "+(SELECT COUNT(*) FROM members WHERE student_name='ሰላም' AND father_name='ተስፋ')"
-        . "+(SELECT COUNT(*) FROM guardians WHERE phone_primary IN ('0911000001','0911000002'))"
+        "SELECT (SELECT COUNT(*) FROM users WHERE username IN ('fam_e2e','fam_g2_e2e'))"
+        . "+(SELECT COUNT(*) FROM members WHERE student_name IN ('ሰላም','ሰላም','ጽጌ','ሄኖክ'))"
+        . "+(SELECT COUNT(*) FROM guardians WHERE phone_primary IN ('0911000001','0911000002','0922000001','0922000002'))"
     )->fetchColumn();
     check('residue zero', 0, $residue);
     echo "  ok    seeded rows removed\n";
