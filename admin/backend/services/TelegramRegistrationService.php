@@ -450,7 +450,7 @@ final class TelegramRegistrationService
         $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id), true);
         $cands = $this->loadCandidateList($session);
         foreach ($cands as $c) {
-            $band = (string)($c['score_band']??($c['band']??''));
+            $band = (string)($c['match_band']??($c['band']??($c['score_band']??'')));
             $score = (int)($c['match_score']??0);
             $cid = (int)($c['id']??0);
             $isHigh = $score >= 70 || in_array($band,['high','very_high','certain'],true);
@@ -566,7 +566,7 @@ final class TelegramRegistrationService
         $cands = $this->loadCandidateList($session);
         $blocked = false;
         foreach ($cands as $c) {
-            $band = (string)($c['score_band']??($c['band']??''));
+            $band = (string)($c['match_band']??($c['band']??($c['score_band']??'')));
             $score = (int)($c['match_score']??0);
             $cid = (int)($c['id']??0);
             $isHigh = $score >= 70 || in_array($band,['high','very_high','certain'],true);
@@ -789,7 +789,7 @@ final class TelegramRegistrationService
     {
         $rows = [];
         $aid=(int)$actor['id'];
-        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,COALESCE(an.value_text,'') member_name FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' WHERE s.bot_user_id=? ORDER BY s.id DESC LIMIT 15");
+        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,s.revision_number,COALESCE(an.value_text,'') member_name,r.decision review_decision,r.session_revision review_revision FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' LEFT JOIN telegram_registration_reviews r ON r.id=(SELECT rr.id FROM telegram_registration_reviews rr WHERE rr.session_id=s.id ORDER BY rr.id DESC LIMIT 1) WHERE s.bot_user_id=? ORDER BY s.id DESC LIMIT 15");
         $q->bind_param('i',$aid); $q->execute(); $res=$q->get_result();
         while ($row = $res->fetch_assoc()) $rows[] = $row;
         $q->close();
@@ -799,6 +799,13 @@ final class TelegramRegistrationService
             $st = match((string)$r['status']) {
                 'submitted'=>'⏳ በማጽደቅ ላይ','approved'=>"✅ ጸድቋል",'cancelled'=>'❌ የተሰረዘ','expired'=>'⌛ ጊዜው ያለፈ','escalated'=>'📨 ለኃላፊ ተልኳል',default=>'📝 በመሥራት ላይ'
             };
+            // A current-revision rejected/duplicate HR verdict is terminal: say so
+            // instead of "in approval". Stale revisions (resubmitted after a
+            // correction) keep the status label.
+            if ((string)$r['status']==='submitted' && (int)($r['review_revision']??0)===(int)($r['revision_number']??0)) {
+                if ((string)($r['review_decision']??'')==='rejected') $st='❌ ውድቅ ተደርጓል';
+                elseif ((string)($r['review_decision']??'')==='duplicate') $st='⛔ ድግግሞሽ ተገኝቷል';
+            }
             $text .= "<b>".$this->esc((string)$r['public_id'])."</b> — {$st}\n";
             if ((string)$r['member_name'] !== '') $text .= "ስም: ".$this->esc((string)$r['member_name'])."\n";
             $text .= "\n";
@@ -1335,7 +1342,7 @@ final class TelegramRegistrationService
         $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id), true);
         $cands = $this->loadCandidateList($session);
         foreach ($cands as $c) {
-            $band = (string)($c['score_band']??($c['band']??''));
+            $band = (string)($c['match_band']??($c['band']??($c['score_band']??'')));
             $score = (int)($c['match_score']??0);
             $cid = (int)($c['id']??0);
             $isHigh = $score >= 70 || in_array($band,['high','very_high','certain'],true);
