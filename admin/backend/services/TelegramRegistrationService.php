@@ -1316,8 +1316,9 @@ final class TelegramRegistrationService
 
     private function mostRecentActiveSession(int $actorId, int $chatId): ?array
     {
-        // Active: any session not in terminal states
-        $s = $this->conn->prepare("SELECT * FROM telegram_registration_sessions WHERE bot_user_id=? AND telegram_chat_id=? AND status NOT IN ('approved','cancelled','expired','failed') AND viewing_menu<>'search_results' ORDER BY id DESC LIMIT 1");
+        // Active: any session not in terminal states. Submitted/escalated drafts belong to
+        // HR now — the officer must be able to start the next registration.
+        $s = $this->conn->prepare("SELECT * FROM telegram_registration_sessions WHERE bot_user_id=? AND telegram_chat_id=? AND status NOT IN ('approved','cancelled','expired','failed','submitted','escalated') AND viewing_menu<>'search_results' ORDER BY id DESC LIMIT 1");
         $s->bind_param('ii',$actorId,$chatId); $s->execute(); $r = $s->get_result()->fetch_assoc() ?: null; $s->close();
         return $r;
     }
