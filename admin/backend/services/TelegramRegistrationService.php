@@ -658,7 +658,7 @@ final class TelegramRegistrationService
                 TelegramKeyboard::reply($rows, true, false));
         }
         $dailyLimit = max(1, min(200, (int)($actor['daily_registration_limit'] ?? 50)));
-        $q = $this->conn->prepare('SELECT COUNT(*) n FROM telegram_registration_sessions WHERE bot_user_id=? AND created_at>=CURRENT_DATE');
+        $q = $this->conn->prepare('SELECT COUNT(*) n FROM telegram_registration_sessions WHERE bot_user_id=? AND created_at>=CURRENT_DATE AND status<>\'failed\'');
         $q->bind_param('i',$actorId); $q->execute(); $used = (int)($q->get_result()->fetch_assoc()['n']??0); $q->close();
         if ($used >= $dailyLimit) {
             $this->audit('telegram', (int)$actor['telegram_user_id'], 'daily_limit_reached','bot_user',$actorId,'denied');
@@ -925,7 +925,7 @@ final class TelegramRegistrationService
         $def = TelegramFormRegistry::definitions()[$fieldKey] ?? [];
         $isFile = ($def['input'] ?? '') === 'file';
         if ($isFile) {
-            return $this->acceptAttachment($chatId, $session, $field, $message);
+            return $this->acceptAttachment($chatId, $session, $field, $message, $fromEdit);
         }
         $text = is_scalar($message['text'] ?? null) ? trim((string)$message['text']) : '';
         if (in_array($text,['⏭️ ዝለል','/skip','skip','ዝለል'],true)) {
@@ -957,6 +957,24 @@ final class TelegramRegistrationService
             return $this->showReview($chatId, $session);
         }
 
+        // HR correction mode (082): work through only the requested keys, then
+        // return to review. Skipped when no correction list is pending; the
+        // duplicate_search detour is bypassed here because refreshDuplicates
+        // above already re-ran and submit-time gates still enforce policy.
+        $corr = json_decode((string)($session['correction_fields']??''), true);
+        if (($session['status']??'')==='collecting' && is_array($corr) && $corr!==[]) {
+            $corr = array_values(array_unique(array_filter($corr, 'is_string')));
+            $corr = array_values(array_filter($corr, fn($k)=>$k!==$fieldKey));
+            $cid=(int)$session['id'];
+            if ($corr===[]) {
+                $this->transition($cid, ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'correction_fields'=>null]);
+            } else {
+                $this->transition($cid, ['current_field_key'=>$corr[0],'correction_fields'=>json_encode($corr, JSON_UNESCAPED_UNICODE)]);
+            }
+            $session = $this->session($cid);
+            return $this->renderSession($chatId, $session);
+        }
+
         // If field is full_name_am, transition to duplicate_search.
         if ($fieldKey === 'full_name_am') {
             $this->transition((int)$session['id'], ['status'=>'duplicate_search','viewing_menu'=>'candidates','current_candidate_index'=>0,'selected_candidate_id'=>null,'identity_verification_decision'=>'undecided']);
@@ -976,7 +994,7 @@ final class TelegramRegistrationService
         return $this->renderSession($chatId, $session);
     }
 
-    private function acceptAttachment(int $chatId, array $session, array $field, array $message): array
+    private function acceptAttachment(int $chatId, array $session, array $field, array $message, bool $fromEdit=false): array
     {
         $file = null;
         if (is_array($message['document']??null)) $file = $message['document'];
@@ -991,8 +1009,24 @@ final class TelegramRegistrationService
             if (is_file($tmp)) @unlink($tmp);
         }
         $this->saveAnswer((int)$session['id'], (string)$field['field_key'], 'ፋይል ተቀምጧል', 'file://'.(string)$field['field_key']);
-        $next = $this->nextFieldAfter($session, (string)$field['field_key']);
         $id=(int)$session['id'];
+        if ($fromEdit) {
+            $this->updateField($id, 'viewing_menu', 'final_review');
+            return $this->showReview($chatId, $this->session($id));
+        }
+        // HR correction mode (082), mirrored from acceptAnswerForField.
+        $corr = json_decode((string)($session['correction_fields']??''), true);
+        if (($session['status']??'')==='collecting' && is_array($corr) && $corr!==[]) {
+            $corr = array_values(array_unique(array_filter($corr, 'is_string')));
+            $corr = array_values(array_filter($corr, fn($k)=>$k!==(string)$field['field_key']));
+            if ($corr===[]) {
+                $this->transition($id, ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'correction_fields'=>null]);
+            } else {
+                $this->transition($id, ['current_field_key'=>$corr[0],'correction_fields'=>json_encode($corr, JSON_UNESCAPED_UNICODE)]);
+            }
+            return $this->renderSession($chatId, $this->session($id));
+        }
+        $next = $this->nextFieldAfter($session, (string)$field['field_key']);
         if (!$next) $this->transition($id,['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null]);
         else $this->transition($id,['current_field_key'=>$next]);
         $session = $this->session($id);
@@ -1594,9 +1628,12 @@ final class TelegramRegistrationService
 
     private function cancelActive(int $actorId): void
     {
-        $q=$this->conn->prepare("SELECT id FROM telegram_registration_sessions WHERE bot_user_id=? AND status NOT IN ('approved','cancelled','expired')");
+        // Only in-flight drafts are cancellable: submitted (with HR), escalated
+        // (needs HR follow-up) and failed search markers must survive /cancel.
+        // Mirrors the active-session exclusion in expireStale/mostRecentActiveSession.
+        $q=$this->conn->prepare("SELECT id FROM telegram_registration_sessions WHERE bot_user_id=? AND status NOT IN ('approved','cancelled','expired','failed','submitted','escalated')");
         $q->bind_param('i',$actorId); $q->execute(); $ids=array_column($q->get_result()->fetch_all(MYSQLI_ASSOC),'id'); $q->close();
-        $s=$this->conn->prepare("UPDATE telegram_registration_sessions SET status='cancelled',viewing_menu='home',lock_version=lock_version+1 WHERE bot_user_id=? AND status NOT IN ('approved','cancelled','expired')");
+        $s=$this->conn->prepare("UPDATE telegram_registration_sessions SET status='cancelled',viewing_menu='home',lock_version=lock_version+1 WHERE bot_user_id=? AND status NOT IN ('approved','cancelled','expired','failed','submitted','escalated')");
         $s->bind_param('i',$actorId); $s->execute(); $s->close();
         $attachments=new TelegramAttachmentService($this->conn);
         foreach($ids as $id) $attachments->cleanupSession((int)$id);
