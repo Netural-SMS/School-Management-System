@@ -10,7 +10,7 @@ final class TelegramFormRegistry
     private const FIELDS = [
         'full_name_am' => ['max'=>150, 'skip'=>false, 'label'=>'ሙሉ ስም', 'script'=>'ethiopic'],
         'baptismal_name' => ['max'=>150, 'skip'=>true, 'label'=>'የክርስትና ስም', 'script'=>'ethiopic'],
-        'gender' => ['max'=>10, 'skip'=>false, 'label'=>'Gender / ጾታ', 'input'=>'choice', 'choices'=>['male'=>'ወንድ / Male','female'=>'ሴት / Female']],
+        'gender' => ['max'=>20, 'skip'=>false, 'label'=>'Gender / ጾታ', 'input'=>'choice', 'choices'=>['male'=>'ወንድ / Male','female'=>'ሴት / Female']],
         'dob_ec' => ['max'=>10, 'skip'=>true, 'label'=>'Ethiopian date of birth / የትውልድ ቀን'],
         'father_name' => ['max'=>150, 'skip'=>false, 'label'=>'የአባት ስም', 'script'=>'ethiopic'],
         'mother_name' => ['max'=>150, 'skip'=>true, 'label'=>'የእናት ስም', 'script'=>'ethiopic'],
@@ -73,6 +73,16 @@ final class TelegramFormRegistry
             throw new InvalidArgumentException('Please enter valid text.');
         }
         $value = trim((string)preg_replace('/\s+/u', ' ', $value));
+        // Closed choice sets match before length: an exact label/key is inherently valid,
+        // so no future label can ever self-reject on max length (gender proved the trap).
+        $choices=self::choices($key);
+        if($choices!==[]){
+            $normalized=null;
+            foreach($choices as $choiceValue=>$label)if($value===(string)$choiceValue||$value===(string)$label){$normalized=(string)$choiceValue;break;}
+            if($key==='gender'&&$normalized===null){$legacy=['ወንድ'=>'male','ሴት'=>'female'];$normalized=$legacy[$value]??null;}
+            if($normalized===null)throw new InvalidArgumentException('Choose one of the available options.');
+            return ['display'=>(string)$choices[$normalized], 'normalized'=>$normalized];
+        }
         $length = function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
         if ($length > (int)self::FIELDS[$key]['max']) {
             throw new InvalidArgumentException('The answer is too long.');
@@ -90,14 +100,6 @@ final class TelegramFormRegistry
             $parts = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
             if (count($parts) < 1) throw new InvalidArgumentException('ያስገቡት ስም ትክክል አይደለም።');
             return ['display'=>$value, 'normalized'=>AmharicIdentityNormalizer::normalize($value)];
-        }
-        $choices=self::choices($key);
-        if($choices!==[]){
-            $normalized=null;
-            foreach($choices as $choiceValue=>$label)if($value===(string)$choiceValue||$value===(string)$label){$normalized=(string)$choiceValue;break;}
-            if($key==='gender'&&$normalized===null){$legacy=['ወንድ'=>'male','ሴት'=>'female'];$normalized=$legacy[$value]??null;}
-            if($normalized===null)throw new InvalidArgumentException('Choose one of the available options.');
-            return ['display'=>(string)$choices[$normalized], 'normalized'=>$normalized];
         }
         if ($key === 'dob_ec') {
             if (!preg_match('/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/', $value, $m)) {
