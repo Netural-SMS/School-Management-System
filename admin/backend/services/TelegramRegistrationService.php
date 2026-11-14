@@ -135,7 +135,9 @@ final class TelegramRegistrationService
                 }
             } catch (\Throwable $ignore) {}
         }
-        return ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId,'text'=>$answerText,'show_alert'=>$answerAlert?'true':'false'];
+        $answer = ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId,'show_alert'=>$answerAlert?'true':'false'];
+        if ($answerText !== '') $answer['text'] = $answerText;
+        return $answer;
     }
 
     // -------------------------------------------------------------------------
@@ -164,6 +166,14 @@ final class TelegramRegistrationService
         // Global text commands
         if ($text === '/start' || $text === '/help') return $this->sendHome($chatId, $actor);
         if (in_array($text,['/cancel','❌ Cancel','❌ ሰርዝ','❌ ስርዝ'], true)) {
+            // Cancelling a member search must not destroy a paused draft:
+            // drop only the search marker and go home (the draft survives
+            // with its resume hint). Plain cancel behaviour is unchanged.
+            $searching = $this->sessionWithMenu((int)$actor['id'], $chatId, 'search_results') !== null;
+            $this->clearInFlight($chatId, $actor);
+            if ($searching && $this->mostRecentActiveSession((int)$actor['id'], $chatId)) {
+                return $this->sendHome($chatId, $actor);
+            }
             $this->cancelActive((int)$actor['id']);
             return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
         }
@@ -175,10 +185,26 @@ final class TelegramRegistrationService
         }
         if ($text === '/resume' || $text === '▶️ ቀጥል' || $text === '▶️ ቀጥል / Resume') {
             $session = $this->mostRecentActiveSession((int)$actor['id'], $chatId);
-            if (!$session) return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'resume_no_draft'), $this->homeKeyboard());
+            if (!$session) {
+                // An escalated draft belongs to no queue HR can act on, so
+                // the officer must be able to take it back: reopen it at
+                // the candidate list instead of stranding it forever.
+                $esc = $this->conn->prepare("SELECT id FROM telegram_registration_sessions WHERE bot_user_id=? AND telegram_chat_id=? AND status='escalated' ORDER BY id DESC LIMIT 1");
+                $aid=(int)$actor['id']; $esc->bind_param('ii',$aid,$chatId); $esc->execute();
+                $escRow = $esc->get_result()->fetch_assoc(); $esc->close();
+                if ($escRow) {
+                    $this->transition((int)$escRow['id'], ['status'=>'duplicate_review','viewing_menu'=>'candidates','current_candidate_index'=>0]);
+                    $this->clearInFlight($chatId, $actor);
+                    $resumed = $this->session((int)$escRow['id']);
+                    if ($resumed) return $this->renderSession($chatId, $resumed);
+                }
+                $this->clearInFlight($chatId, $actor);
+                return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'resume_no_draft'), $this->homeKeyboard());
+            }
+            $this->clearInFlight($chatId, $actor);
             return $this->renderSession($chatId, $session);
         }
-        if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId, $actor);
+        if ($text === '🏠 ዋና ምናሌ' || $text === '/home') { $this->clearInFlight($chatId, $actor); return $this->sendHome($chatId, $actor); }
 
         // Menu text buttons (home) — robust matching using Amharic keyword
         // detection. Telegram may normalize emojis (➕ ↔ +, 🔎 ↔ plain magnifier
@@ -281,12 +307,27 @@ final class TelegramRegistrationService
                 return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
             case 'continue_reg':
                 if (!$session) return ['method'=>'sendMessage'] + $this->sendHome($chatId, $actor);
-                $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am')]);
+                $missing = $this->firstMissingField($session);
+                if ($missing === null) {
+                    // Every enabled field is answered (late re-show from
+                    // review): return to review instead of rewinding.
+                    $this->transition((int)$session['id'], ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'edit_return_to_review'=>0]);
+                } else {
+                    $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$missing,'edit_return_to_review'=>0]);
+                }
                 $session = $this->session((int)$session['id']);
                 return $this->renderSession($chatId, $session, $messageId);
             case 'cand_next':
             case 'cand_prev':
                 if (!$session) return null;
+                $navStatus = (string)($session['status'] ?? '');
+                if ($navStatus === 'identity_verification') {
+                    // "Back to candidates" from the verify screen.
+                    $this->transition((int)$session['id'], ['status'=>'duplicate_review']);
+                } elseif ($navStatus === 'review' || $navStatus === 'final_validation') {
+                    // "Show candidates" from a blocked-submit screen.
+                    $this->transition((int)$session['id'], ['status'=>'duplicate_review','current_candidate_index'=>0]);
+                }
                 $offset = $action==='cand_next' ? 1 : -1;
                 $newIndex = max(0, ((int)($session['current_candidate_index'] ?? 0)) + $offset);
                 $candidates = $this->loadCandidateList($session);
@@ -310,7 +351,15 @@ final class TelegramRegistrationService
                     $this->updateField((int)$session['id'], 'current_candidate_index', $idx+1);
                     $session = $this->session((int)$session['id']);
                 } else {
-                    $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none','selected_candidate_id'=>null]);
+                    // duplicate_state keeps its search value ('possible' /
+                    // 'likely'): the candidates existed even though the
+                    // officer ruled each one a different person.
+                    $missing = $this->firstMissingField($session);
+                    if ($missing === null) {
+                        $this->transition((int)$session['id'], ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'selected_candidate_id'=>null,'edit_return_to_review'=>0]);
+                    } else {
+                        $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$missing,'selected_candidate_id'=>null,'edit_return_to_review'=>0]);
+                    }
                     $session = $this->session((int)$session['id']);
                 }
                 return $this->renderSession($chatId, $session, $messageId);
@@ -332,7 +381,12 @@ final class TelegramRegistrationService
                     $this->transition((int)$session['id'], ['status'=>'duplicate_review','identity_verification_decision'=>'different_person']);
                     $session = $this->session((int)$session['id']);
                 } else {
-                    $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none','selected_candidate_id'=>null,'identity_verification_decision'=>'different_person']);
+                    $missing = $this->firstMissingField($session);
+                    if ($missing === null) {
+                        $this->transition((int)$session['id'], ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'selected_candidate_id'=>null,'identity_verification_decision'=>'different_person','edit_return_to_review'=>0]);
+                    } else {
+                        $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$missing,'selected_candidate_id'=>null,'identity_verification_decision'=>'different_person','edit_return_to_review'=>0]);
+                    }
                     $session = $this->session((int)$session['id']);
                 }
                 return $this->renderSession($chatId, $session, $messageId);
@@ -350,6 +404,7 @@ final class TelegramRegistrationService
                 $sid=(int)$session['id'];
                 $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='escalated',viewing_menu='completed',escalated_at=CURRENT_TIMESTAMP,lock_version=lock_version+1 WHERE id=?");
                 $q->bind_param('i',$sid); $q->execute(); $q->close();
+                $this->audit('telegram', (int)$session['bot_user_id'], 'registration_escalated', 'session', $sid);
                 $s = $this->session((int)$session['id']);
                 return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'escalated',['public_id'=>(string)$s['public_id']]), $this->homeKeyboard());
             case 'pause':
@@ -376,6 +431,13 @@ final class TelegramRegistrationService
     /** Build an editMessageText payload (for callbacks to consume after lock release). */
     private function buildEdit(int $chatId, int $messageId, string $text, ?array $markup): array
     {
+        // Telegram cannot edit a reply keyboard into an existing message
+        // (editMessageText only accepts inline keyboards): a reply markup
+        // here must go out as a fresh message or the API rejects the call
+        // and the pressed button looks dead.
+        if (is_array($markup) && isset($markup['keyboard'])) {
+            return TelegramKeyboard::msg($chatId, $text, $markup);
+        }
         return [
             'method' => 'editMessageText',
             'chat_id' => $chatId,
@@ -645,6 +707,8 @@ final class TelegramRegistrationService
     private function beginNewRegistration(int $chatId, array $actor): array
     {
         $actorId = (int)$actor['id'];
+        // A stale member-search marker must not steal the new draft's input.
+        $this->clearInFlight($chatId, $actor);
         $active = $this->mostRecentActiveSession($actorId, $chatId);
         if ($active !== null) {
             // Show an ACTIONABLE keyboard: ▶️ ቀጥል (resume) and ❌ ሰርዝ (cancel).
@@ -725,7 +789,14 @@ final class TelegramRegistrationService
         try {
             $statement = $this->conn->prepare("SELECT id,version FROM telegram_form_profiles WHERE profile_key=? AND status='published' ORDER BY version DESC LIMIT 1");
             $statement->bind_param('s',$profile); $statement->execute(); $form=$statement->get_result()->fetch_assoc(); $statement->close();
-            if (!$form) throw new \RuntimeException('Form not published.');
+            if (!$form) {
+                // No silent 500: stay in the chooser so another allowed
+                // profile can be picked (or /cancel to leave).
+                $this->conn->rollback();
+                $retry = $this->renderSession($chatId, $session);
+                $retry['text'] = 'የዚህ ዓይነት ምዝገባ ቅጽ አሁን ላይ አልታተመም። ሌላ ዓይነት ይምረጡ ወይም አስተዳዳሪ ያነጋግሩ።' . "\n\n" . (string)($retry['text'] ?? '');
+                return $retry;
+            }
             $id=(int)$session['id']; $formId=(int)$form['id']; $version=(int)$form['version'];
             $q=$this->conn->prepare("UPDATE telegram_registration_sessions SET profile_key=?,form_profile_id=?,form_version=?,status='collecting',viewing_menu='field_edit',current_field_key='full_name_am',lock_version=lock_version+1 WHERE id=? AND status='choosing'");
             $q->bind_param('siis', $profile, $formId, $version, $id); $q->execute(); $q->close();
@@ -755,12 +826,17 @@ final class TelegramRegistrationService
     private function runSearch(int $chatId, array $session, string $query): array
     {
         $query = trim($query);
-        if ($query === '' || in_array($query,['❌ ሰርዝ','/cancel'],true)) {
-            $this->cancelActive((int)$session['bot_user_id']);
-            return $this->sendHome($chatId, $this->actor((int)$session['telegram_user_id'] ?? 0, []));
+        if ($query === '') {
+            // Empty text (e.g. a photo sent while searching): leave search
+            // mode without touching any paused draft. Cancel texts are owned
+            // by the global /cancel handler above, never reach here.
+            $this->clearInFlight($chatId, $this->actorOfSession($session));
+            return $this->sendHome($chatId, $this->actorOfSession($session));
         }
         $rows = [];
-        $q = '%' . $this->conn->real_escape_string($query) . '%';
+        // Prepared statement handles quoting; escape only LIKE wildcards
+        // (backslash is MySQL's default LIKE escape character).
+        $q = '%' . addcslashes($query, '\\%_') . '%';
         // Search by member code or name
         $s = $this->conn->prepare("SELECT id,member_code,student_name,father_name,grandfather_name,baptismal_name,gender,dob_ec_day,dob_ec_month,dob_ec_year,current_section,status,phone_number,mother_name FROM members WHERE (member_code LIKE ? OR student_name LIKE ? OR father_name LIKE ? OR full_name_am LIKE ?) AND status IN ('active','warning') ORDER BY id DESC LIMIT 15");
         $s->bind_param('ssss',$q,$q,$q,$q);
@@ -789,7 +865,7 @@ final class TelegramRegistrationService
     {
         $rows = [];
         $aid=(int)$actor['id'];
-        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,s.revision_number,COALESCE(an.value_text,'') member_name,r.decision review_decision,r.session_revision review_revision FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' LEFT JOIN telegram_registration_reviews r ON r.id=(SELECT rr.id FROM telegram_registration_reviews rr WHERE rr.session_id=s.id ORDER BY rr.id DESC LIMIT 1) WHERE s.bot_user_id=? ORDER BY s.id DESC LIMIT 15");
+        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,s.revision_number,COALESCE(an.value_text,'') member_name,r.decision review_decision,r.session_revision review_revision FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' LEFT JOIN telegram_registration_reviews r ON r.id=(SELECT rr.id FROM telegram_registration_reviews rr WHERE rr.session_id=s.id ORDER BY rr.id DESC LIMIT 1) WHERE s.bot_user_id=? AND s.viewing_menu<>'search_results' ORDER BY s.id DESC LIMIT 15");
         $q->bind_param('i',$aid); $q->execute(); $res=$q->get_result();
         while ($row = $res->fetch_assoc()) $rows[] = $row;
         $q->close();
@@ -946,7 +1022,10 @@ final class TelegramRegistrationService
                     ? $this->validateSection($text, (int)$field['is_required']===1)
                     : TelegramFormRegistry::validate($fieldKey, $text, (int)$field['is_required']===1);
             } catch (InvalidArgumentException $e) {
-                $prompt = TelegramMessageService::get($this->conn, $this->msgKeyForField($fieldKey));
+                // Prefer the live form-builder prompt (always exists) over
+                // the static message key (missing for extended fields).
+                $prompt = (string)($field['prompt_am'] ?? '');
+                if ($prompt === '') $prompt = TelegramMessageService::get($this->conn, $this->msgKeyForField($fieldKey));
                 $msg = TelegramMessageService::get($this->conn,'invalid_input',['error'=>$e->getMessage(),'prompt'=>$prompt]);
                 return TelegramKeyboard::msg($chatId, $msg);
             }
@@ -1003,20 +1082,36 @@ final class TelegramRegistrationService
 
     private function acceptAttachment(int $chatId, array $session, array $field, array $message, bool $fromEdit=false): array
     {
-        $file = null;
-        if (is_array($message['document']??null)) $file = $message['document'];
-        elseif (is_array($message['photo']??null) && $message['photo']!==[]) $file = end($message['photo']);
-        if (!is_array($file) || empty($file['file_id'])) {
-            return TelegramKeyboard::msg($chatId, "ፎቶውን ወይም ሰነዱን ይላኩ።");
-        }
-        $tmp = (new TelegramBotApiService())->downloadFile((string)$file['file_id']);
-        try {
-            (new TelegramAttachmentService($this->conn))->store((int)$session['id'], (string)$field['field_key'], (string)$file['file_id'], (string)$file['file_unique_id'], $tmp);
-        } finally {
-            if (is_file($tmp)) @unlink($tmp);
-        }
-        $this->saveAnswer((int)$session['id'], (string)$field['field_key'], 'ፋይል ተቀምጧል', 'file://'.(string)$field['field_key']);
         $id=(int)$session['id'];
+        $key=(string)$field['field_key'];
+        $text = is_scalar($message['text'] ?? null) ? trim((string)$message['text']) : '';
+        if (in_array($text,['⏭️ ዝለል','/skip','skip','ዝለል'],true)) {
+            if ((int)($field['is_required']??0)===1) {
+                return TelegramKeyboard::msg($chatId, "⚠️ ይህ ጥያቄ አስፈላጊ ነው።");
+            }
+            $this->saveAnswer($id, $key, '', '');
+        } else {
+            $file = null;
+            if (is_array($message['document']??null)) $file = $message['document'];
+            elseif (is_array($message['photo']??null) && $message['photo']!==[]) $file = end($message['photo']);
+            if (!is_array($file) || empty($file['file_id'])) {
+                return TelegramKeyboard::msg($chatId, "ፎቶውን ወይም ሰነዱን ይላኩ።");
+            }
+            try {
+                $tmp = (new TelegramBotApiService())->downloadFile((string)$file['file_id']);
+                try {
+                    (new TelegramAttachmentService($this->conn))->store($id, $key, (string)$file['file_id'], (string)($file['file_unique_id'] ?? ''), $tmp);
+                } finally {
+                    if (is_file($tmp)) @unlink($tmp);
+                }
+            } catch (\Throwable $e) {
+                // Download/validation/storage failures must tell the officer
+                // what happened instead of dying into a silent webhook 500.
+                reportInternalError('Telegram attachment failed', $e);
+                return TelegramKeyboard::msg($chatId, "⚠️ " . $e->getMessage() . "\n\nእባክዎ እንደገና ይሞክሩ።");
+            }
+            $this->saveAnswer($id, $key, 'ፋይል ተቀምጧል', 'file://'.$key);
+        }
         if ($fromEdit) {
             $this->updateField($id, 'viewing_menu', 'final_review');
             return $this->showReview($chatId, $this->session($id));
@@ -1070,8 +1165,14 @@ final class TelegramRegistrationService
         $candidates = $this->loadCandidateList($session);
         $idx = (int)($session['current_candidate_index'] ?? 0);
         if (!$candidates) {
-            // Nothing to review — continue
-            $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none']);
+            // Nothing to review — continue where answers ran out, or back to
+            // review when everything is answered (late re-show).
+            $missing = $this->firstMissingField($session);
+            if ($missing === null) {
+                $this->transition((int)$session['id'], ['status'=>'review','viewing_menu'=>'final_review','current_field_key'=>null,'duplicate_state'=>'none','edit_return_to_review'=>0]);
+            } else {
+                $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$missing,'duplicate_state'=>'none','edit_return_to_review'=>0]);
+            }
             return $this->renderSession($chatId, $this->session((int)$session['id']), $editId);
         }
         if ($idx >= count($candidates)) $idx = count($candidates)-1;
@@ -1235,9 +1336,23 @@ final class TelegramRegistrationService
             $q->bind_param('si', $key, $sid); $q->execute(); $q->close();
             $this->audit('telegram', (int)$session['bot_user_id'], 'field_edit_started', 'session', (int)$session['id']);
             $this->conn->commit();
-        } catch (\Throwable $e) { $this->conn->rollback(); }
-        // Build simple keyboard with skip/back/review/cancel
+        } catch (\Throwable $e) { $this->conn->rollback(); reportInternalError('Telegram field-edit start failed', $e); }
+        // Mirror the collection prompt: choice buttons (gender/section/...)
+        // and the file-attach hint, so officers never face a bare keyboard
+        // in edit mode.
+        $def = TelegramFormRegistry::definitions()[$key] ?? [];
         $buttons = [];
+        $choices = $key === 'current_section' ? $this->sectionOptions() : TelegramFormRegistry::choices($key);
+        if ($choices !== []) {
+            $row = []; $i = 0;
+            foreach ($choices as $val => $lab) {
+                $row[] = ['text' => $lab]; $i++;
+                if ($i % 2 === 0) { $buttons[] = $row; $row = []; }
+            }
+            if ($row !== []) $buttons[] = $row;
+        } elseif (($def['input'] ?? '') === 'file') {
+            $buttons[] = [['text'=>'📎 ፋይል ለመላክ ተጫን']];
+        }
         if ((int)($field['is_required']??0)!==1) $buttons[] = [['text'=>'⏭️ ዝለል']];
         $buttons[] = [['text'=>'↩️ ወደ ማጠቃለያ']];
         $buttons[] = [['text'=>'❌ ሰርዝ']];
@@ -1291,7 +1406,7 @@ final class TelegramRegistrationService
         // Re-show candidates
         if (str_contains($text,'እጮች') || str_contains($text,'cand')) {
             $this->updateField((int)$session['id'],'current_candidate_index',0);
-            $this->transition((int)$session['id'],['status'=>'duplicate_review']);
+            $this->transition((int)$session['id'],['status'=>'duplicate_review','selected_candidate_id'=>null]);
             return $this->renderSession($chatId, $this->session((int)$session['id']));
         }
         // Edit a specific field (✏️ prefix) — prefix match so any field label works.
@@ -1513,7 +1628,14 @@ final class TelegramRegistrationService
     private function sectionOptions(): array
     {
         $opts = [];
-        $r = $this->conn->query("SELECT class_name,class_name_en FROM classes WHERE is_active=1 ORDER BY level_order,class_name,id LIMIT 50");
+        try {
+            $r = $this->conn->query("SELECT class_name,class_name_en FROM classes WHERE is_active=1 ORDER BY level_order,class_name,id LIMIT 50");
+        } catch (\Throwable $e) {
+            // Partial schema (no classes table): no section choices rather
+            // than a webhook-wide 500. Section answers then fail closed in
+            // validateSection until the school tables exist.
+            return [];
+        }
         if ($r) while ($row = $r->fetch_assoc()) {
             $v = trim((string)$row['class_name']); if ($v==='') continue;
             $en = trim((string)($row['class_name_en']??''));
@@ -1545,6 +1667,26 @@ final class TelegramRegistrationService
     }
 
     private function nextFieldAfter(array $session, string $key): ?string { return $this->nextFieldKey($session, $key); }
+
+    /** First enabled field with no stored answer row (answered and skipped
+     *  fields both have rows and count as done). Null when every enabled
+     *  field already has an answer. */
+    private function firstMissingField(array $session): ?string
+    {
+        $fields = $this->enabledFields((int)($session['form_profile_id']??0));
+        if ($fields === []) return null;
+        $answered = [];
+        $sid=(int)$session['id'];
+        $q = $this->conn->prepare('SELECT field_key FROM telegram_registration_answers WHERE session_id=?');
+        $q->bind_param('i',$sid); $q->execute(); $res=$q->get_result();
+        while ($row=$res->fetch_assoc()) $answered[(string)$row['field_key']]=true;
+        $q->close();
+        foreach ($fields as $f) {
+            $k = (string)($f['field_key'] ?? '');
+            if ($k !== '' && !isset($answered[$k])) return $k;
+        }
+        return null;
+    }
 
     private function previousField(array $session, string $key): ?string
     {

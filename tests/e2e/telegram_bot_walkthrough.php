@@ -472,8 +472,9 @@ check('T1 old audit pruned', true, $counts['audit_deleted'] >= 1);
 check('T1 expired status set', 'expired', one("SELECT status FROM telegram_registration_sessions WHERE id={$expId}")['status']);
 check('T1 old session gone', null, one("SELECT id FROM telegram_registration_sessions WHERE id={$oldId}"));
 check('T1 old answers gone', 0, (int)one("SELECT COUNT(*) n FROM telegram_registration_answers WHERE session_id={$oldId}")['n']);
-/* Finding F6: retention deletes answers+sessions but never attachment
- * rows or their quarantined files. Document with a throwaway session. */
+/* Finding F6 (fixed in telegram round-3): retention now cleans stale
+ * attachments — the quarantined file is unlinked and the row is tombstoned
+ * ('deleted') instead of leaking both. Verified with a throwaway session. */
 execSql("INSERT INTO telegram_registration_sessions(public_id,bot_user_id,telegram_chat_id,status,expires_at) VALUES('TGRETENTIONATTACH0000001',{$opA},900001,'cancelled',DATE_ADD(NOW(),INTERVAL 1 DAY))");
 $attSess = (int)$mysqli->insert_id;
 @mkdir('/tmp/ssms_private/telegram_quarantine', 0700, true);
@@ -482,8 +483,8 @@ execSql("INSERT INTO telegram_registration_attachments(session_id,field_key,tele
 execSql("UPDATE telegram_registration_sessions SET updated_at='2020-01-01 00:00:00' WHERE id={$attSess}");
 TelegramRetentionService::run($mysqli, 500);
 check('T2 session pruned', null, one("SELECT id FROM telegram_registration_sessions WHERE id={$attSess}"));
-check('T2 attachment ROW orphaned (F6)', 1, (int)one("SELECT COUNT(*) n FROM telegram_registration_attachments WHERE session_id={$attSess}")['n']);
-check('T2 attachment FILE orphaned (F6)', true, is_file('/tmp/ssms_private/telegram_quarantine/' . str_repeat('a', 32) . '.png'));
+check('T2 attachment ROW tombstoned (F6)', 'deleted', one("SELECT status FROM telegram_registration_attachments WHERE session_id={$attSess}")['status']);
+check('T2 attachment FILE cleaned (F6)', false, is_file('/tmp/ssms_private/telegram_quarantine/' . str_repeat('a', 32) . '.png'));
 execSql("DELETE FROM telegram_registration_attachments WHERE session_id={$attSess}");
 @unlink('/tmp/ssms_private/telegram_quarantine/' . str_repeat('a', 32) . '.png');
 

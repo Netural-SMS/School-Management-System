@@ -44,7 +44,7 @@ final class TelegramDuplicateCandidateService
                      AND student_name_norm=? AND ?>0
                   UNION
                   SELECT id FROM members
-                   WHERE student_name_norm=? AND ?>0
+                   WHERE student_name_norm=? AND ?<>''
                   LIMIT {$candidateLimit}
                 ) c ON c.id=m.id
                 LIMIT {$candidateLimit}";
