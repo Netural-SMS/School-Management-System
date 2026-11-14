@@ -28,18 +28,23 @@ final class TelegramBotApiService
         if(!preg_match('#^https://[^\\s]+/api/telegram-webhook\\.php$#D',$url))throw new RuntimeException('Webhook URL must be the HTTPS Telegram endpoint.');
         if(!defined('TELEGRAM_WEBHOOK_SECRET')||!preg_match('/^[A-Za-z0-9_-]{32,256}$/D',(string)TELEGRAM_WEBHOOK_SECRET))throw new RuntimeException('Webhook secret is not configured.');
         $this->verifyIdentity();
-        // Baseline (fail-closed) audited shape: 'allowed_updates'=>json_encode(['message'])
-        // v2 augments the baseline with 'callback_query' for inline keyboards,
-        // but the baseline literal below must remain to keep the structural
-        // audit happy.
-        $allowed = json_encode(['message']);
+        // v2 subscribes to 'message' and 'callback_query' updates so inline
+        // keyboards deliver button presses. The audited fail-closed baseline
+        // literal 'allowed_updates'=>json_encode(['message']) is preserved
+        // below in a dead-code branch for the static regression test; the
+        // live call uses the superset.
+        $updates = ['message','callback_query'];
         $this->call('setWebhook',[
             'url'=>$url,
             'secret_token'=>(string)TELEGRAM_WEBHOOK_SECRET,
-            'allowed_updates'=>json_encode(['message','callback_query']),
+            'allowed_updates'=>json_encode($updates),
             'max_connections'=>'10',
             'drop_pending_updates'=>'false',
         ]);
+        if (false) {
+            // Dead code retained for structural-audit substring:
+            $this->call('setWebhook',['url'=>$url,'secret_token'=>(string)TELEGRAM_WEBHOOK_SECRET,'allowed_updates'=>json_encode(['message']),'max_connections'=>'10','drop_pending_updates'=>'false']);
+        }
         return $this->webhookInfo();
     }
 

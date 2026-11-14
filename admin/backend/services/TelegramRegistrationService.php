@@ -78,7 +78,7 @@ final class TelegramRegistrationService
     /** Handle an inline-keyboard callback query. All outbound edits/messages are
      *  performed directly via the Bot API because the webhook response must be
      *  answerCallbackQuery (one-method-per-response rule). */
-    public function handleCallback(array $callbackQuery): void
+    public function handleCallback(array $callbackQuery): ?array
     {
         $msg = is_array($callbackQuery['message'] ?? null) ? $callbackQuery['message'] : [];
         $chat = is_array($msg['chat'] ?? null) ? $msg['chat'] : [];
@@ -88,30 +88,54 @@ final class TelegramRegistrationService
         $messageId = (int)($msg['message_id'] ?? 0);
         $cbqId = (string)($callbackQuery['id'] ?? '');
         $data = (string)($callbackQuery['data'] ?? '');
-        if ($chatId === 0 || $telegramId === 0) return;
+        if ($chatId === 0 || $telegramId === 0) return ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId];
         $lockName = 'tg-reg-'.hash('sha256',(string)$telegramId);
         $q = $this->conn->prepare('SELECT GET_LOCK(?,2) acquired');
         $q->bind_param('s',$lockName); $q->execute(); $row=$q->get_result()->fetch_assoc(); $q->close();
         if((int)($row['acquired']??0)!==1){
-            try { (new TelegramBotApiService())->answerCallbackQuery($cbqId, TelegramMessageService::get($this->conn,'processing_retry')); } catch (\Throwable $ignore) {}
-            return;
+            return ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId,'text'=>TelegramMessageService::get($this->conn,'processing_retry')];
         }
+        // Plan: run all DB/state work under the lock, capture the reply action
+        // (edit/send/none), then release the lock BEFORE doing the outbound
+        // HTTPS call. This mirrors v1's fast-path pattern and keeps the
+        // critical section short.
+        $reply = null;
+        $answerText = '';
+        $answerAlert = false;
         try {
             $actor = $this->actor($telegramId, $from);
             if (($actor['status'] ?? '') !== 'active' || empty($actor['linked_user_id']) || empty($actor['system_user_active'])) {
-                $api = new TelegramBotApiService();
-                try { $api->answerCallbackQuery($cbqId, '', false); } catch (\Throwable $ignore) {}
-                try { $api->sendMessage($chatId, TelegramMessageService::get($this->conn,'access_denied',[
-                    'telegram_id'=>$telegramId,'pairing_id'=>(int)($actor['id']??0)
-                ])); } catch (\Throwable $ignore) {}
-                return;
+                $this->audit('telegram', $telegramId, 'access_denied', 'bot_user', (int)($actor['id'] ?? 0), 'denied');
+                $reply = TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'access_denied',[
+                    'telegram_id'=>$telegramId, 'pairing_id'=>(int)($actor['id']??0)
+                ]));
+            } else {
+                $this->expireStale((int)$actor['id']);
+                $reply = $this->dispatchCallback($actor, $chatId, $messageId, $data, $cbqId);
             }
-            $this->expireStale((int)$actor['id']);
-            $this->dispatchCallback($actor, $chatId, $messageId, $data, $cbqId);
+        } catch (\Throwable $e) {
+            reportInternalError('Telegram callback failed', $e);
+            $answerText = 'ችግር ተፈጥሯል';
+            $answerAlert = true;
         } finally {
             $q = $this->conn->prepare('SELECT RELEASE_LOCK(?)');
             $q->bind_param('s',$lockName); $q->execute(); $q->close();
         }
+        // Outbound HTTPS happens AFTER the lock is released so the next user
+        // update isn't blocked on a slow network call to Telegram. One
+        // editMessageText per callback is the minimum necessary to support
+        // inline-keyboard pagination/decisions.
+        if (is_array($reply) && isset($reply['method'])) {
+            try {
+                $api = new TelegramBotApiService();
+                if ($reply['method'] === 'editMessageText') {
+                    $api->editMessageText((int)$reply['chat_id'], (int)$reply['message_id'], (string)$reply['text'], $reply['reply_markup'] ?? null);
+                } elseif ($reply['method'] === 'sendMessage') {
+                    $api->sendMessage((int)$reply['chat_id'], (string)$reply['text'], $reply['reply_markup'] ?? null);
+                }
+            } catch (\Throwable $ignore) {}
+        }
+        return ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId,'text'=>$answerText,'show_alert'=>$answerAlert?'true':'false'];
     }
 
     // -------------------------------------------------------------------------
@@ -149,10 +173,13 @@ final class TelegramRegistrationService
             return $this->renderSession($chatId, $session);
         }
 
-        // Menu text buttons (home)
-        if ($text === '➕ አዲስ አባል መመዝገብ' || $text === '/new') return $this->beginNewRegistration($chatId, $actor);
-        if ($text === '🔎 የተመዘገበ አባል መፈለግ' || $text === '/search') return $this->startSearch($chatId, $actor);
-        if ($text === '📋 የእኔ ምዝገባዎች' || $text === '/mine') return $this->listMyRegistrations($chatId, $actor);
+        // Menu text buttons (home) — accept both v1 and v2 labels so users with
+        // cached reply keyboards from before the upgrade don't get stuck.
+        if (in_array($text,['➕ አዲስ አባል መመዝገብ','➕ አዲስ ምዝገባ','➕ New registration'],true) || $text === '/new') {
+            return $this->beginNewRegistration($chatId, $actor);
+        }
+        if (in_array($text,['🔎 የተመዘገበ አባል መፈለግ'],true) || $text === '/search') return $this->startSearch($chatId, $actor);
+        if (in_array($text,['📋 የእኔ ምዝገባዎች'],true) || $text === '/mine') return $this->listMyRegistrations($chatId, $actor);
 
         // If a search is in progress (viewing_menu = search_results), interpret text as search query.
         $searchSession = $this->sessionWithMenu((int)$actor['id'], $chatId, 'search_results');
@@ -190,7 +217,7 @@ final class TelegramRegistrationService
             case 'collecting':
                 $fieldKey = (string)($session['current_field_key'] ?? '');
                 if ($fieldKey === '') return $this->showReview($chatId, $session);
-                if (in_array($text,['✏️ ሌላ መረጃ ማስተካከል'],true)) return $this->showEditMenu($chatId, $session);
+                if (in_array($text,['✏️ ሌላ መረጃ ማስተካከል','✏️ አርም','✏️ Edit'],true)) return $this->showEditMenu($chatId, $session);
                 return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, false);
             case 'review':
             case 'final_validation':
@@ -200,155 +227,228 @@ final class TelegramRegistrationService
         }
     }
 
-    private function dispatchCallback(array $actor, int $chatId, int $messageId, string $data, string $cbqId): void
+    /** Plan an outbound reply to a callback press. Returns a payload array
+     *  with method 'editMessageText' or 'sendMessage' that the caller will
+     *  dispatch via ONE bounded HTTPS call AFTER releasing the advisory lock. */
+    private function dispatchCallback(array $actor, int $chatId, int $messageId, string $data, string $cbqId): ?array
     {
-        $api = new TelegramBotApiService();
         $session = $this->mostRecentActiveSession((int)$actor['id'], $chatId);
-        try {
-            $parts = explode(':', $data, 4);
-            $action = $parts[0] ?? '';
-            $arg1 = $parts[1] ?? '';
-            switch ($action) {
-                case 'home':
-                    $this->clearInFlight($chatId, $actor);
-                    $this->apiSend($api, $chatId, $this->sendHome($chatId, $actor));
-                    return;
-                case 'new':
-                    $this->apiSend($api, $chatId, $this->beginNewRegistration($chatId, $actor));
-                    return;
-                case 'cancel':
-                    if ($session) { $this->cancelActive((int)$actor['id']); }
-                    $this->apiEditOrSend($api, $chatId, $messageId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
-                    return;
-                case 'continue_reg':
-                    if (!$session) { $this->apiSend($api, $chatId, $this->sendHome($chatId, $actor)); return; }
-                    $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am')]);
+        $parts = explode(':', $data, 4);
+        $action = $parts[0] ?? '';
+        $arg1 = $parts[1] ?? '';
+        switch ($action) {
+            case 'home':
+                $this->clearInFlight($chatId, $actor);
+                return ['method'=>'sendMessage'] + $this->sendHome($chatId, $actor);
+            case 'new':
+                return ['method'=>'sendMessage'] + $this->beginNewRegistration($chatId, $actor);
+            case 'cancel':
+                if ($session) { $this->cancelActive((int)$actor['id']); }
+                return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
+            case 'continue_reg':
+                if (!$session) return ['method'=>'sendMessage'] + $this->sendHome($chatId, $actor);
+                $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am')]);
+                $session = $this->session((int)$session['id']);
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'cand_next':
+            case 'cand_prev':
+                if (!$session) return null;
+                $offset = $action==='cand_next' ? 1 : -1;
+                $newIndex = max(0, ((int)($session['current_candidate_index'] ?? 0)) + $offset);
+                $candidates = $this->loadCandidateList($session);
+                if ($newIndex >= count($candidates)) $newIndex = count($candidates)-1;
+                $this->updateField((int)$session['id'], 'current_candidate_index', $newIndex);
+                $session = $this->session((int)$session['id']);
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'cand_verify':
+                if (!$session) return null;
+                $candId = (int)$arg1;
+                $this->updateField((int)$session['id'], 'selected_candidate_id', $candId);
+                $this->transition((int)$session['id'], ['status'=>'identity_verification']);
+                $session = $this->session((int)$session['id']);
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'cand_not_match':
+                if (!$session) return null;
+                $this->recordCandidateDecision($session, (int)$arg1, 'different');
+                $candidates = $this->loadCandidateList($session);
+                $idx = (int)($session['current_candidate_index'] ?? 0);
+                if ($idx+1 < count($candidates)) {
+                    $this->updateField((int)$session['id'], 'current_candidate_index', $idx+1);
                     $session = $this->session((int)$session['id']);
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'cand_next':
-                case 'cand_prev':
-                    if (!$session) return;
-                    $offset = $action==='cand_next' ? 1 : -1;
-                    $newIndex = max(0, ((int)($session['current_candidate_index'] ?? 0)) + $offset);
-                    $candidates = $this->loadCandidateList($session);
-                    if ($newIndex >= count($candidates)) $newIndex = count($candidates)-1;
-                    $this->updateField((int)$session['id'], 'current_candidate_index', $newIndex);
-                    $session = $this->session((int)$session['id']);
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'cand_verify':
-                    if (!$session) return;
-                    $candId = (int)$arg1;
-                    $this->updateField((int)$session['id'], 'selected_candidate_id', $candId);
-                    $this->transition((int)$session['id'], ['status'=>'identity_verification']);
-                    $session = $this->session((int)$session['id']);
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'cand_not_match':
-                    if (!$session) return;
-                    $this->recordCandidateDecision($session, (int)$arg1, 'different');
-                    $candidates = $this->loadCandidateList($session);
-                    $idx = (int)($session['current_candidate_index'] ?? 0);
-                    if ($idx+1 < count($candidates)) {
-                        $this->updateField((int)$session['id'], 'current_candidate_index', $idx+1);
-                        $session = $this->session((int)$session['id']);
-                        $this->renderAndEdit($api, $chatId, $messageId, $session);
-                        return;
-                    }
+                } else {
                     $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none','selected_candidate_id'=>null]);
                     $session = $this->session((int)$session['id']);
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'verify_same':
-                    if (!$session) return;
-                    $candId = (int)$arg1;
-                    $this->recordCandidateDecision($session, $candId, 'same');
-                    $this->transition((int)$session['id'], ['status'=>'cancelled','viewing_menu'=>'completed','selected_candidate_id'=>$candId,'identity_verification_decision'=>'same_person']);
+                }
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'verify_same':
+                if (!$session) return null;
+                $candId = (int)$arg1;
+                $this->recordCandidateDecision($session, $candId, 'same');
+                $this->transition((int)$session['id'], ['status'=>'cancelled','viewing_menu'=>'completed','selected_candidate_id'=>$candId,'identity_verification_decision'=>'same_person']);
+                $session = $this->session((int)$session['id']);
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'verify_different':
+                if (!$session) return null;
+                $candId = (int)($session['selected_candidate_id'] ?? (int)$arg1);
+                $this->recordCandidateDecision($session, $candId, 'different');
+                $candidates = $this->loadCandidateList($session);
+                $idx = (int)($session['current_candidate_index'] ?? 0);
+                if ($idx+1 < count($candidates)) {
+                    $this->updateField((int)$session['id'], 'current_candidate_index', $idx+1);
+                    $this->transition((int)$session['id'], ['status'=>'duplicate_review','identity_verification_decision'=>'different_person']);
                     $session = $this->session((int)$session['id']);
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'verify_different':
-                    if (!$session) return;
-                    $candId = (int)($session['selected_candidate_id'] ?? (int)$arg1);
-                    $this->recordCandidateDecision($session, $candId, 'different');
-                    $candidates = $this->loadCandidateList($session);
-                    $idx = (int)($session['current_candidate_index'] ?? 0);
-                    if ($idx+1 < count($candidates)) {
-                        $this->updateField((int)$session['id'], 'current_candidate_index', $idx+1);
-                        $this->transition((int)$session['id'], ['status'=>'duplicate_review','identity_verification_decision'=>'different_person']);
-                        $session = $this->session((int)$session['id']);
-                    } else {
-                        $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none','selected_candidate_id'=>null,'identity_verification_decision'=>'different_person']);
-                        $session = $this->session((int)$session['id']);
-                    }
-                    $this->renderAndEdit($api, $chatId, $messageId, $session);
-                    return;
-                case 'verify_uncertain':
-                    if (!$session) return;
-                    $this->apiEditOrSend($api, $chatId, $messageId, TelegramMessageService::get($this->conn,'uncertain_prompt'), TelegramKeyboard::inline([
-                        [['🔍 ተጨማሪ መረጃ አወዳድር', 'continue_reg']],
-                        [['📨 ለኃላፊ አቅርብ', 'escalate']],
-                        [['⏸️ ለጊዜው አቆይ', 'pause']],
-                        [['❌ ሰርዝ', 'cancel'],['🏠 ዋና ምናሌ', 'home']],
-                    ]));
-                    $this->updateField((int)$session['id'],'identity_verification_decision','uncertain');
-                    return;
-                case 'escalate':
-                    if (!$session) return;
-                    $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='escalated',viewing_menu='completed',escalated_at=CURRENT_TIMESTAMP,lock_version=lock_version+1 WHERE id=?");
-                    $q->bind_param('i',(int)$session['id']); $q->execute(); $q->close();
-                    $s = $this->session((int)$session['id']);
-                    $this->apiEditOrSend($api, $chatId, $messageId, TelegramMessageService::get($this->conn,'escalated',['public_id'=>(string)$s['public_id']]), $this->homeKeyboard());
-                    return;
-                case 'pause':
-                    if (!$session) return;
-                    $this->updateField((int)$session['id'], 'viewing_menu', 'home');
-                    $this->apiEditOrSend($api, $chatId, $messageId, TelegramMessageService::get($this->conn,'paused'), $this->homeKeyboard());
-                    return;
-                case 'edit_field':
-                    if (!$session) return;
-                    $this->editFieldViaApi($api, $chatId, $messageId, $session, $arg1);
-                    return;
-                case 'edit_back':
-                    if (!$session) return;
-                    $this->showReviewViaApi($api, $chatId, $messageId, $session);
-                    return;
-                case 'submit':
-                    if (!$session) return;
-                    $this->finalizeSubmitViaApi($api, $chatId, $messageId, $session);
-                    return;
-                case 'review_edit':
-                    if (!$session) return;
-                    $this->showEditMenuViaApi($api, $chatId, $messageId, $session);
-                    return;
-            }
-        } catch (\Throwable $e) {
-            try { $api->answerCallbackQuery($cbqId, 'ችግር ተፈጥሯል', true); } catch (\Throwable $ignore) {}
+                } else {
+                    $this->transition((int)$session['id'], ['status'=>'collecting','viewing_menu'=>'field_edit','current_field_key'=>$this->nextFieldKey($session,'full_name_am'),'duplicate_state'=>'none','selected_candidate_id'=>null,'identity_verification_decision'=>'different_person']);
+                    $session = $this->session((int)$session['id']);
+                }
+                return $this->renderSession($chatId, $session, $messageId);
+            case 'verify_uncertain':
+                if (!$session) return null;
+                $this->updateField((int)$session['id'],'identity_verification_decision','uncertain');
+                return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'uncertain_prompt'), TelegramKeyboard::inline([
+                    [['🔍 ተጨማሪ መረጃ አወዳድር', 'continue_reg']],
+                    [['📨 ለኃላፊ አቅርብ', 'escalate']],
+                    [['⏸️ ለጊዜው አቆይ', 'pause']],
+                    [['❌ ሰርዝ', 'cancel'],['🏠 ዋና ምናሌ', 'home']],
+                ]));
+            case 'escalate':
+                if (!$session) return null;
+                $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='escalated',viewing_menu='completed',escalated_at=CURRENT_TIMESTAMP,lock_version=lock_version+1 WHERE id=?");
+                $q->bind_param('i',(int)$session['id']); $q->execute(); $q->close();
+                $s = $this->session((int)$session['id']);
+                return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'escalated',['public_id'=>(string)$s['public_id']]), $this->homeKeyboard());
+            case 'pause':
+                if (!$session) return null;
+                $this->updateField((int)$session['id'], 'viewing_menu', 'home');
+                return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'paused'), $this->homeKeyboard());
+            case 'edit_field':
+                if (!$session) return null;
+                return $this->buildEditFieldPayload($chatId, $messageId, $session, $arg1);
+            case 'edit_back':
+                if (!$session) return null;
+                return $this->buildReviewPayload($chatId, $messageId, $session);
+            case 'submit':
+                if (!$session) return null;
+                return $this->buildFinalizePayload($chatId, $messageId, $session);
+            case 'review_edit':
+                if (!$session) return null;
+                return $this->buildEditMenuPayload($chatId, $messageId, $session);
+            default:
+                return null;
         }
     }
 
-    /** Render the current session state and apply it to the given message (or send new). */
-    private function renderAndEdit(TelegramBotApiService $api, int $chatId, int $messageId, array $session): void
+    /** Build an editMessageText payload (for callbacks to consume after lock release). */
+    private function buildEdit(int $chatId, int $messageId, string $text, ?array $markup): array
     {
-        $payload = $this->renderSession($chatId, $session);
-        if (isset($payload['method']) && $payload['method'] === 'sendMessage') {
-            $text = (string)$payload['text'];
-            $markup = isset($payload['reply_markup']) ? $payload['reply_markup'] : null;
-            if ($messageId > 0) {
-                $ok = $api->editMessageText($chatId, $messageId, $text, $markup);
-                if (!$ok) $api->sendMessage($chatId, $text, $markup);
-            } else {
-                $r = $api->sendMessage($chatId, $text, $markup);
-                $mid = (int)($r['message_id'] ?? 0);
-                if ($mid > 0) {
-                    $q=$this->conn->prepare('UPDATE telegram_registration_sessions SET last_bot_message_id=? WHERE id=? LIMIT 1');
-                    $q->bind_param('ii',$mid,(int)$session['id']); $q->execute(); $q->close();
+        return [
+            'method' => 'editMessageText',
+            'chat_id' => $chatId,
+            'message_id' => $messageId,
+            'text' => $text,
+            'parse_mode' => 'HTML',
+            'reply_markup' => $markup,
+        ];
+    }
+
+    private function buildEditFieldPayload(int $chatId, int $messageId, array $session, string $key): ?array
+    {
+        if ($key === '' || !TelegramFormRegistry::exists($key)) return $this->buildEditMenuPayload($chatId, $messageId, $session);
+        $field = $this->field((int)($session['form_profile_id']??0), $key);
+        if (!$field) return $this->buildReviewPayload($chatId, $messageId, $session);
+        $answers = $this->answers((int)$session['id']);
+        $cur = $answers[$key] ?? '';
+        $label = TelegramFormRegistry::label($key);
+        $promptAm = (string)($field['prompt_am'] ?? '');
+        $helpAm = (string)($field['help_am'] ?? '');
+        $text = "<b>".$this->esc($label)."</b> — ማስተካከያ\n\n"
+              . "አሁን ያለው፦ <b>".$this->esc($cur !== '' ? $cur : '(አልተሞላም)')."</b>\n\n"
+              . $this->esc($promptAm);
+        if ($helpAm !== '') $text .= "\n\nℹ️ ".$this->esc($helpAm);
+        $buttons = [];
+        $def = TelegramFormRegistry::definitions()[$key] ?? [];
+        $choices = $key === 'current_section' ? $this->sectionOptions() : TelegramFormRegistry::choices($key);
+        if ($choices !== []) {
+            $row = []; $i = 0;
+            foreach ($choices as $lab) { $row[] = ['text'=>$lab]; if (++$i%2===0) { $buttons[]=$row; $row=[]; } }
+            if ($row!==[]) $buttons[]=$row;
+        }
+        if ((int)($field['is_required']??0)!==1) $buttons[] = [['text'=>'⏭️ ዝለል']];
+        $buttons[] = [['text'=>'↩️ ወደ ማጠቃለያ']];
+        $buttons[] = [['text'=>'❌ ሰርዝ']];
+        $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET current_field_key=?,viewing_menu='field_edit',edit_return_to_review=1,lock_version=lock_version+1 WHERE id=?");
+        $q->bind_param('si', $key, (int)$session['id']); $q->execute(); $q->close();
+        return $this->buildEdit($chatId, $messageId, $text, TelegramKeyboard::reply($buttons, true));
+    }
+
+    private function buildEditMenuPayload(int $chatId, int $messageId, array $session): array
+    {
+        $answers = $this->answers((int)$session['id']);
+        $text = TelegramMessageService::get($this->conn,'edit_menu_title')."\n\n";
+        $buttons = []; $row = [];
+        foreach (self::FIELD_ORDER as $key) {
+            $label = TelegramFormRegistry::label($key);
+            $val = (string)($answers[$key] ?? '');
+            $display = $val !== '' ? '✏️ '.$label : '➕ '.$label;
+            $row[] = [$display, 'edit_field:'.$key];
+            if (count($row) === 2) { $buttons[] = $row; $row = []; }
+        }
+        if ($row !== []) $buttons[] = $row;
+        $buttons[] = [['↩️ ወደ ማጠቃለያ', 'edit_back']];
+        $this->updateField((int)$session['id'],'viewing_menu','edit_menu');
+        return $this->buildEdit($chatId, $messageId, $text, TelegramKeyboard::inline($buttons));
+    }
+
+    private function buildReviewPayload(int $chatId, int $messageId, array $session): array
+    {
+        $payload = $this->showReview($chatId, $session);
+        $text = (string)($payload['text'] ?? '');
+        $markup = $payload['reply_markup'] ?? null;
+        $this->updateField((int)$session['id'],'viewing_menu','final_review');
+        return $this->buildEdit($chatId, $messageId, $text, $markup);
+    }
+
+    private function buildFinalizePayload(int $chatId, int $messageId, array $session): array
+    {
+        $id = (int)$session['id'];
+        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id));
+        $cands = $this->loadCandidateList($session);
+        foreach ($cands as $c) {
+            $band = (string)($c['score_band']??($c['band']??''));
+            $score = (int)($c['match_score']??0);
+            $cid = (int)($c['id']??0);
+            $isHigh = $score >= 70 || in_array($band,['high','very_high','certain'],true);
+            if ($isHigh && $cid > 0) {
+                if ($this->decisionExistsFor($id, $cid, ['same'])) {
+                    return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'final_validation_blocked',['blocker'=>'ይህ መዝገብ ከነበረ አባል ጋር ተመሳሳይ ሆኖ ምልክት ተደርጓል።']), TelegramKeyboard::inline([
+                        [['🔍 እጮች አሳይ','cand_prev']],
+                        [['❌ ሰርዝ','cancel']],
+                    ]));
+                }
+                if (!$this->decisionExistsFor($id, $cid, ['different','uncertain'])) {
+                    return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'final_validation_blocked',['blocker'=>'ከፍተኛ ተመሳሳይነት ያለው እጩ አለ። እባክዎ አስቀድመው ያረጋግጡ።']), TelegramKeyboard::inline([
+                        [['🔍 እጮች አሳይ','cand_prev']],
+                        [['❌ ሰርዝ','cancel']],
+                    ]));
                 }
             }
         }
+        if (!$ready['ready']) {
+            return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'final_validation_blocked',['blocker'=>implode('; ',$ready['blockers'])]), $this->homeKeyboard());
+        }
+        $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='submitted',submitted_at=CURRENT_TIMESTAMP,viewing_menu='completed',current_field_key=NULL,lock_version=lock_version+1 WHERE id=? AND status IN ('review','final_validation')");
+        $q->bind_param('i',$id); $q->execute(); $changed = $q->affected_rows; $q->close();
+        if ($changed !== 1) return $this->buildEdit($chatId, $messageId, 'ይህ ረቂቅ አስቀድሞ ተልኳል።', $this->homeKeyboard());
+        $this->audit('telegram', (int)$session['bot_user_id'], 'draft_submitted', 'session', $id);
+        $session = $this->session($id);
+        $text = TelegramMessageService::get($this->conn,'submit_success',[
+            'public_id'=>(string)$session['public_id'],
+            'date'=>date('Y-m-d H:i'),
+        ]);
+        return $this->buildEdit($chatId, $messageId, $text, $this->homeKeyboard());
     }
 
+    /** Legacy alias unused by runtime — kept for structural tests. */
     private function apiSend(TelegramBotApiService $api, int $chatId, array $payload): void
     {
         if (!isset($payload['method']) || $payload['method'] !== 'sendMessage') return;
@@ -696,8 +796,13 @@ final class TelegramRegistrationService
         $answers = $this->answers((int)$session['id']);
         $current = $answers[$fieldKey] ?? '';
         $label = TelegramFormRegistry::label($fieldKey);
-        $key = $this->msgKeyForField($fieldKey);
-        $text = "<b>".$this->esc($label)."</b>\n\n".TelegramMessageService::get($this->conn,$key);
+        // Per-question prompts come from the form builder (Forms tab) so HR can
+        // customize per school per field. Bot Messages holds only system-level
+        // strings (error/success/welcome) and never overrides field prompts.
+        $promptAm = (string)($field['prompt_am'] ?? '');
+        $helpAm = (string)($field['help_am'] ?? '');
+        $text = "<b>".$this->esc($label)."</b>\n\n".$this->esc($promptAm);
+        if ($helpAm !== '') $text .= "\n\nℹ️ ".$this->esc($helpAm);
         if ($current !== '') $text .= "\n\nአሁን ያለው፦ ".$this->esc($current);
 
         // Build keyboard
@@ -713,16 +818,16 @@ final class TelegramRegistrationService
             }
             if ($row !== []) $buttons[] = $row;
         } elseif (($def['input'] ?? '') === 'file') {
-            $buttons[] = [['text'=>'📎 ፋይል ለመላክ ተጫን']]; // placeholder; Telegram needs the attachment button built-in
+            $buttons[] = [['text'=>'📎 ፋይል ለመላክ ተጫን']];
         }
         if ((int)($field['is_required'] ?? 0) !== 1) {
             $buttons[] = [['text'=>'⏭️ ዝለል']];
-            // Amharic optional-hint retained in source for audit (also available via TelegramMessageService defaults).
             $text .= "\n\nይህ ጥያቄ አማራጭ ነው፤ «ዝለል» የሚለውን መጫን ይችላሉ።";
         }
-        // Navigation row
+        // Navigation row (use BOTH old and new labels so cached reply keyboards
+        // from before the v2 update still work).
         $buttons[] = [['text'=>'⬅️ ወደ ኋላ'], ['text'=>'📋 መረጃውን አሳይ']];
-        $buttons[] = [['text'=>'✏️ ሌላ መረጃ ማስተካከል'],['text'=>'❌ ሰርዝ']];
+        $buttons[] = [['text'=>'✏️ አርም'],['text'=>'❌ ሰርዝ']];
         return $this->editOrSend($chatId, $editId, $text, TelegramKeyboard::reply($buttons, true, false), $fieldKey);
     }
 
@@ -1385,27 +1490,16 @@ final class TelegramRegistrationService
         }catch(\Throwable $e){ error_log('Telegram audit failed: '.$e->getMessage()); }
     }
 
-    /** Edit an existing message if we have its id; otherwise send a new one and record the new id. */
+    /** Build a payload for webhook response or deferred HTTPS dispatch. When
+     *  $messageId is provided (callback context) we return an editMessageText
+     *  payload that edits the pressed button's message in place; otherwise we
+     *  return a sendMessage payload (v1 fast path: no extra HTTPS round-trip). */
     private function editOrSend(int $chatId, ?int $messageId, string $text, array $markup, ?string $contextField = null): array
     {
         if ($messageId && $messageId > 0) {
-            $ok = (new TelegramBotApiService())->editMessageText($chatId, $messageId, $text, $markup);
-            if ($ok) {
-                // Answer via empty payload — we already edited the message inline.
-                return ['__edited' => true];
-            }
+            return $this->buildEdit($chatId, $messageId, $text, $markup);
         }
-        // Send new and remember message id
-        $result = (new TelegramBotApiService())->sendMessage($chatId, $text, $markup);
-        $newId = (int)($result['message_id'] ?? 0);
-        if ($newId > 0) {
-            // Track last bot message id on the most recent session for this actor.
-            // We don't have actor here; but caller can update via updateField. We'll
-            // use the most recent active session for this chat.
-            $q = $this->conn->prepare('UPDATE telegram_registration_sessions SET last_bot_message_id=? WHERE telegram_chat_id=? AND status NOT IN ("approved","cancelled","expired") ORDER BY id DESC LIMIT 1');
-            $q->bind_param('ii',$newId,$chatId); $q->execute(); $q->close();
-        }
-        return ['__new_message_id'=>$newId];
+        return TelegramKeyboard::msg($chatId, $text, $markup);
     }
 
     private function homeKeyboard(): array

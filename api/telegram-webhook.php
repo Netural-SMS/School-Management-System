@@ -63,7 +63,11 @@ if ($isCallback) {
 $insert = $conn->prepare("INSERT IGNORE INTO telegram_processed_updates (update_id,telegram_user_id,update_type,status) VALUES (?,?,?,'processing')");
 $insert->bind_param('iis', $updateId, $userId, $updateType);
 $insert->execute(); $owned = $insert->affected_rows === 1; $insert->close();
-if (!$owned) telegram_reply(200);
+if (!$owned) {
+    // Still answer callback queries to dismiss spinners on replays.
+    if ($isCallback) telegram_reply(200, ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId]);
+    telegram_reply(200);
+}
 
 $started = microtime(true);
 $responseMethod = null;
@@ -71,16 +75,20 @@ $status = 'ignored';
 
 try {
     $service = new \App\Services\TelegramRegistrationService($conn);
-    $api = new \App\Services\TelegramBotApiService();
     if ($isCallback) {
-        // Callbacks perform all outbound actions via HTTPS; the webhook response
-        // just answers the callback query to dismiss the spinner.
+        // Callbacks: service returns a response-method payload for the webhook
+        // body (answerCallbackQuery with optional show_alert, or a follow-up
+        // sendMessage). We answer directly in the HTTP response to avoid an
+        // extra HTTPS round-trip — same speed pattern v1 used for messages.
+        $responseMethod = null;
         try {
-            $service->handleCallback($cb);
+            $responseMethod = $service->handleCallback($cb);
         } catch (\Throwable $e) {
             reportInternalError('Telegram callback failed', $e);
         }
-        try { $api->answerCallbackQuery($cbqId); } catch (\Throwable $ignore) {}
+        if (!is_array($responseMethod) || !isset($responseMethod['method'])) {
+            $responseMethod = ['method'=>'answerCallbackQuery','callback_query_id'=>$cbqId];
+        }
         $status = 'processed';
     } else {
         $chat = is_array($message['chat'] ?? null) ? $message['chat'] : null;
@@ -93,8 +101,11 @@ try {
         if ($message !== null && $chat !== null && ($chat['type']??'')!=='private') {
             $status = 'ignored';
         } elseif ($isRelevantPrivateMessage) {
+            // v1 fast-path: return the Bot-API payload directly in the HTTP
+            // response so Telegram delivers it without a second outbound
+            // HTTPS call (critical for shared-host speed).
             $payload = $service->handleMessage($message);
-            if (is_array($payload) && isset($payload['method']) && ($payload['method'] ?? '') === 'sendMessage') {
+            if (is_array($payload) && isset($payload['method'])) {
                 $responseMethod = $payload;
             }
             $status = 'processed';
