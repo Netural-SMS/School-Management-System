@@ -172,6 +172,7 @@ final class TelegramRegistrationService
             if (!$session) return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'resume_no_draft'), $this->homeKeyboard());
             return $this->renderSession($chatId, $session);
         }
+        if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId, $actor);
 
         // Menu text buttons (home) — accept both v1 and v2 labels so users with
         // cached reply keyboards from before the upgrade don't get stuck.
@@ -608,10 +609,17 @@ final class TelegramRegistrationService
     private function beginNewRegistration(int $chatId, array $actor): array
     {
         $actorId = (int)$actor['id'];
-        if ($this->mostRecentActiveSession($actorId, $chatId) !== null) {
+        $active = $this->mostRecentActiveSession($actorId, $chatId);
+        if ($active !== null) {
+            // Show an ACTIONABLE keyboard: ▶️ ቀጥል (resume) and ❌ ሰርዝ (cancel).
+            // Without these, users are stuck with text they can't act on.
+            $rows = [];
+            $rows[] = [['text'=>'▶️ ቀጥል']];
+            $rows[] = [['text'=>'❌ ሰርዝ']];
+            $rows[] = [['text'=>'🏠 ዋና ምናሌ']];
             return TelegramKeyboard::msg($chatId,
-                'ያልተጠናቀቀ ምዝገባ አለ። «ቀጥል»ን ይጫኑ ወይም ይሰርዙ።',
-                $this->homeKeyboard());
+                'ያልተጠናቀቀ ምዝገባ አለ። «ቀጥል»ን ይጫኑ ለመቀጠል፣ ወይም ይሰርዙ።',
+                TelegramKeyboard::reply($rows, true, false));
         }
         $dailyLimit = max(1, min(200, (int)($actor['daily_registration_limit'] ?? 50)));
         $q = $this->conn->prepare('SELECT COUNT(*) n FROM telegram_registration_sessions WHERE bot_user_id=? AND created_at>=CURRENT_DATE');
@@ -622,22 +630,36 @@ final class TelegramRegistrationService
         }
         $publicId = self::publicId();
         $expires = date('Y-m-d H:i:s', time()+86400);
-        // If user is allowed only one profile type, skip choosing and start with name.
+        // Profile-flag inspection
         $waiting = (int)($actor['can_waiting'] ?? 1) === 1;
         $direct  = (int)($actor['can_direct'] ?? 0) === 1;
         $transfer = (int)($actor['can_transfer'] ?? 0) === 1;
-        $profile = null;
-        if ($waiting && !$direct && !$transfer) $profile = 'waiting';
-        elseif ($direct && !$waiting && !$transfer) $profile = 'direct';
-        $status = $profile ? 'collecting' : 'choosing';
-        $menu = $profile ? 'field_edit' : 'home';
-        $firstField = $profile ? 'full_name_am' : null;
-        // When starting with a profile, we need a published form_profile_id.
-        $formId = null; $formVersion = null;
-        if ($profile) {
-            $s = $this->conn->prepare("SELECT id,version FROM telegram_form_profiles WHERE profile_key=? AND status='published' ORDER BY version DESC LIMIT 1");
-            $s->bind_param('s',$profile); $s->execute(); $f=$s->get_result()->fetch_assoc(); $s->close();
-            if ($f) { $formId = (int)$f['id']; $formVersion = (int)$f['version']; }
+        // Determine the single profile if exactly one is allowed, otherwise fall
+        // through to the profile chooser. IMPORTANT: only auto-skip the chooser
+        // when that single profile actually has a PUBLISHED form, otherwise the
+        // session ends up with form_profile_id=NULL and no first field → bot
+        // appears silent.
+        $autoProfile = null;
+        foreach ([
+            'waiting' => $waiting && !$direct && !$transfer,
+            'direct'  => $direct && !$waiting && !$transfer,
+            'transfer'=> $transfer && !$waiting && !$direct,
+        ] as $p => $only) {
+            if ($only) {
+                $s = $this->conn->prepare("SELECT id,version FROM telegram_form_profiles WHERE profile_key=? AND status='published' ORDER BY version DESC LIMIT 1");
+                $s->bind_param('s',$p); $s->execute(); $f=$s->get_result()->fetch_assoc(); $s->close();
+                if ($f) { $autoProfile = ['key'=>$p,'form_id'=>(int)$f['id'],'form_version'=>(int)$f['version']]; break; }
+                // Single allowed profile but no published form — fall through to
+                // chooser which will show only cancel (and render a clear error
+                // via the published-form check in chooseProfile, just like v1).
+            }
+        }
+        if ($autoProfile) {
+            $status = 'collecting'; $menu = 'field_edit'; $firstField = 'full_name_am';
+            $profile = $autoProfile['key']; $formId = $autoProfile['form_id']; $formVersion = $autoProfile['form_version'];
+        } else {
+            $status = 'choosing'; $menu = 'home'; $firstField = null;
+            $profile = null; $formId = null; $formVersion = null;
         }
         $q = $this->conn->prepare("INSERT INTO telegram_registration_sessions (public_id,bot_user_id,telegram_chat_id,status,profile_key,form_profile_id,form_version,viewing_menu,current_field_key,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
         $q->bind_param('siisiisiss', $publicId, $actorId, $chatId, $status, $profile, $formId, $formVersion, $menu, $firstField, $expires);
