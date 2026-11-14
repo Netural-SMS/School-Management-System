@@ -33,6 +33,7 @@ require __DIR__ . '/destructive_guard.php';
 require_once $root . '/acm/autoload.php';
 require_once $root . '/admin/backend/services/GuardianMatchService.php';
 require_once $root . '/admin/backend/services/GuardianService.php';
+require_once $root . '/api/v1/core/acl.php';
 
 use App\Services\GuardianService;
 use SSMS\Acm\Accounts\AcmTicketService;
@@ -189,6 +190,47 @@ GuardianService::merge($mysqli, $gid2b, $gid2a, $uid2);
 $moved = $pdo->query("SELECT verified_by FROM member_guardians WHERE member_id={$mid4} AND guardian_id={$gid2a}")->fetchColumn();
 check('G2 merge keeps verified stamp', $uid2, (int)$moved);
 
+echo "== G1: parent children read path ==\n";
+$pdo->exec("INSERT INTO users(username,full_name,role,password_hash,is_active) VALUES('fam_g1_parent','Fam G1','parent','x',1),('fam_g1_staff','Fam G1s','info_dept','x',1)");
+$uidP = (int)$pdo->query("SELECT id FROM users WHERE username='fam_g1_parent'")->fetchColumn();
+$uidS = (int)$pdo->query("SELECT id FROM users WHERE username='fam_g1_staff'")->fetchColumn();
+$pdo->exec("INSERT INTO guardians(display_name,phone_primary,status) VALUES('አባ G1','0933000001','active'),('አባ G1 other','0933000002','active')");
+$gidP = (int)$pdo->query("SELECT id FROM guardians WHERE phone_primary='0933000001'")->fetchColumn();
+$gidO = (int)$pdo->query("SELECT id FROM guardians WHERE phone_primary='0933000002'")->fetchColumn();
+$pdo->exec("INSERT INTO members(full_name_am,student_name,father_name,gender,status) VALUES('ዳዊት ወልደ','ዳዊት','ወልደ','male','active'),('ማርታ ወልደ','ማርታ','ወልደ','female','active'),('ዮሴፍ ወልደ','ዮሴፍ','ወልደ','male','archived'),('ሰራዊት ወልደ','ሰራዊት','ወልደ','female','active')");
+$midV = (int)$pdo->query("SELECT id FROM members WHERE student_name='ዳዊት' AND father_name='ወልደ'")->fetchColumn();
+$midU = (int)$pdo->query("SELECT id FROM members WHERE student_name='ማርታ'")->fetchColumn();
+$midA = (int)$pdo->query("SELECT id FROM members WHERE student_name='ዮሴፍ'")->fetchColumn();
+$midO = (int)$pdo->query("SELECT id FROM members WHERE student_name='ሰራዊት'")->fetchColumn();
+$_SESSION['admin_id'] = $uid2;
+GuardianService::linkMember($mysqli, $gidP, $midV, 'father', 1, true, true, true);
+GuardianService::linkMember($mysqli, $gidP, $midU, 'father', 1, false);
+GuardianService::linkMember($mysqli, $gidP, $midA, 'father', 1, false, true, true);
+GuardianService::linkMember($mysqli, $gidO, $midO, 'father', 1, true, true, true);
+$pdo->exec("INSERT INTO acm_persons(uuid,full_name_am,guardian_id) VALUES(UUID(),'አባ G1',{$gidP})");
+$pidP = (int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO acm_person_accounts(person_id,user_id,account_type,status,linked_by,linked_at) VALUES({$pidP},{$uidP},'parent','active',{$uid2},NOW())");
+$authP = ['uid' => $uidP, 'rol' => 'parent'];
+$authS = ['uid' => $uidS, 'rol' => 'info_dept'];
+check('G1 resolver maps parent to guardian', $gidP, apiParentGuardianId($mysqli, $authP));
+check('G1 staff resolves to none', 0, apiParentGuardianId($mysqli, $authS));
+check('G1 unknown user resolves to none', 0, apiParentGuardianId($mysqli, ['uid' => 999999, 'rol' => 'parent']));
+$pdo->exec("UPDATE acm_person_accounts SET status='suspended' WHERE user_id={$uidP}");
+check('G1 suspended link resolves to none', 0, apiParentGuardianId($mysqli, $authP));
+$pdo->exec("UPDATE acm_person_accounts SET status='active' WHERE user_id={$uidP}");
+check('G1 verified child visible', true, apiParentCanSeeMember($mysqli, $authP, $midV));
+check('G1 unverified child hidden', false, apiParentCanSeeMember($mysqli, $authP, $midU));
+check('G1 other guardian child hidden', false, apiParentCanSeeMember($mysqli, $authP, $midO));
+check('G1 staff never scoped', false, apiParentCanSeeMember($mysqli, $authS, $midV));
+$kids = apiParentChildren($mysqli, $authP);
+check('G1 list has verified non-archived only', [$midV], array_map(fn($k) => $k['id'], $kids));
+check('G1 list empty for staff', [], apiParentChildren($mysqli, $authS));
+$leaked = array_intersect(['phone_number', 'phone_primary', 'alt_phone_number', 'guardian_name', 'guardian_phone1', 'guardian_phone2', 'address', 'city', 'sub_city', 'woreda', 'date_of_birth', 'student_photo_path'], array_keys($kids[0]));
+check('G1 child row leaks no PII', [], array_values($leaked));
+check('G1 child carries relation', 'father', $kids[0]['relation']);
+check('G1 child carries primary flag', 1, $kids[0]['is_primary']);
+check('G1 child carries verified_at', true, $kids[0]['verified_at'] !== null);
+
 echo "== cleanup + residue ==\n";
 try {
     $pdo->exec("DELETE FROM acm_ticket_events WHERE ticket_id IN (" . (int)$ticket['id'] . ',' . (int)$ticketM['id'] . ')');
@@ -206,11 +248,19 @@ try {
     $pdo->exec("DELETE FROM guardians WHERE id IN ({$gid2a},{$gid2b})");
     $pdo->exec("DELETE FROM members WHERE id IN ({$mid2},{$mid3},{$mid4})");
     $pdo->exec("DELETE FROM users WHERE id={$uid2}");
-    $pdo->exec("DELETE FROM activity_logs WHERE action LIKE 'Guardian%' AND (details LIKE 'Member {$mid2}%' OR details LIKE 'Member {$mid3}%' OR details LIKE 'Member {$mid4}%' OR details LIKE 'Guardian {$gid2a}%' OR details LIKE 'Guardian {$gid2b}%')");
+    $pdo->exec("DELETE FROM member_guardians WHERE guardian_id IN ({$gidP},{$gidO}) OR member_id IN ({$midV},{$midU},{$midA},{$midO})");
+    $pdo->exec("DELETE FROM guardian_aliases WHERE guardian_id IN ({$gidP},{$gidO})");
+    $pdo->exec("DELETE FROM acm_person_accounts WHERE user_id IN ({$uidP},{$uidS})");
+    $pdo->exec("DELETE FROM acm_persons WHERE id={$pidP}");
+    $pdo->exec("DELETE FROM guardians WHERE id IN ({$gidP},{$gidO})");
+    $pdo->exec("DELETE FROM members WHERE id IN ({$midV},{$midU},{$midA},{$midO})");
+    $pdo->exec("DELETE FROM users WHERE id IN ({$uidP},{$uidS})");
+    $pdo->exec("DELETE FROM activity_logs WHERE action LIKE 'Guardian%' AND (details LIKE 'Member {$mid2}%' OR details LIKE 'Member {$mid3}%' OR details LIKE 'Member {$mid4}%' OR details LIKE 'Member {$midV}%' OR details LIKE 'Member {$midU}%' OR details LIKE 'Member {$midA}%' OR details LIKE 'Member {$midO}%' OR details LIKE 'Guardian {$gid2a}%' OR details LIKE 'Guardian {$gid2b}%' OR details LIKE 'Guardian {$gidP}%' OR details LIKE 'Guardian {$gidO}%')");
     $residue = (int)$pdo->query(
-        "SELECT (SELECT COUNT(*) FROM users WHERE username IN ('fam_e2e','fam_g2_e2e'))"
-        . "+(SELECT COUNT(*) FROM members WHERE student_name IN ('ሰላም','ሰላም','ጽጌ','ሄኖክ'))"
-        . "+(SELECT COUNT(*) FROM guardians WHERE phone_primary IN ('0911000001','0911000002','0922000001','0922000002'))"
+        "SELECT (SELECT COUNT(*) FROM users WHERE username IN ('fam_e2e','fam_g2_e2e','fam_g1_parent','fam_g1_staff'))"
+        . "+(SELECT COUNT(*) FROM members WHERE student_name IN ('ሰላም','ሰላም','ጽጌ','ሄኖክ','ዳዊት','ማርታ','ዮሴፍ','ሰራዊት'))"
+        . "+(SELECT COUNT(*) FROM guardians WHERE phone_primary IN ('0911000001','0911000002','0922000001','0922000002','0933000001','0933000002'))"
+        . "+(SELECT COUNT(*) FROM acm_person_accounts WHERE user_id IN ({$uidP},{$uidS}))"
     )->fetchColumn();
     check('residue zero', 0, $residue);
     echo "  ok    seeded rows removed\n";

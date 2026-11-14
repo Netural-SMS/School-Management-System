@@ -21,6 +21,9 @@ class AcmFamilyGapsTests(unittest.TestCase):
         cls.api = (ROOT / "admin/api_guardians.php").read_text(encoding="utf-8")
         cls.migration092 = (ROOT / "sql/092_acm_guardian_link_verification.sql").read_text(encoding="utf-8")
         cls.js = (ROOT / "admin/js/family_link.js").read_text(encoding="utf-8")
+        cls.acl = (ROOT / "api/v1/core/acl.php").read_text(encoding="utf-8")
+        cls.users_route = (ROOT / "api/v1/routes/users.php").read_text(encoding="utf-8")
+        cls.members_route = (ROOT / "api/v1/routes/members.php").read_text(encoding="utf-8")
 
     def test_suggestions_query_uses_pair_columns(self):
         method = self.tickets[self.tickets.index("private function linkSuggestions"):]
@@ -92,6 +95,53 @@ class AcmFamilyGapsTests(unittest.TestCase):
         self.assertIn("FamilyLink.unverify(", self.js)
         self.assertIn("verify: verify, unverify: unverify", self.js)
         self.assertIn("links_unverified", self.js)
+
+    def test_parent_resolver_requires_active_parent_link(self):
+        fn = self.acl[self.acl.index("function apiParentGuardianId"):]
+        fn = fn[: fn.index("\n}\n")]
+        self.assertIn("apiRoleIs($auth, ['parent'])", fn)
+        self.assertIn("pa.account_type = 'parent'", fn)
+        self.assertIn("pa.status = 'active'", fn)
+        self.assertIn("p.guardian_id IS NOT NULL", fn)
+        self.assertIn("catch (\\mysqli_sql_exception", fn)
+
+    def test_parent_scope_requires_verified_link(self):
+        fn = self.acl[self.acl.index("function apiParentCanSeeMember"):]
+        fn = fn[: fn.index("\n}\n")]
+        self.assertIn("verified_by IS NOT NULL", fn)
+
+    def test_parent_children_verified_non_archived_safe_shaped(self):
+        fn = self.acl[self.acl.index("function apiParentChildren"):]
+        fn = fn[: fn.index("\n}\n")]
+        self.assertIn("mg.verified_by IS NOT NULL", fn)
+        self.assertIn("m.status != 'archived'", fn)
+        self.assertIn("apiMemberSafeRow($row)", fn)
+        self.assertIn("$child['relation']", fn)
+        self.assertNotIn("apiMemberStaffRow", fn)
+
+    def test_children_route_is_parent_only_and_rate_limited(self):
+        self.assertIn("$subAction === 'children'", self.users_route)
+        self.assertIn("Your children list is only for parent accounts.", self.users_route)
+        self.assertIn("isApiRateLimited('parent_children', 60)", self.users_route)
+        self.assertIn("apiParentChildren($conn, $auth)", self.users_route)
+
+    def test_member_detail_admits_parents_for_own_children_only(self):
+        self.assertIn("apiParentCanSeeMember($conn, $auth, $id)", self.members_route)
+        self.assertIn("You can only open your own linked children.", self.members_route)
+        # Parents still get the safe row; staff shaping stays PII-gated.
+        self.assertIn(
+            "ok($canPii ? apiMemberStaffRow($member) : apiMemberSafeRow($member));",
+            self.members_route,
+        )
+
+    def test_members_list_stays_staff_only(self):
+        self.assertIn(
+            "err('Members list is only for Information and Education staff.', 403);",
+            self.members_route,
+        )
+        browse = self.acl[self.acl.index("function apiCanBrowseMembers"):]
+        browse = browse[: browse.index("\n}\n")]
+        self.assertNotIn("parent", browse)
 
 
 if __name__ == "__main__":
