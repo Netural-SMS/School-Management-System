@@ -180,13 +180,17 @@ final class TelegramRegistrationService
         }
         if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId, $actor);
 
-        // Menu text buttons (home) — accept both v1 and v2 labels so users with
-        // cached reply keyboards from before the upgrade don't get stuck.
-        if (in_array($text,['➕ አዲስ አባል መመዝገብ','➕ አዲስ ምዝገባ','➕ New registration'],true) || $text === '/new') {
-            return $this->beginNewRegistration($chatId, $actor);
-        }
-        if (in_array($text,['🔎 የተመዘገበ አባል መፈለግ'],true) || $text === '/search') return $this->startSearch($chatId, $actor);
-        if (in_array($text,['📋 የእኔ ምዝገባዎች'],true) || $text === '/mine') return $this->listMyRegistrations($chatId, $actor);
+        // Menu text buttons (home) — robust matching using Amharic keyword
+        // detection. Telegram may normalize emojis (➕ ↔ +, 🔎 ↔ plain magnifier
+        // substitutions, variant selectors U+FE0F, etc.) so we NEVER rely on
+        // exact emoji+text equality. Match on the distinctive Amharic phrase.
+        $norm = trim($text);
+        $isNew  = str_contains($norm,'አዲስ አባል') || str_contains($norm,'አዲስ ምዝገባ') || str_contains($norm,'New registration') || $norm === '/new';
+        $isSearch = str_contains($norm,'የተመዘገበ አባል መፈለግ') || str_contains($norm,'አባል መፈለግ') || $norm === '/search';
+        $isMine  = str_contains($norm,'የእኔ ምዝገባዎች') || str_contains($norm,'ምዝገባዎች') || $norm === '/mine';
+        if ($isNew)  return $this->beginNewRegistration($chatId, $actor);
+        if ($isSearch) return $this->startSearch($chatId, $actor);
+        if ($isMine)  return $this->listMyRegistrations($chatId, $actor);
 
         // If a search is in progress (viewing_menu = search_results), interpret text as search query.
         $searchSession = $this->sessionWithMenu((int)$actor['id'], $chatId, 'search_results');
