@@ -69,6 +69,14 @@ final class TelegramRegistrationService
             return TelegramKeyboard::msg($chat, TelegramMessageService::get($this->conn,'processing_retry'));
         }
         try { return $this->handleLocked($message); }
+        catch (\Throwable $e) {
+            // Mirror the callback path: a failed update must tell the officer
+            // to retry instead of dying into a silent webhook 500 (buttons
+            // that "do nothing" are worse than an error message).
+            reportInternalError('Telegram message failed', $e);
+            $chat = is_array($message['chat'] ?? null) ? (int)($message['chat']['id'] ?? 0) : 0;
+            return TelegramKeyboard::msg($chat, 'ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ።');
+        }
         finally {
             $q = $this->conn->prepare('SELECT RELEASE_LOCK(?)');
             $q->bind_param('s',$lockName); $q->execute(); $q->close();
@@ -241,6 +249,12 @@ final class TelegramRegistrationService
             }
             if (in_array($text,['❌ ሰርዝ','❌ ስርዝ','/cancel'],true)) { $this->cancelActive((int)$actor['id']); return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'),$this->homeKeyboard()); }
             if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId,$actor);
+            // Forward collection also carries viewing_menu='field_edit', so the
+            // mid-collection review's ✅/✏️ buttons arrive here: route them as
+            // review actions (mirrors the collecting branch) instead of
+            // swallowing them as answers to the current question.
+            if (str_starts_with($text,'✅')) return $this->handleReviewAction($chatId, $session, $text);
+            if (str_starts_with($text,'✏️')) return $this->handleReviewAction($chatId, $session, $text);
             if ($fieldKey !== '') {
                 $fromEdit = (int)($session['edit_return_to_review'] ?? 0) === 1;
                 return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, $fromEdit);
@@ -1275,7 +1289,9 @@ final class TelegramRegistrationService
         foreach (self::FIELD_ORDER as $key) {
             if (($answers[$key] ?? '') !== '' || $key === 'full_name_am') {
                 $label = TelegramFormRegistry::label($key);
-                $text .= "• <b>".$this->esc($label)."</b>፦ ".$this->esc((string)($answers[$key]??'—'))."\n";
+                $shown = (string)($answers[$key]??'—');
+                if ($key==='gender' && $shown!=='—') { $gch = TelegramFormRegistry::choices('gender'); $shown = $gch[$shown] ?? $shown; }
+                $text .= "• <b>".$this->esc($label)."</b>፦ ".$this->esc($shown)."\n";
                 $btn = '✏️ '.$this->esc($label);
                 $row[] = ['text'=>$btn];
                 if (count($row) === 2) { $rows[] = $row; $row = []; }
@@ -1493,7 +1509,17 @@ final class TelegramRegistrationService
             ]);
             return TelegramKeyboard::msg($chatId, $text);
         }
-        $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='submitted',submitted_at=CURRENT_TIMESTAMP,viewing_menu='completed',current_field_key=NULL,lock_version=lock_version+1 WHERE id=? AND status IN ('review','final_validation')");
+        // HR correction mode: a draft with pending correction answers must not
+        // dodge them via the mid-collection submit button.
+        $corr = json_decode((string)($session['correction_fields']??''), true);
+        if (is_array($corr) && $corr!==[]) {
+            return TelegramKeyboard::msg($chatId, 'የHR ማስተካከያ ጥያቄ መጀመሪያ መሟላት አለበት። እባክዎ የተጠየቁትን መልሶች ያርሙና እንደገና ይላኩ።');
+        }
+        // A ready draft may be submitted straight from the mid-collection
+        // review (status still 'collecting'): readiness already enforced the
+        // required fields and the duplicate policy above. The status guard
+        // still rejects double submits (status is 'submitted' then).
+        $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='submitted',submitted_at=CURRENT_TIMESTAMP,viewing_menu='completed',current_field_key=NULL,lock_version=lock_version+1 WHERE id=? AND status IN ('review','final_validation','collecting')");
         $q->bind_param('i',$id); $q->execute(); $changed = $q->affected_rows; $q->close();
         if ($changed !== 1) return TelegramKeyboard::msg($chatId,'ይህ ረቂቅ አስቀድሞ ተልኳል።');
         $this->audit('telegram', (int)$session['bot_user_id'], 'draft_submitted', 'session', $id);
