@@ -163,9 +163,15 @@ final class TelegramRegistrationService
 
         // Global text commands
         if ($text === '/start' || $text === '/help') return $this->sendHome($chatId, $actor);
-        if (in_array($text,['/cancel','❌ Cancel','❌ ሰርዝ'], true)) {
+        if (in_array($text,['/cancel','❌ Cancel','❌ ሰርዝ','❌ ስርዝ'], true)) {
             $this->cancelActive((int)$actor['id']);
             return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
+        }
+        // ↩️ from the edit menu returns to review of the active session.
+        if ($text === '↩️ ወደ ማጠቃለያ' || $text === '/review' || $text === '📋 መረጃውን አሳይ') {
+            $session = $this->mostRecentActiveSession((int)$actor['id'], $chatId);
+            if ($session) return $this->showReview($chatId, $session);
+            return $this->sendHome($chatId, $actor);
         }
         if ($text === '/resume' || $text === '▶️ ቀጥል' || $text === '▶️ ቀጥል / Resume') {
             $session = $this->mostRecentActiveSession((int)$actor['id'], $chatId);
@@ -190,12 +196,21 @@ final class TelegramRegistrationService
         $session = $this->mostRecentActiveSession((int)$actor['id'], $chatId);
         if (!$session) return $this->sendHome($chatId, $actor);
 
-        // If viewing edit menu, handle field selection
+        // If viewing edit menu, handle field selection (✏️ field / ↩️ / cancel / home)
         if (($session['viewing_menu'] ?? '') === 'edit_menu') {
+            if (in_array($text,['↩️ ወደ ማጠቃለያ','/review','📋 መረጃውን አሳይ'],true)) return $this->showReview($chatId, $session);
+            if (in_array($text,['❌ ሰርዝ','❌ ስርዝ','/cancel'],true)) { $this->cancelActive((int)$actor['id']); return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'),$this->homeKeyboard()); }
+            if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId,$actor);
             return $this->enterFieldEditFromText($chatId, $session, $text);
         }
         if (($session['viewing_menu'] ?? '') === 'field_edit') {
             $fieldKey = (string)($session['current_field_key'] ?? '');
+            if (in_array($text,['↩️ ወደ ማጠቃለያ','/review','📋 መረጃውን አሳይ'],true)) {
+                $this->updateField((int)$session['id'],'viewing_menu','final_review');
+                return $this->showReview($chatId, $this->session((int)$session['id']));
+            }
+            if (in_array($text,['❌ ሰርዝ','❌ ስርዝ','/cancel'],true)) { $this->cancelActive((int)$actor['id']); return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'),$this->homeKeyboard()); }
+            if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId,$actor);
             if ($fieldKey !== '') {
                 return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, true);
             }
@@ -218,12 +233,25 @@ final class TelegramRegistrationService
             case 'collecting':
                 $fieldKey = (string)($session['current_field_key'] ?? '');
                 if ($fieldKey === '') return $this->showReview($chatId, $session);
-                if (in_array($text,['✏️ ሌላ መረጃ ማስተካከል','✏️ አርም','✏️ Edit'],true)) return $this->showEditMenu($chatId, $session);
+                if (in_array($text,['✏️ ሌላ መረጃ ማስተካከል','✏️ አርም','✏️ Edit'],true)) return $this->showEditMenuReply($chatId, $session);
+                if (str_starts_with($text,'✏️')) return $this->handleReviewAction($chatId, $session, $text);
+                if (str_starts_with($text,'✅')) return $this->handleReviewAction($chatId, $session, $text);
+                if (in_array($text,['❌ ሰርዝ','❌ ስርዝ'],true)) { $this->cancelActive((int)$actor['id']); return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'),$this->homeKeyboard()); }
+                if ($text === '🏠 ዋና ምናሌ' || $text === '/home') return $this->sendHome($chatId,$actor);
                 return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, false);
             case 'review':
             case 'final_validation':
                 return $this->handleReviewAction($chatId, $session, $text);
             default:
+                // If the user pressed a review-action button (submit/cancel/
+                // home/edit-✏️/↩️) from a stale keyboard, route it through the
+                // review action handler instead of getting stuck.
+                if (str_starts_with($text,'✏️')
+                    || str_starts_with($text,'✅')
+                    || in_array($text,['❌ ሰርዝ','❌ ስርዝ','🏠 ዋና ምናሌ','↩️ ወደ ማጠቃለያ'],true)
+                    || str_contains($text,'አጽደቅ') || str_contains($text,'ምዝገባውን')) {
+                    return $this->handleReviewAction($chatId, $session, $text);
+                }
                 return $this->renderSession($chatId, $session);
         }
     }
@@ -1088,22 +1116,29 @@ final class TelegramRegistrationService
         foreach ($cands as $c) if ((int)($c['match_score']??0) >= 70) { $high = true; break; }
         $text = TelegramMessageService::get($this->conn,'review_header')."\n\n";
         if ($high) $text .= "🚨 ".TelegramMessageService::get($this->conn,'review_duplicate_warn')."\n\n";
-        $editButtons = [];
+        // Build a REPLY keyboard with per-field ✏️ edit buttons (v1-style, robust
+        // against webhook callback-query state because it's plain text). We
+        // accept these text labels in handleReviewAction via prefix matching.
+        $rows = []; $row = [];
         foreach (self::FIELD_ORDER as $key) {
             if (($answers[$key] ?? '') !== '' || $key === 'full_name_am') {
                 $label = TelegramFormRegistry::label($key);
                 $text .= "• <b>".$this->esc($label)."</b>፦ ".$this->esc((string)($answers[$key]??'—'))."\n";
-                $editButtons[] = ['✏️ '.$this->esc($label), 'edit_field:'.$key];
+                $btn = '✏️ '.$this->esc($label);
+                $row[] = ['text'=>$btn];
+                if (count($row) === 2) { $rows[] = $row; $row = []; }
             }
         }
-        // Chunk edit buttons 2 per row
-        $editRows = array_chunk($editButtons, 2);
+        if ($row !== []) $rows[] = $row;
         if ($high) {
-            $editRows[] = [['🔍 እጮች ዳግም አሳይ', 'cand_prev']];
+            $rows[] = [['text'=>'🔍 እጮች ዳግም አሳይ']];
         }
-        $editRows[] = [['✅ ምዝገባውን ላክ', 'submit']];
-        $editRows[] = [['❌ ሰርዝ', 'cancel'],['🏠 ዋና ምናሌ', 'home']];
-        return $this->editOrSend($chatId,$editId,$text,TelegramKeyboard::inline($editRows));
+        $rows[] = [['text'=>'✅ ምዝገባውን ላክ']];
+        $rows[] = [['text'=>'❌ ሰርዝ'],['text'=>'🏠 ዋና ምናሌ']];
+        // Always send as a fresh message with a reply keyboard — this replaces
+        // the previous field-prompt reply keyboard and keeps all actions as
+        // plain text so even if callback_query isn't subscribed, buttons work.
+        return TelegramKeyboard::msg($chatId, $text, TelegramKeyboard::reply($rows, true, false));
     }
 
     private function showEditMenu(int $chatId, array $session, ?int $editId = null): array
@@ -1135,10 +1170,13 @@ final class TelegramRegistrationService
         $answers = $this->answers((int)$session['id']);
         $cur = $answers[$key] ?? '';
         $label = TelegramFormRegistry::label($key);
-        $promptKey = $this->msgKeyForField($key);
+        $promptAm = (string)($field['prompt_am'] ?? '');
+        $helpAm = (string)($field['help_am'] ?? '');
         $text = "<b>".$this->esc($label)."</b> — ማስተካከያ\n\n";
         $text .= "አሁን ያለው፦ <b>".$this->esc($cur !== '' ? $cur : '(አልተሞላም)')."</b>\n\n";
-        $text .= TelegramMessageService::get($this->conn, $promptKey);
+        $text .= $this->esc($promptAm);
+        if ($helpAm !== '') $text .= "\n\nℹ️ ".$this->esc($helpAm);
+        if ((int)($field['is_required']??0)!==1) $text .= "\n\nይህ ጥያቄ አማራጭ ነው፤ «ዝለል» የሚለውን መጫን ይችላሉ።";
         $this->conn->begin_transaction();
         try {
             $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET current_field_key=?,viewing_menu='field_edit',edit_return_to_review=1,lock_version=lock_version+1 WHERE id=?");
@@ -1156,7 +1194,15 @@ final class TelegramRegistrationService
 
     private function enterFieldEditFromText(int $chatId, array $session, string $text): array
     {
-        return $this->showEditMenu($chatId, $session);
+        // Strip ✏️ prefix and match against field labels.
+        $pressed = trim(mb_substr($text, 2));
+        foreach (self::FIELD_ORDER as $key) {
+            $label = TelegramFormRegistry::label($key);
+            if ($pressed === $label || str_contains($pressed, $label) || str_contains($label, $pressed)) {
+                return $this->enterFieldEdit($chatId, $session, $key);
+            }
+        }
+        return $this->showEditMenuReply($chatId, $session);
     }
 
     private function goBack(int $chatId, array $session): array
@@ -1173,13 +1219,67 @@ final class TelegramRegistrationService
 
     private function handleReviewAction(int $chatId, array $session, string $text): array
     {
-        if (in_array($text,['✅ ምዝገባውን ለማጽደቅ ላክ','✅ ላክ','✅ Submit for HR review'],true)) {
+        // Submit — accept both Amharic variants and English.
+        if ($text === '✅ ምዝገባውን ላክ'
+            || $text === '✅ ምዝገባውን ለማጽደቅ ላክ'
+            || $text === '✅ ላክ'
+            || $text === '✅ Submit for HR review'
+            || str_starts_with($text,'✅')) {
             return $this->finalizeSubmit($chatId, $session);
         }
-        if (in_array($text,['✏️ አርም','✏️ መረጃ ማስተካከል','✏️ Edit'],true)) {
-            return $this->showEditMenu($chatId, $session);
+        // Cancel — accept both ሰርዝ (se) and ስርዝ (s-r) spellings users type.
+        if ($text === '❌ ሰርዝ' || $text === '❌ ስርዝ' || $text === '/cancel' || $text === '❌ Cancel') {
+            $this->cancelActive((int)$session['bot_user_id']);
+            return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'cancelled'), $this->homeKeyboard());
+        }
+        // Home
+        if ($text === '🏠 ዋና ምናሌ' || $text === '/home') {
+            return $this->sendHome($chatId, $this->actorOfSession($session));
+        }
+        // Re-show candidates
+        if (str_contains($text,'እጮች') || str_contains($text,'cand')) {
+            $this->updateField((int)$session['id'],'current_candidate_index',0);
+            $this->transition((int)$session['id'],['status'=>'duplicate_review']);
+            return $this->renderSession($chatId, $this->session((int)$session['id']));
+        }
+        // Edit a specific field (✏️ prefix) — prefix match so any field label works.
+        if (str_starts_with($text,'✏️')) {
+            $pressed = trim(mb_substr($text, 2)); // strip the pencil
+            // Match against field labels
+            foreach (self::FIELD_ORDER as $key) {
+                $label = TelegramFormRegistry::label($key);
+                if ($pressed === $label || str_contains($pressed, $label) || str_contains($label, $pressed)) {
+                    return $this->enterFieldEdit($chatId, $session, $key);
+                }
+            }
+            // Generic "edit" request without a specific field
+            if ($pressed === 'አርም' || $pressed === 'መረጃ ማስተካከል' || $pressed === 'Edit' || $pressed === '') {
+                return $this->showEditMenuReply($chatId, $session);
+            }
+        }
+        if (in_array($text,['✏️ አርም','✏️ መረጃ ማስተካከል','✏️ Edit','✏️ ሌላ መረጃ ማስተካከል'],true)) {
+            return $this->showEditMenuReply($chatId, $session);
         }
         return $this->showReview($chatId, $session);
+    }
+
+    /** Edit menu rendered as a reply keyboard (text-routed, robust). */
+    private function showEditMenuReply(int $chatId, array $session): array
+    {
+        $answers = $this->answers((int)$session['id']);
+        $text = "የትኛውን መረጃ ማስተካከል ይፈልጋሉ?\n\n";
+        $rows = []; $row = [];
+        foreach (self::FIELD_ORDER as $key) {
+            if (($answers[$key] ?? '') !== '' || $key === 'full_name_am') {
+                $label = TelegramFormRegistry::label($key);
+                $row[] = ['text'=>'✏️ '.$label];
+                if (count($row) === 2) { $rows[] = $row; $row = []; }
+            }
+        }
+        if ($row !== []) $rows[] = $row;
+        $rows[] = [['text'=>'↩️ ወደ ማጠቃለያ']];
+        $rows[] = [['text'=>'❌ ሰርዝ']];
+        return TelegramKeyboard::msg($chatId, $text, TelegramKeyboard::reply($rows, true));
     }
 
     private function finalizeSubmit(int $chatId, array $session, ?int $editId = null): array
