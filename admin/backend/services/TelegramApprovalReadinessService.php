@@ -19,7 +19,7 @@ final class TelegramApprovalReadinessService
         foreach($required as $key)if(trim((string)($byKey[$key]['value_text']??''))==='')$blockers[]=TelegramFormRegistry::label($key).' is required.';
         $name=trim((string)($byKey['full_name_am']['value_text']??''));if(count(preg_split('/\s+/u',$name,-1,PREG_SPLIT_NO_EMPTY)?:[])<2)$blockers[]='Full name must contain at least first and father name.';
         if(!in_array((string)($byKey['gender']['value_normalized']??''),['male','female'],true))$blockers[]='Gender must be a validated choice.';
-        $section=trim((string)($byKey['current_section']['value_normalized']??''));if($section!==''){$q=$this->conn->prepare('SELECT id FROM classes WHERE class_name=? AND is_active=1 LIMIT 1');$q->bind_param('s',$section);$q->execute();$active=$q->get_result()->fetch_assoc();$q->close();if(!$active)$blockers[]='The selected school section is no longer active.';}
+        $section=trim((string)($byKey['current_section']['value_normalized']??''));if($section!==''){try{$q=$this->conn->prepare('SELECT id FROM classes WHERE class_name=? AND is_active=1 LIMIT 1');$q->bind_param('s',$section);$q->execute();$active=$q->get_result()->fetch_assoc();$q->close();if(!$active)$blockers[]='The selected school section is no longer active.';}catch(\Throwable $e){$blockers[]='The school section list is unavailable; the selected section cannot be verified.';}}
         // Legacy duplicate-state flag: 'likely' fails closed only when no parseable
         // high-candidate evidence exists (stale rows); otherwise the v2
         // per-candidate verdicts below decide and legacy likely only warns.

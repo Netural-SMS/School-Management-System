@@ -2,6 +2,7 @@
 /** Versioned administration for closed-registry Telegram forms. */
 namespace App\Services;
 
+use DomainException;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -23,8 +24,9 @@ final class TelegramFormAdminService
         if(!in_array($profileKey,['waiting','direct','transfer'],true))throw new InvalidArgumentException('Invalid form profile.');
         $this->conn->begin_transaction();
         try{
+            $d=$this->conn->prepare("SELECT id FROM telegram_form_profiles WHERE profile_key=? AND status='draft' LIMIT 1 FOR UPDATE");$d->bind_param('s',$profileKey);$d->execute();$dup=$d->get_result()->fetch_assoc();$d->close();if($dup)throw new DomainException('A draft already exists for this type. Edit it instead.');
             $q=$this->conn->prepare('SELECT id,version,title_am,title_en FROM telegram_form_profiles WHERE profile_key=? ORDER BY version DESC LIMIT 1 FOR UPDATE');$q->bind_param('s',$profileKey);$q->execute();$source=$q->get_result()->fetch_assoc();$q->close();
-            $version=(int)($source['version']??0)+1;$titleAm=(string)($source['title_am']??($profileKey==='waiting'?'ጊዜያዊ ምዝገባ':'ቀጥታ ምዝገባ'));$titleEn=(string)($source['title_en']??($profileKey==='waiting'?'Temporary Registration':'Direct Registration'));
+            $version=(int)($source['version']??0)+1;$titles=['waiting'=>['ጊዜያዊ ምዝገባ','Temporary Registration'],'direct'=>['ቀጥታ ምዝገባ','Direct Registration'],'transfer'=>['የዝውውር ምዝገባ','Transfer Registration']];$fallback=$titles[$profileKey]??[$profileKey,$profileKey];$titleAm=(string)($source['title_am']??$fallback[0]);$titleEn=(string)($source['title_en']??$fallback[1]);
             $q=$this->conn->prepare("INSERT INTO telegram_form_profiles(profile_key,version,status,title_am,title_en) VALUES(?,?,'draft',?,?)");$q->bind_param('siss',$profileKey,$version,$titleAm,$titleEn);$q->execute();$id=(int)$this->conn->insert_id;$q->close();
             if($source){$sourceId=(int)$source['id'];$q=$this->conn->prepare('INSERT INTO telegram_form_fields(profile_id,field_key,is_enabled,is_required,sort_order,prompt_am,prompt_en,help_am,help_en) SELECT ?,field_key,is_enabled,is_required,sort_order,prompt_am,prompt_en,help_am,help_en FROM telegram_form_fields WHERE profile_id=? ORDER BY sort_order,id');$q->bind_param('ii',$id,$sourceId);$q->execute();$q->close();}
             $this->conn->commit();return $this->detail($id)??throw new RuntimeException('Draft was not created.');
