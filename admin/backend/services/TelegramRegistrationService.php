@@ -197,7 +197,8 @@ final class TelegramRegistrationService
         if (($session['viewing_menu'] ?? '') === 'field_edit') {
             $fieldKey = (string)($session['current_field_key'] ?? '');
             if ($fieldKey !== '') {
-                return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, true);
+                $fromEdit = (int)($session['edit_return_to_review'] ?? 0) === 1;
+                return $this->acceptAnswerForField($chatId, $session, $fieldKey, $message, $fromEdit);
             }
         }
 
@@ -314,8 +315,9 @@ final class TelegramRegistrationService
                 ]));
             case 'escalate':
                 if (!$session) return null;
+                $sid=(int)$session['id'];
                 $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET status='escalated',viewing_menu='completed',escalated_at=CURRENT_TIMESTAMP,lock_version=lock_version+1 WHERE id=?");
-                $q->bind_param('i',(int)$session['id']); $q->execute(); $q->close();
+                $q->bind_param('i',$sid); $q->execute(); $q->close();
                 $s = $this->session((int)$session['id']);
                 return $this->buildEdit($chatId, $messageId, TelegramMessageService::get($this->conn,'escalated',['public_id'=>(string)$s['public_id']]), $this->homeKeyboard());
             case 'pause':
@@ -377,8 +379,9 @@ final class TelegramRegistrationService
         if ((int)($field['is_required']??0)!==1) $buttons[] = [['text'=>'⏭️ ዝለል']];
         $buttons[] = [['text'=>'↩️ ወደ ማጠቃለያ']];
         $buttons[] = [['text'=>'❌ ሰርዝ']];
+        $sid=(int)$session['id'];
         $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET current_field_key=?,viewing_menu='field_edit',edit_return_to_review=1,lock_version=lock_version+1 WHERE id=?");
-        $q->bind_param('si', $key, (int)$session['id']); $q->execute(); $q->close();
+        $q->bind_param('si', $key, $sid); $q->execute(); $q->close();
         return $this->buildEdit($chatId, $messageId, $text, TelegramKeyboard::reply($buttons, true));
     }
 
@@ -489,8 +492,9 @@ final class TelegramRegistrationService
         $buttons[] = [['text'=>'↩️ ወደ ማጠቃለያ']];
         $buttons[] = [['text'=>'❌ ሰርዝ']];
         $markup = TelegramKeyboard::reply($buttons, true);
+        $sid=(int)$session['id'];
         $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET current_field_key=?,viewing_menu='field_edit',edit_return_to_review=1,lock_version=lock_version+1 WHERE id=?");
-        $q->bind_param('si', $key, (int)$session['id']); $q->execute(); $q->close();
+        $q->bind_param('si', $key, $sid); $q->execute(); $q->close();
         $this->apiEditOrSend($api, $chatId, $messageId, $text, $markup);
     }
 
@@ -662,7 +666,7 @@ final class TelegramRegistrationService
             $profile = null; $formId = null; $formVersion = null;
         }
         $q = $this->conn->prepare("INSERT INTO telegram_registration_sessions (public_id,bot_user_id,telegram_chat_id,status,profile_key,form_profile_id,form_version,viewing_menu,current_field_key,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
-        $q->bind_param('siisiisiss', $publicId, $actorId, $chatId, $status, $profile, $formId, $formVersion, $menu, $firstField, $expires);
+        $q->bind_param('siissiisss', $publicId, $actorId, $chatId, $status, $profile, $formId, $formVersion, $menu, $firstField, $expires);
         $q->execute(); $id = (int)$this->conn->insert_id; $q->close();
         $this->audit('telegram', (int)$actor['telegram_user_id'], 'draft_started', 'session', $id);
         $session = $this->session($id);
@@ -708,8 +712,8 @@ final class TelegramRegistrationService
         $expires = date('Y-m-d H:i:s', time()+3600);
         $q=$this->conn->prepare("INSERT INTO telegram_registration_sessions (public_id,bot_user_id,telegram_chat_id,status,viewing_menu,expires_at) VALUES (?,?,?,'failed','search_results',?)");
         // 'failed' status so the row doesn't interfere with approval queues but remains for menu tracking.
-        $status='failed'; $menu='search_results';
-        $q->bind_param('siiss',$publicId,(int)$actor['id'],$chatId,$status,$menu,$expires);
+        $actorId=(int)$actor['id'];
+        $q->bind_param('siis',$publicId,$actorId,$chatId,$expires);
         $q->execute(); $q->close();
         return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'search_prompt'), TelegramKeyboard::reply([
             [['text'=>'❌ ሰርዝ']]
@@ -752,8 +756,9 @@ final class TelegramRegistrationService
     private function listMyRegistrations(int $chatId, array $actor): array
     {
         $rows = [];
+        $aid=(int)$actor['id'];
         $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,COALESCE(an.value_text,'') member_name FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' WHERE s.bot_user_id=? ORDER BY s.id DESC LIMIT 15");
-        $q->bind_param('i',(int)$actor['id']); $q->execute(); $res=$q->get_result();
+        $q->bind_param('i',$aid); $q->execute(); $res=$q->get_result();
         while ($row = $res->fetch_assoc()) $rows[] = $row;
         $q->close();
         if (!$rows) return TelegramKeyboard::msg($chatId, TelegramMessageService::get($this->conn,'my_registrations_empty'), $this->homeKeyboard());
@@ -915,7 +920,7 @@ final class TelegramRegistrationService
         }
 
         if ($fromEdit) {
-            $this->updateField((int)$session['id'], 'viewing_menu', 'review');
+            $this->updateField((int)$session['id'], 'viewing_menu', 'final_review');
             $session = $this->session((int)$session['id']);
             return $this->showReview($chatId, $session);
         }
@@ -975,8 +980,9 @@ final class TelegramRegistrationService
         }
         $newStatus = $state==='none' ? 'collecting' : 'duplicate_review';
         $newField = $state==='none' ? $this->nextFieldKey($session,'full_name_am') : null;
+        $sid=(int)$session['id'];
         $q = $this->conn->prepare('UPDATE telegram_registration_sessions SET status=?, duplicate_state=?, duplicate_summary=?, current_field_key=?, current_candidate_index=0, lock_version=lock_version+1 WHERE id=?');
-        $q->bind_param('ssssi', $newStatus, $state, $summary, $newField, (int)$session['id']);
+        $q->bind_param('ssssi', $newStatus, $state, $summary, $newField, $sid);
         $q->execute(); $q->close();
     }
 
@@ -1141,8 +1147,9 @@ final class TelegramRegistrationService
         $text .= TelegramMessageService::get($this->conn, $promptKey);
         $this->conn->begin_transaction();
         try {
+            $sid=(int)$session['id'];
             $q = $this->conn->prepare("UPDATE telegram_registration_sessions SET current_field_key=?,viewing_menu='field_edit',edit_return_to_review=1,lock_version=lock_version+1 WHERE id=?");
-            $q->bind_param('si', $key, (int)$session['id']); $q->execute(); $q->close();
+            $q->bind_param('si', $key, $sid); $q->execute(); $q->close();
             $this->audit('telegram', (int)$session['bot_user_id'], 'field_edit_started', 'session', (int)$session['id']);
             $this->conn->commit();
         } catch (\Throwable $e) { $this->conn->rollback(); }
@@ -1427,15 +1434,17 @@ final class TelegramRegistrationService
         } catch (\Throwable $e) {
             reportInternalError('Telegram duplicate lookup failed',$e); $state='error'; $summary=null;
         }
+        $sid=(int)$session['id'];
         $q = $this->conn->prepare('UPDATE telegram_registration_sessions SET duplicate_state=?,duplicate_summary=?,lock_version=lock_version+1 WHERE id=?');
-        $q->bind_param('ssi',$state,$summary,(int)$session['id']); $q->execute(); $q->close();
+        $q->bind_param('ssi',$state,$summary,$sid); $q->execute(); $q->close();
     }
 
     private function recordCandidateDecision(array $session, int $candidateId, string $decision): void
     {
         if ($candidateId < 1) return;
+        $sid=(int)$session['id'];
         $q = $this->conn->prepare('INSERT INTO telegram_candidate_decisions (session_id,candidate_member_id,decision) VALUES (?,?,?)');
-        $q->bind_param('iis',(int)$session['id'],$candidateId,$decision); $q->execute(); $q->close();
+        $q->bind_param('iis',$sid,$candidateId,$decision); $q->execute(); $q->close();
     }
 
     private function decisionExistsFor(int $sessionId, int $candidateId, array $decisions): bool
@@ -1458,6 +1467,7 @@ final class TelegramRegistrationService
         $sets = []; $types = ''; $vals = [];
         foreach ($changes as $col => $val) {
             if ($val instanceof \mysqli_sql_expr) { $sets[] = "`$col`=".((string)$val); continue; }
+            if ($val === null) { $sets[] = "`$col`=NULL"; continue; }
             $sets[] = "`$col`=?"; $types .= 's'; $vals[] = is_int($val) ? (string)$val : (string)$val;
         }
         $sets[] = "lock_version=lock_version+1";
@@ -1500,8 +1510,9 @@ final class TelegramRegistrationService
     private function clearInFlight(int $chatId, array $actor): void
     {
         // Cancel any search-results marker sessions for this actor.
+        $aid=(int)$actor['id'];
         $q = $this->conn->prepare("DELETE FROM telegram_registration_sessions WHERE bot_user_id=? AND viewing_menu='search_results'");
-        $q->bind_param('i',(int)$actor['id']); $q->execute(); $q->close();
+        $q->bind_param('i',$aid); $q->execute(); $q->close();
     }
 
     private function audit(string $type,int $actor,string $event,string $entity,int $entityId,string $result='success'): void
