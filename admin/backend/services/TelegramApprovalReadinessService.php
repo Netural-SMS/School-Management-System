@@ -7,10 +7,11 @@ final class TelegramApprovalReadinessService
     public function __construct(private \mysqli $conn) {}
 
     /** @return array{ready:bool,blockers:list<string>,warnings:list<string>} */
-    public function inspect(array $session,array $answers): array
+    public function inspect(array $session,array $answers,bool $forSubmit=false): array
     {
         $blockers=[];$warnings=[];
-        if(($session['status']??'')!=='submitted')$blockers[]='The draft must be submitted before approval.';
+        // Submit gates ($forSubmit) skip the status rule: the draft is being submitted, not yet submitted.
+        if(!$forSubmit&&($session['status']??'')!=='submitted')$blockers[]='The draft must be submitted before approval.';
         if(!in_array((string)($session['profile_key']??''),['waiting','direct','transfer'],true))$blockers[]='The registration profile is invalid.';
         $byKey=[];foreach($answers as $answer)$byKey[(string)($answer['field_key']??'')]=$answer;
         $profileId=(int)($session['form_profile_id']??0);
@@ -22,7 +23,7 @@ final class TelegramApprovalReadinessService
         // Legacy duplicate-state flag is still honoured: duplicate==='likely' blocks approval.
         // v2 also consults telegram_candidate_decisions below so that human identity
         // verdicts (same/different/uncertain) are respected.
-        $duplicate=(string)($session['duplicate_state']??'not_checked');if($duplicate==='likely')$blockers[]='A likely duplicate must be resolved before approval.';elseif(in_array($duplicate,['possible','error','not_checked'],true)){$legacyDupWarn=true;}else{$legacyDupWarn=false;}
+        $legacyDupWarn=false;$duplicate=(string)($session['duplicate_state']??'not_checked');if($duplicate==='likely')$blockers[]='A likely duplicate must be resolved before approval.';elseif(in_array($duplicate,['possible','error','not_checked'],true)){$legacyDupWarn=true;}else{$legacyDupWarn=false;}
         // v2 duplicate policy (per REG spec):
         //   - If any high-confidence plausible candidate is still 'viewed' (no
         //     human decision), submission/approval is BLOCKED.
