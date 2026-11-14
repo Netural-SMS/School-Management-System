@@ -415,7 +415,7 @@ final class TelegramRegistrationService
     private function buildFinalizePayload(int $chatId, int $messageId, array $session): array
     {
         $id = (int)$session['id'];
-        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id));
+        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id), true);
         $cands = $this->loadCandidateList($session);
         foreach ($cands as $c) {
             $band = (string)($c['score_band']??($c['band']??''));
@@ -530,7 +530,7 @@ final class TelegramRegistrationService
     {
         $id = (int)$session['id'];
         $answers = $this->answers($id);
-        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id));
+        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id), true);
         $cands = $this->loadCandidateList($session);
         $blocked = false;
         foreach ($cands as $c) {
@@ -1194,7 +1194,7 @@ final class TelegramRegistrationService
         $id = (int)$session['id'];
         // Run final duplicate check + readiness
         $answers = $this->answers($id);
-        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id));
+        $ready = (new TelegramApprovalReadinessService($this->conn))->inspect($session, $this->answersRows($id), true);
         $cands = $this->loadCandidateList($session);
         foreach ($cands as $c) {
             $band = (string)($c['score_band']??($c['band']??''));
