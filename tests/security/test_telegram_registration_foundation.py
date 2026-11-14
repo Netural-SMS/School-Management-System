@@ -134,7 +134,7 @@ class TelegramRegistrationFoundationTests(unittest.TestCase):
         self.assertIn('class="editor-workspace"', page)
         self.assertIn("height:94vh", page)
         self.assertIn("የቦት ጥያቄ", page)
-        self.assertIn("body.set('title_en',formEditor.elements.namedItem('title_am').value)", page)
+        self.assertIn("body.set('title_en',formEditor.elements.namedItem('title_en').value)", page)
 
     def test_desktop_sidebar_and_readable_approval_queue(self):
         page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
