@@ -9,6 +9,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/backend/ethiopian_date.php';
 require_once __DIR__ . '/backend/services/MemberFileService.php';
 require_once __DIR__ . '/backend/services/MemberImportService.php';
+require_once __DIR__ . '/backend/services/EducationLabels.php';
 
 // Helper functions
 if (!function_exists('sel')) {
@@ -831,17 +832,11 @@ $fullName = trim($m['student_name'] . ' ' . $m['father_name'] . ' ' . $m['grandf
                     <div class="mm-info-row"><span class="mm-info-label">Date of Birth</span><span class="mm-info-value"><?= $dobDisplay ?: '—' ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Age</span><span class="mm-info-value"><?= $m['age'] ? $m['age'] . ' years' : '—' ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Section</span><span class="mm-info-value"><?= esc($m['current_section'], '—') ?></span></div>
-                    <div class="mm-info-row"><span class="mm-info-label">Education</span><span class="mm-info-value"><?= e(ucfirst(str_replace('_', ' ', $m['education_level'] ?: '—'))) ?></span></div>
+                    <div class="mm-info-row"><span class="mm-info-label">Education</span><span class="mm-info-value"><?= e(\App\Services\EducationLabels::education($m['education_level'] ?? null)) ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Spiritual Education</span><span class="mm-info-value" style="color: #059669; font-weight: 700;">
-                        <?php 
-                        $spEduLabels = [
-                            'grade_1' => '1ኛ ክፍል', 'grade_2' => '2ኛ ክፍል', 'grade_3' => '3ኛ ክፍል',
-                            'grade_4' => '4ኛ ክፍል', 'grade_5' => '5ኛ ክፍል', 'grade_6' => '6ኛ ክፍል',
-                            'grade_7' => '7ኛ ክፍል', 'grade_8' => '8ኛ ክፍል', 'grade_9' => '9ኛ ክፍል',
-                            'grade_10' => '10ኛ ክፍል', 'grade_11' => '11ኛ ክፍል', 'grade_12' => '12ኛ ክፍል',
-                            'diploma' => 'ዲፕሎማ', 'degree' => 'ዲግሪ'
-                        ];
-                        echo e($spEduLabels[$m['spiritual_education'] ?? ''] ?? ($m['spiritual_education'] ?: '—'));
+                        <?php
+                        // M2: canonical labels shared with the print dossier.
+                        echo e(\App\Services\EducationLabels::spiritual($m['spiritual_education'] ?? null));
                         ?>
                     </span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Profession</span><span class="mm-info-value"><?= esc($m['work_profession'], '—') ?></span></div>
