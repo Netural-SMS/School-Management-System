@@ -1066,7 +1066,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span id="nextMemberIdDisplay" class="font-semibold text-slate-800"><?= e($nextMemberCode) ?></span>
                                 </p>
                                 <p class="text-[10px] text-slate-400">
-                                    Waiting-list members will not get an ID until they complete 3 months.
+                                    Waiting-list members will not get an ID until they complete 6 months.
                                 </p>
 
                                 <input type="hidden" name="student_id" id="studentIdField" value="">
@@ -1725,7 +1725,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
 
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <p class="text-[11px] text-slate-500">
-                                *Required. Waiting-list: signed form optional; full ID + card only after 3 months (backend logic later).
+                                *Required. Waiting-list: signed form optional; full ID + card only after 6 months (backend logic later).
                             </p>
                             <div class="flex gap-2 justify-end">
                                 <button type="button"
