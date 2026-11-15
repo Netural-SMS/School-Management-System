@@ -256,8 +256,17 @@ if ($age !== null) {
 }
 if ($age_group === null) {
     // No usable birth date: respect an explicitly posted canonical value
-    // (e.g. quick-add section pick); anything unknown stays null.
-    $postedGroup = \App\Services\MemberCategory::normalizeGroup(field('age_group'));
+    // (e.g. quick-add section pick). M4: a posted value that is not a known
+    // code used to be silently stored as NULL (success-yet-no-group); reject
+    // it instead so the caller fixes the value.
+    $postedGroupRaw = trim((string)field('age_group'));
+    $postedGroup = \App\Services\MemberCategory::normalizeGroup($postedGroupRaw);
+    if ($postedGroupRaw !== '' && $postedGroup === null) {
+        // Pre-try guard: jsonExit directly like the other guards above
+        // (the InvalidArgumentException→422 mapping try starts later).
+        jsonExit(['status' => 'error',
+            'message' => 'Unknown age group "' . $postedGroupRaw . '". Use one of: 7_13, 14_17, 18_plus.'], 422);
+    }
     if ($postedGroup !== null) {
         $age_group = $postedGroup;
         $current_section = \App\Services\MemberCategory::sectionAm($postedGroup);
