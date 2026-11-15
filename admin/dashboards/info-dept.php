@@ -3547,9 +3547,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         .then(r => r.json())
         .then(data => {
             if(data.status === 'success') {
-                alert('Saved successfully!');
                 closeManageSheet();
-                window.location.reload(); // Refresh to see changes
+                // M21: no full-page reload — refresh the lists in place so
+                // the officer keeps section, scroll position and filters.
+                try { if (typeof loadManageMembers === 'function') loadManageMembers(); } catch (e) { console.warn(e); }
+                try { if (typeof loadAllMembers === 'function') loadAllMembers(); } catch (e) { console.warn(e); }
+                if (typeof showToast === 'function') showToast('Saved successfully!', 'success');
+                else alert('Saved successfully!');
             } else {
                 alert('Error: ' + data.message);
             }
