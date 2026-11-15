@@ -345,7 +345,7 @@ final class TelegramRegistrationService
                 $offset = $action==='cand_next' ? 1 : -1;
                 $newIndex = max(0, ((int)($session['current_candidate_index'] ?? 0)) + $offset);
                 $candidates = $this->loadCandidateList($session);
-                if ($newIndex >= count($candidates)) $newIndex = count($candidates)-1;
+                if ($newIndex >= count($candidates)) $newIndex = max(0, count($candidates)-1);
                 $this->updateField((int)$session['id'], 'current_candidate_index', $newIndex);
                 $session = $this->session((int)$session['id']);
                 return $this->renderSession($chatId, $session, $messageId);
