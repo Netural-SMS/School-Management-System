@@ -3544,8 +3544,21 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             method: 'POST',
             body: formData
         })
-        .then(r => r.json())
+        .then(response => {
+            // M22: mirror registration — a non-JSON reply (login page after
+            // full session loss) means re-login, not 'Network error'.
+            const ct = response.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                throw { _type: 'session_expired', message: 'Session expired. The page will reload.' };
+            }
+            return response.json();
+        })
         .then(data => {
+            if (data && (data.status === 'session_expired' || data.status === 'csrf_expired' || data.action === 'reload')) {
+                alert(data.message || 'Session expired. The page will reload.');
+                window.location.reload();
+                return;
+            }
             if(data.status === 'success') {
                 closeManageSheet();
                 // M21: no full-page reload — refresh the lists in place so
@@ -3559,6 +3572,12 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             }
         })
         .catch(err => {
+            if (err && err._type === 'session_expired') {
+                alert(err.message); window.location.reload(); return;
+            }
+            if (err instanceof SyntaxError) {
+                alert('Session may have expired. The page will reload.'); window.location.reload(); return;
+            }
             alert('Network error');
             console.error(err);
         })

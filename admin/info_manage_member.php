@@ -66,9 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $newUploadedPaths = [];
     $uploadsCommitted = false;
     try {
-        // Validate CSRF token
+        // Validate CSRF token. M22: same expiry shape as registration
+        // (status + action:reload) so the sheet client can offer re-login.
         if (!validateCsrf()) {
-            echo json_encode(['status' => 'error', 'message' => 'Security token expired. Please refresh and try again.']);
+            http_response_code(403);
+            echo json_encode(['status' => 'csrf_expired', 'message' => 'Security token expired. The page will reload.', 'action' => 'reload']);
             exit;
         }
         if (function_exists('isRateLimited') && isRateLimited('info_manage', 60, 300)) {
