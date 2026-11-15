@@ -2867,6 +2867,17 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                     <i class="fa-solid fa-users text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">Members</span>
                 </button>
+                <!-- M3: Family + Register were desktop-sidebar-only; mobile had no path to them. -->
+                <button data-section="family"
+                        class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
+                    <i class="fa-solid fa-people-roof text-base mb-0.5"></i>
+                    <span class="text-[10px] whitespace-nowrap">Family Link</span>
+                </button>
+                <button data-section="newmembers"
+                        class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
+                    <i class="fa-solid fa-user-plus text-base mb-0.5"></i>
+                    <span class="text-[10px] whitespace-nowrap">New Members</span>
+                </button>
                 <button data-section="manage"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-pen-to-square text-base mb-0.5"></i>
