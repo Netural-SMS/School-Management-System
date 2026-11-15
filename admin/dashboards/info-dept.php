@@ -3526,6 +3526,11 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
     function submitEditForm(e) {
         e.preventDefault();
         const form = e.target;
+        // M9: button-disable alone still allows re-entry (Enter key, second
+        // sheet, impatient re-click after .finally re-enables mid-flight in
+        // slow networks). One save per form until the round-trip settles.
+        if (form.dataset.saving === '1') return;
+        form.dataset.saving = '1';
         const formData = new FormData(form);
         formData.append('csrf_token', CSRF_TOKEN);
         const btn = form.querySelector('button[type="submit"]');
@@ -3554,6 +3559,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             console.error(err);
         })
         .finally(() => {
+            form.dataset.saving = '';
             if(btn) {
                 btn.disabled = false;
                 btn.textContent = 'Save Changes';
