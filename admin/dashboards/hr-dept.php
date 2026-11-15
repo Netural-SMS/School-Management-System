@@ -3431,6 +3431,17 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         if (!form) return;
         form.reset();
 
+        // M12: form.reset() already restores upgradeMemberIdField to its
+        // value="0" default — make that invariant explicit so no future
+        // markup change can leave promotion mode armed after Clear.
+        const upgradeIdInput = document.getElementById('upgradeMemberIdField');
+        if (upgradeIdInput) upgradeIdInput.value = '0';
+        // The early-promotion reason input is created dynamically, so reset()
+        // does NOT remove it — a stale reason must not ride along on the next
+        // submit.
+        const staleReason = document.getElementById('promotion_override_reason');
+        if (staleReason) staleReason.remove();
+
         // Default registration type: waiting
         const defaultRegBtn = document.querySelector('.registration-type-btn[data-registration-type="waiting"]');
         if (defaultRegBtn) selectRegistrationType('waiting', defaultRegBtn);
