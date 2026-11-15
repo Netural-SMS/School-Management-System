@@ -165,6 +165,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $postedRaw = $_POST['age_group'];
         $postedRaw = is_scalar($postedRaw) ? trim((string)$postedRaw) : '';
         $postedGroup = \App\Services\MemberCategory::normalizeGroup($postedRaw);
+        // M4: '' intentionally clears back to pending, but a non-empty unknown
+        // value used to wipe both columns with a success message. Reject it.
+        if ($postedRaw !== '' && $postedGroup === null) {
+            echo json_encode(['status' => 'error',
+                'message' => 'Unknown age group "' . $postedRaw . '". Use one of: 7_13, 14_17, 18_plus (or empty to clear).']);
+            exit;
+        }
         $age_group = $postedGroup;
         $current_section = \App\Services\MemberCategory::sectionAm($postedGroup);
     } else {
