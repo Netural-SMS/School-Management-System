@@ -2451,14 +2451,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 <!-- ID CARD SECTION END -->
 
             <!-- GROUPS -->
-            <section id="section-groups" class="content-section">
-                <div class="panel p-4 mobile-card">
-                    <h3 class="text-sm font-semibold text-slate-800 mb-1">Groups</h3>
-                    <p class="text-xs text-slate-500">
-                        Group & section management UI placeholder. Add CRUD later.
-                    </p>
-                </div>
-            </section>
+            <!-- M20: placeholder section removed — Groups lives at /admin/groups.php (see sidebar + mobile nav). -->
 
             <!-- ATTENDANCE -->
             <!-- ════════════════════════════════════════════════════════
@@ -2892,11 +2885,12 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                     <i class="fa-solid fa-id-card text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">ID Cards</span>
                 </button>
-                <button data-section="groups"
+                <!-- M20: mobile goes to the real Groups module, like the sidebar (was: placeholder section). -->
+                <a href="/admin/groups.php"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-layer-group text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">Groups</span>
-                </button>
+                </a>
                 <button data-section="reports"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-file-lines text-base mb-0.5"></i>

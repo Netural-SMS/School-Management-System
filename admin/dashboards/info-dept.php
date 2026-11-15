@@ -1067,14 +1067,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
 
 
             <!-- GROUPS -->
-            <section id="section-groups" class="content-section">
-                <div class="panel p-4 mobile-card">
-                    <h3 class="text-sm font-semibold text-slate-800 mb-1">Groups</h3>
-                    <p class="text-xs text-slate-500">
-                        Group & section management UI placeholder. Add CRUD later.
-                    </p>
-                </div>
-            </section>
+            <!-- M20: placeholder section removed — Information Dept has no Groups module access; nav entry removed with it. -->
 
             <!-- ════════════════════════════════════════════════════════
                  ANALYTICS HUB — shared read-only analytics over the two
@@ -1641,11 +1634,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <span class="text-[10px] whitespace-nowrap">Archive</span>
                 </button>
                 
-                <button data-section="groups"
-                        class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
-                    <i class="fa-solid fa-layer-group text-base mb-0.5"></i>
-                    <span class="text-[10px] whitespace-nowrap">Groups</span>
-                </button>
+
                 <button data-section="attendance"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-clipboard-check text-base mb-0.5"></i>
