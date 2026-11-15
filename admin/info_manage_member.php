@@ -831,7 +831,7 @@ $fullName = trim($m['student_name'] . ' ' . $m['father_name'] . ' ' . $m['grandf
                     <div class="mm-info-row"><span class="mm-info-label">Date of Birth</span><span class="mm-info-value"><?= $dobDisplay ?: '—' ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Age</span><span class="mm-info-value"><?= $m['age'] ? $m['age'] . ' years' : '—' ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Section</span><span class="mm-info-value"><?= esc($m['current_section'], '—') ?></span></div>
-                    <div class="mm-info-row"><span class="mm-info-label">Education</span><span class="mm-info-value"><?= ucfirst(str_replace('_', ' ', $m['education_level'] ?: '—')) ?></span></div>
+                    <div class="mm-info-row"><span class="mm-info-label">Education</span><span class="mm-info-value"><?= e(ucfirst(str_replace('_', ' ', $m['education_level'] ?: '—'))) ?></span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Spiritual Education</span><span class="mm-info-value" style="color: #059669; font-weight: 700;">
                         <?php 
                         $spEduLabels = [
@@ -841,7 +841,7 @@ $fullName = trim($m['student_name'] . ' ' . $m['father_name'] . ' ' . $m['grandf
                             'grade_10' => '10ኛ ክፍል', 'grade_11' => '11ኛ ክፍል', 'grade_12' => '12ኛ ክፍል',
                             'diploma' => 'ዲፕሎማ', 'degree' => 'ዲግሪ'
                         ];
-                        echo $spEduLabels[$m['spiritual_education'] ?? ''] ?? ($m['spiritual_education'] ?: '—');
+                        echo e($spEduLabels[$m['spiritual_education'] ?? ''] ?? ($m['spiritual_education'] ?: '—'));
                         ?>
                     </span></div>
                     <div class="mm-info-row"><span class="mm-info-label">Profession</span><span class="mm-info-value"><?= esc($m['work_profession'], '—') ?></span></div>

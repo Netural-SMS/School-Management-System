@@ -4343,11 +4343,11 @@ function showDuplicateWarning(matches) {
                         </div>
                         <div class="mt-3 flex gap-2">
                             ${isArchived 
-                                ? `<button onclick="restoreAndClose(${m.id}, '${fullName.replace(/'/g, "\\'")}')" 
+                                ? `<button type="button" data-restore-id="${escapeAttr(m.id)}" data-restore-name="${escapeAttr(fullName)}"
                                         class="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-rotate-left mr-1"></i> Restore This Member
                                    </button>`
-                                : `<button onclick="viewExistingMember(${m.id})" 
+                                : `<button type="button" data-view-id="${escapeAttr(m.id)}"
                                         class="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-eye mr-1"></i> View Member
                                    </button>`
@@ -4358,7 +4358,20 @@ function showDuplicateWarning(matches) {
             </div>
         `;
     }).join('');
-    
+
+    // H3: no JS-in-attribute — wire the buttons with listeners so a member
+    // name can never break out of an onclick string (stored XSS).
+    container.querySelectorAll('[data-restore-id]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (typeof restoreAndClose === 'function') restoreAndClose(btn.getAttribute('data-restore-id'), btn.getAttribute('data-restore-name') || '');
+        });
+    });
+    container.querySelectorAll('[data-view-id]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (typeof viewExistingMember === 'function') viewExistingMember(btn.getAttribute('data-view-id'));
+        });
+    });
+
     // Show modal
     document.getElementById('duplicateModal').classList.remove('hidden');
     document.getElementById('duplicateModal').classList.add('flex');

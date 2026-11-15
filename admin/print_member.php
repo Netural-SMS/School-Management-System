@@ -589,11 +589,11 @@ $fullAddress = !empty($addressParts) ? implode('፣ ', $addressParts) : '—';
                 </div>
                 <div class="info-box">
                     <div class="info-label">የትምህርት ደረጃ</div>
-                    <div class="info-value"><?= $eduDisplay ?></div>
+                    <div class="info-value"><?= e($eduDisplay) ?></div>
                 </div>
                 <div class="info-box" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color: #10b981;">
                     <div class="info-label" style="color: #059669;">✝ የመንፈሳዊ ትምህርት</div>
-                    <div class="info-value" style="color: #059669; font-weight: 700;"><?= $spiritualEduDisplay ?></div>
+                    <div class="info-value" style="color: #059669; font-weight: 700;"><?= e($spiritualEduDisplay) ?></div>
                 </div>
             </div>
         </div>

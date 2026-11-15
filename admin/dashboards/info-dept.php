@@ -3369,7 +3369,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const toast = document.createElement('div');
         toast.className = 'fixed top-4 right-4 z-[200] px-6 py-4 rounded-xl shadow-2xl text-white font-semibold text-sm transform transition-all duration-300 translate-x-full';
         toast.style.background = type === 'success' ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #dc2626, #ef4444)';
-        toast.innerHTML = message;
+        // H3: text only — server messages carry member names (stored XSS).
+        toast.textContent = message;
         document.body.appendChild(toast);
         
         setTimeout(() => toast.classList.remove('translate-x-full'), 100);
@@ -3385,6 +3386,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const div = document.createElement('div');
         div.textContent = String(text ?? '');
         return div.innerHTML;
+    }
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
     // A value passed as a JS string argument inside onclick="...":
     // JSON-encode (valid JS literal), then HTML-attribute-encode.
@@ -3782,18 +3786,18 @@ function showDuplicateWarning(matches) {
                             </span>
                         </div>
                         <div class="space-y-1 text-xs text-slate-600">
-                            <p><i class="fa-solid fa-id-card w-4 text-slate-400"></i> ${m.member_code || 'No ID'}</p>
-                            <p><i class="fa-solid fa-users w-4 text-slate-400"></i> ${m.current_section || m.age_group || '—'}</p>
-                            <p><i class="fa-solid fa-phone w-4 text-slate-400"></i> ${m.phone_number || '—'}</p>
-                            ${m.match_reasons ? `<p class="text-red-500 text-[10px] mt-1"><i class="fa-solid fa-exclamation-circle"></i> ${m.match_reasons.join(', ')}</p>` : ''}
+                            <p><i class="fa-solid fa-id-card w-4 text-slate-400"></i> ${escapeHtml(m.member_code || 'No ID')}</p>
+                            <p><i class="fa-solid fa-users w-4 text-slate-400"></i> ${escapeHtml(m.current_section || m.age_group || '—')}</p>
+                            <p><i class="fa-solid fa-phone w-4 text-slate-400"></i> ${escapeHtml(m.phone_number || '—')}</p>
+                            ${m.match_reasons ? `<p class="text-red-500 text-[10px] mt-1"><i class="fa-solid fa-exclamation-circle"></i> ${escapeHtml(m.match_reasons.join(', '))}</p>` : ''}
                         </div>
                         <div class="mt-3 flex gap-2">
                             ${isArchived 
-                                ? `<button onclick="restoreAndClose(${m.id}, '${fullName.replace(/'/g, "\\'")}')" 
+                                ? `<button type="button" data-restore-id="${escapeAttr(m.id)}" data-restore-name="${escapeAttr(fullName)}"
                                         class="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-rotate-left mr-1"></i> Restore This Member
                                    </button>`
-                                : `<button onclick="viewExistingMember(${m.id})" 
+                                : `<button type="button" data-view-id="${escapeAttr(m.id)}"
                                         class="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-eye mr-1"></i> View Member
                                    </button>`
@@ -3804,7 +3808,20 @@ function showDuplicateWarning(matches) {
             </div>
         `;
     }).join('');
-    
+
+    // H3: no JS-in-attribute — wire the buttons with listeners so a member
+    // name can never break out of an onclick string (stored XSS).
+    container.querySelectorAll('[data-restore-id]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (typeof restoreAndClose === 'function') restoreAndClose(btn.getAttribute('data-restore-id'), btn.getAttribute('data-restore-name') || '');
+        });
+    });
+    container.querySelectorAll('[data-view-id]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (typeof viewExistingMember === 'function') viewExistingMember(btn.getAttribute('data-view-id'));
+        });
+    });
+
     // Show modal
     document.getElementById('duplicateModal').classList.remove('hidden');
     document.getElementById('duplicateModal').classList.add('flex');
