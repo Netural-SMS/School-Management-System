@@ -25,6 +25,7 @@ require_once __DIR__ . '/../admin/backend/services/TelegramDuplicateCandidateSer
 require_once __DIR__ . '/../admin/backend/services/TelegramBotApiService.php';
 require_once __DIR__ . '/../admin/backend/services/TelegramAttachmentService.php';
 require_once __DIR__ . '/../admin/backend/services/TelegramMessageService.php';
+require_once __DIR__ . '/../admin/backend/services/TelegramApprovalReadinessService.php';
 require_once __DIR__ . '/../admin/backend/services/TelegramRegistrationService.php';
 
 if (!feature_enabled('telegram_registration') || !defined('TELEGRAM_BOT_TOKEN') || !defined('TELEGRAM_WEBHOOK_SECRET')) {
