@@ -3234,13 +3234,29 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
             ['house_number','house_number'],
             ['education_level','education_level'],
             ['spiritual_education','spiritual_education'],
-            ['member_code','student_id']
+            ['member_code','student_id'],
+            // H1: prefill the birth date so promotion keeps it even if the
+            // officer submits without touching DOB (server keeps stored DOB
+            // too, but the form must show the truth).
+            ['dob_ec_day','dob_day'],
+            ['dob_ec_month','dob_month'],
+            ['dob_ec_year','dob_year']
         ];
         direct.forEach(function (pair) {
             if (m[pair[0]] != null && String(m[pair[0]]).trim() !== '') {
                 setFormField(f, pair[1], m[pair[0]]);
             }
         });
+        // Refresh the live age display from the prefilled DOB, then restore
+        // the STORED group on top: a manual override must survive promotion
+        // even when it disagrees with the DOB-derived group.
+        if (typeof calculateAgeSection === 'function' && (m.dob_ec_year || m.date_of_birth)) {
+            calculateAgeSection();
+            if (m.age_group != null && String(m.age_group).trim() !== '') {
+                setFormField(f, 'age_group', m.age_group);
+                setFormField(f, 'current_section', m.current_section || '');
+            }
+        }
         // membership_tier forced to permanent on promotion
         setFormField(f, 'membership_tier', 'permanent');
         // Sync member-type button UI + conditional sections

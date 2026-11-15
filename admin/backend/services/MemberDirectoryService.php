@@ -39,6 +39,8 @@ final class MemberDirectoryService
         'guardian_phone2', 'city', 'sub_city', 'woreda', 'mender',
         'block_number', 'house_number', 'work_profession', 'education_level',
         'student_photo_path', 'membership_tier', 'registered_at', 'created_at',
+        // H1: promotion prefill needs the birth date (upgrade keeps it).
+        'dob_ec_day', 'dob_ec_month', 'dob_ec_year',
     ];
 
     private const MANAGER_COLUMNS = [
@@ -249,7 +251,10 @@ final class MemberDirectoryService
         }
 
         if ($criteria['eligible_for_id_card']) {
-            $where[] = "(`registration_type` IN ('direct', 'transfer') OR `member_type` = 'honorary')";
+            // H4: promoted members keep registration_type='waiting' as their
+            // true background; tier=permanent is what makes them card-ready.
+            // Keep in sync with generate_id_card.php.
+            $where[] = "(`registration_type` IN ('direct', 'transfer') OR `member_type` = 'honorary' OR `membership_tier` = 'permanent')";
         }
 
         if ($criteria['membership_tier'] !== '') {

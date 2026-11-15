@@ -61,16 +61,20 @@ $installedNewFile = false;
 try {
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT id, member_code, registration_type, member_type, status, id_card_status
+        'SELECT id, member_code, registration_type, member_type, membership_tier, status, id_card_status
          FROM members WHERE id = ? FOR UPDATE'
     );
     $statement->execute([(int)$memberId]);
     $member = $statement->fetch(PDO::FETCH_ASSOC);
+    // H4: promoted members keep registration_type='waiting' as their true
+    // background; tier=permanent is what makes them card-ready. Keep in
+    // sync with MemberDirectoryService eligible_for_id_card.
     $eligible = $member
         && $member['status'] === 'active'
         && (
             in_array($member['registration_type'], ['direct', 'transfer'], true)
             || $member['member_type'] === 'honorary'
+            || ($member['membership_tier'] ?? '') === 'permanent'
         );
     if (!$eligible) {
         throw new DomainException('The member is not eligible for an ID card.');
