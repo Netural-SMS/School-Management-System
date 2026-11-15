@@ -9,9 +9,13 @@
     var list = null;
     var rowCounter = 0;
 
+    // M1: keys must match the <select> ids rendered by hr-dept/info-dept.
+    // 'filterType' matched NO element, so the Reg.Type and Member Type
+    // dropdowns were silently dead (the API already supports both params).
     var filterMap = {
         memberSearchInput: 'q',
-        filterType: 'registration_type',
+        filterRegistrationType: 'registration_type',
+        filterMemberType: 'member_type',
         filterStatus: 'status',
         filterGender: 'gender',
         filterAgeGroup: 'age_group'
