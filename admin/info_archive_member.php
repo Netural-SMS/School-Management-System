@@ -79,7 +79,26 @@ if ($stmt) {
         } catch (Exception $e) {
             error_log("Workflow notification error: " . $e->getMessage());
         }
-        
+
+        // H5: archiving must leave an audit trail (actor + reason + type).
+        // Best-effort: the UPDATE above already committed (no transaction
+        // here), so a logging failure is reported, not user-facing.
+        try {
+            require_once __DIR__ . '/backend/services/SecurityAuditService.php';
+            $auditOk = \App\Services\SecurityAuditService::record(
+                $conn,
+                'Member Archived',
+                ['archive_reason' => $reason, 'archive_type' => $archiveType],
+                'member',
+                $id
+            );
+            if (!$auditOk) {
+                error_log('Member archive audit recording failed for member ' . $id . '.');
+            }
+        } catch (Throwable $auditErr) {
+            error_log('Member archive audit error: ' . $auditErr->getMessage());
+        }
+
         echo json_encode([
             'status' => 'success', 
             'message' => $memberName . ' has been moved to archive successfully'

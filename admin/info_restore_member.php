@@ -62,8 +62,26 @@ if ($stmt) {
     $stmt->bind_param('si', $restoredBy, $id);
     if ($stmt->execute()) {
         $memberName = $member['student_name'] . ' ' . $member['father_name'];
+        // H5: restoring must leave an audit trail. Best-effort: the UPDATE
+        // above already committed (no transaction here), so a logging
+        // failure is reported, not user-facing.
+        try {
+            require_once __DIR__ . '/backend/services/SecurityAuditService.php';
+            $auditOk = \App\Services\SecurityAuditService::record(
+                $conn,
+                'Member Restored',
+                ['restored_to' => 'active'],
+                'member',
+                $id
+            );
+            if (!$auditOk) {
+                error_log('Member restore audit recording failed for member ' . $id . '.');
+            }
+        } catch (Throwable $auditErr) {
+            error_log('Member restore audit error: ' . $auditErr->getMessage());
+        }
         echo json_encode([
-            'status' => 'success', 
+            'status' => 'success',
             'message' => $memberName . ' has been restored to active members'
         ]);
     } else {
