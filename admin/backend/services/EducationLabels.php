@@ -52,6 +52,18 @@ final class EducationLabels
         'degree' => 'ዲግሪ / Degree',
     ];
 
+    /** Canonical code => label map (filter dropdowns + service enum). */
+    public static function options(): array
+    {
+        return self::EDUCATION;
+    }
+
+    /** Canonical codes accepted by the directory filter. */
+    public static function codes(): array
+    {
+        return array_keys(self::EDUCATION);
+    }
+
     public static function education(?string $stored): string
     {
         $stored = trim((string)$stored);

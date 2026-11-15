@@ -2304,14 +2304,13 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                             </select>
                             <select id="manageFilterEducation" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
                                 <option value="">All Education Levels</option>
-                                <option value="illiterate">Illiterate</option>
-                                <option value="elementary">Elementary</option>
-                                <option value="high_school">High School</option>
-                                <option value="certificate">Certificate</option>
-                                <option value="diploma">Diploma</option>
-                                <option value="degree">Degree</option>
-                                <option value="masters">Masters</option>
-                                <option value="phd">PhD</option>
+                                <?php
+                                // M2: options single-sourced from the canonical vocabulary —
+                                // the old hardcoded set matched nothing the forms store.
+                                require_once __DIR__ . '/../backend/services/EducationLabels.php';
+                                foreach (\App\Services\EducationLabels::options() as $eduCode => $eduLabel): ?>
+                                <option value="<?= e($eduCode) ?>"><?= e($eduLabel) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="mt-3 flex flex-col sm:flex-row gap-2 justify-end">

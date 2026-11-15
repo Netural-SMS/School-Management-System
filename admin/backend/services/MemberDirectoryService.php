@@ -8,6 +8,8 @@
 
 namespace App\Services;
 
+require_once __DIR__ . '/EducationLabels.php';
+
 use InvalidArgumentException;
 use PDO;
 use PDOStatement;
@@ -211,10 +213,10 @@ final class MemberDirectoryService
             'age_group' => $enum($input['age_group'] ?? '', ['7_13', '14_17', '18_plus']),
             'current_section' => $text($input['current_section'] ?? '', 100),
             'city' => $text($input['city'] ?? '', 100),
-            'education_level' => $enum($input['education_level'] ?? '', [
-                'illiterate', 'elementary', 'high_school', 'certificate',
-                'diploma', 'degree', 'masters', 'phd',
-            ]),
+            // M2: the old 8-value set matched nothing the forms store ('high'
+            // vs 'high_school') — unknown codes were silently unfiltered.
+            // Canonical 12 codes, single-sourced from EducationLabels.
+            'education_level' => $enum($input['education_level'] ?? '', EducationLabels::codes()),
             'archive_type' => $enum($input['archive_type'] ?? '', [
                 'permanent_archive', 'failed_observation',
             ]),
