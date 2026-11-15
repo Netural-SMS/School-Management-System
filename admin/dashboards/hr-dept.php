@@ -3287,6 +3287,10 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         toggleMemberRegistrationForm(true, 'permanent', 'Upgrade to Permanent Member');
         var upgradeIdInput = document.getElementById('upgradeMemberIdField');
         if (upgradeIdInput) upgradeIdInput.value = memberId;
+        // M13: flag the signed form required the moment promotion mode opens
+        // (type stays 'waiting', so the type switcher would leave it optional).
+        var signedForUpgrade = document.getElementById('docSignedFormField');
+        if (signedForUpgrade) signedForUpgrade.required = true;
 
         // Override reason (for non-eligible promotions) — captured for audit
         var existingReason = document.getElementById('promotion_override_reason');
@@ -3348,8 +3352,12 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
             if (idField) idField.value = idField.value || '<?= e($nextMemberCode) ?>';
         }
 
-        // Signed form required ONLY for transfer or direct
-        if (signedInput) signedInput.required = (type === 'transfer' || type === 'direct');
+        // Signed form required for transfer/direct — and ALWAYS in promotion
+        // mode (server rejects upgrades without a fresh upload). The submit
+        // guard above is the real enforcement (fetch bypasses native
+        // validation); this keeps the attribute truthful.
+        const upgradeMode = parseInt((document.getElementById('upgradeMemberIdField') || {}).value || '0', 10) > 0;
+        if (signedInput) signedInput.required = upgradeMode || type === 'transfer' || type === 'direct';
 
         document.querySelectorAll('.registration-type-btn').forEach(b => {
             b.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50', 'border-emerald-300');
@@ -3695,6 +3703,18 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
         const form = document.getElementById('memberRegistrationForm');
         if (!form) return;
+
+        // M13: promotion always requires a fresh signed-form upload (server
+        // rejects without one), but the form stays on type 'waiting' where
+        // the field looks optional — and native `required` never fires on
+        // fetch submits. Block here so HR learns before any round-trip.
+        const upgradeIdVal = parseInt((document.getElementById('upgradeMemberIdField') || {}).value || '0', 10);
+        const signedFileInput = document.getElementById('docSignedFormField');
+        if (upgradeIdVal > 0 && signedFileInput && signedFileInput.files.length === 0) {
+            if (typeof showToast === 'function') showToast('The signed registration form must be uploaded to promote a member.', 'warning');
+            else alert('The signed registration form must be uploaded to promote a member.');
+            return;
+        }
 
         const overlay = document.getElementById('formLoadingOverlay');
         if (overlay) overlay.classList.remove('hidden');
