@@ -272,6 +272,11 @@ class PhotoSyncWorker extends ChangeNotifier {
         final replayed = data['replayed'] == true;
         final conflict = data['conflict'] == true;
         final serverPath = data['path'] as String?;
+        // P7 pairing: save any HMAC key the server hands back.
+        final hmacKey = data['photo_hmac_key'] as String?;
+        if (hmacKey != null && hmacKey.isNotEmpty) {
+          await _outbox.saveHmacKey(hmacKey);
+        }
         await _outbox.markDone(
           entry.clientOpId,
           serverPath: serverPath ?? '',

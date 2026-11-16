@@ -104,16 +104,35 @@ class PhotoZipExportService {
           'Try capturing again.');
     }
 
+    // HMAC key — prefer the server-paired per-(operator,device) secret
+    // (returned after first successful upload and persisted via
+    // saveHmacKey); fall back to a per-install secret stored in the
+    // exports directory when we haven't yet paired with the server
+    // (e.g., the operator is exporting without ever having synced).
+    final pairedKeyHex = await PhotoOutboxService.instance.savedHmacKey();
+    List<int> hmacKeyBytes;
+    String hmacKeyType;
+    if (pairedKeyHex != null && pairedKeyHex.length == 64) {
+      final hex = pairedKeyHex;
+      hmacKeyBytes = List<int>.generate(
+          32, (i) => int.parse(hex.substring(i*2, i*2+2), radix: 16));
+      hmacKeyType = 'server_paired';
+    } else {
+      hmacKeyBytes = await _fallbackHmacKey();
+      hmacKeyType = 'per_install';
+    }
+
     final manifest = <String, dynamic>{
       'manifest_version': _manifestVersion,
       'bundle_id': bundleId,
       'exported_at': startedAt.toIso8601String(),
       'device_id': deviceId,
-      'app_version': '1.8.0',
+      'app_version': '1.8.1',
       'zip_version': _zipVersion,
       'photo_count': files.length,
       'total_bytes': totalBytes,
       'skipped_missing_files': missingBytes,
+      'hmac_key_type': hmacKeyType,
       'photos': files
           .map((f) => {
                 'arc_path': f.arcName,
@@ -135,12 +154,7 @@ class PhotoZipExportService {
     final manifestJson =
         const JsonEncoder.withIndent(null).convert(_sorted(manifest));
     final manifestBytes = Uint8List.fromList(utf8.encode(manifestJson));
-
-    // HMAC key — paired secret when we have one, otherwise a stable
-    // per-install secret stored in the outbox dir. A mismatch at
-    // import-time is surfaced to the admin (warn, not block).
-    final hmacKey = await _hmacKey();
-    final sig = Hmac(sha256, hmacKey).convert(manifestBytes);
+    final sig = Hmac(sha256, hmacKeyBytes).convert(manifestBytes);
 
     final archive = Archive();
     // files are stored uncompressed (WebP is already compressed)
@@ -185,10 +199,11 @@ class PhotoZipExportService {
     return zip;
   }
 
-  /// Stable per-install HMAC key. We don't yet pair with a server-issued
-  /// secret (that's a future P7 hardening step); this key lets the admin
-  /// detect accidental corruption of a bundle that arrived by USB.
-  Future<List<int>> _hmacKey() async {
+  /// Per-install fallback HMAC key (used when the device has never
+  /// synced with the server and therefore doesn't have a paired key
+  /// yet). This lets admins detect accidental corruption of a bundle
+  /// that arrived by USB even before pairing completes.
+  Future<List<int>> _fallbackHmacKey() async {
     final dir = await PhotoOutboxService.instance.exportsDirectory();
     final keyFile = File(p.join(dir.path, '.airlock_hmac_key'));
     if (await keyFile.exists()) {

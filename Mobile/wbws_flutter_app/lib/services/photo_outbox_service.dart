@@ -190,6 +190,30 @@ class PhotoOutboxService {
     return _cachedDeviceId!;
   }
 
+  /// P7 pairing: per-(operator,device) HMAC key returned by the server
+  /// after first upload. Persisted in photo_device_identity so future
+  /// ZIP exports can sign manifests with it. Returns the current key
+  /// hex, or null if the server hasn't paired us yet.
+  Future<String?> savedHmacKey() async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query('photo_device_identity',
+        where: 'id = 1', limit: 1);
+    if (rows.isEmpty) return null;
+    final k = rows.first['photo_hmac_key'] as String?;
+    return (k != null && k.isNotEmpty) ? k : null;
+  }
+
+  Future<void> saveHmacKey(String hexKey) async {
+    if (hexKey.isEmpty) return;
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    await db.update('photo_device_identity', {
+      'photo_hmac_key': hexKey,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, where: 'id = 1');
+  }
+
   /// Absolute path to the queue directory (app-private).
   Future<String> queueDirectory() async {
     await ensureInitialized();

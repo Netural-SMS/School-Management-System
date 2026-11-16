@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -39,6 +40,16 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
   bool _capturing = false;
   PhotoOutboxEntry? _reviewEntry;
   String? _error;
+  // The client_op_id of the just-accepted photo (undo window open).
+  String? _lastAcceptedOpId;
+  Timer? _autoPopTimer;
+
+  @override
+  void dispose() {
+    _autoPopTimer?.cancel();
+    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    super.dispose();
+  }
 
   int get _memberId =>
       (ModalRoute.of(context)?.settings.arguments
@@ -56,7 +67,7 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
   String? get _retakeOf => (ModalRoute.of(context)?.settings.arguments
       as Map<String, dynamic>?)?['retakeOfClientOpId'] as String?;
 
-  Future<void> _takePhoto() async {
+  Future<void> _takePhoto({String? retakeOfClientOpId}) async {
     if (_capturing) return;
     setState(() {
       _capturing = true;
@@ -67,7 +78,7 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
         memberId: _memberId,
         memberCode: _memberCode,
         field: _field,
-        retakeOfClientOpId: _retakeOf,
+        retakeOfClientOpId: retakeOfClientOpId ?? _retakeOf,
       );
       if (!mounted) return;
       if (entry == null) {
@@ -95,22 +106,68 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
   }
 
   void _retake() {
-    // Discard the just-captured entry, reopen the shutter.
+    // Retake the photo currently in review. We pass its clientOpId so
+    // the outbox marks the prior capture as discarded (with a
+    // replaced_by pointer) instead of leaving orphaned files — this
+    // keeps the undoRetake path valid for ~30 s.
     final entry = _reviewEntry;
-    if (entry != null) {
-      PhotoOutboxService.instance.discard(entry.clientOpId);
-    }
     setState(() {
       _reviewEntry = null;
       _error = null;
     });
-    _takePhoto();
+    _takePhoto(retakeOfClientOpId: entry?.clientOpId);
   }
 
   void _accept() {
     final entry = _reviewEntry;
     if (entry == null) return;
-    Navigator.of(context).pop(entry);
+    _autoPopTimer?.cancel();
+    setState(() {
+      _lastAcceptedOpId = entry.clientOpId;
+      _reviewEntry = null;
+    });
+    // Show a snackbar for ~8 seconds with Undo. After it closes we pop
+    // back (returning the entry). If Undo is tapped, we hide the
+    // snackbar, cancel the timer, call undoRetake, and re-open the
+    // camera as a retake of the op we just un-did.
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.check_circle, color: AppTheme.gold, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text('Photo saved · ${entry.humanSize}',
+            style: const TextStyle(fontSize: 13))),
+      ]),
+      duration: const Duration(seconds: 8),
+      backgroundColor: AppTheme.maroon,
+      action: SnackBarAction(
+        label: 'UNDO',
+        textColor: AppTheme.gold,
+        onPressed: () => _undoLastAccepted(entry.clientOpId),
+      ),
+    ));
+    _autoPopTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      if (_lastAcceptedOpId == entry.clientOpId) {
+        _lastAcceptedOpId = null;
+        Navigator.of(context).pop(entry);
+      }
+    });
+  }
+
+  Future<void> _undoLastAccepted(String opId) async {
+    _autoPopTimer?.cancel();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    // Try undoRetake first (only works when this entry replaced a
+    // prior one). If not applicable (first capture of the session),
+    // just discard the current entry and re-open.
+    await PhotoOutboxService.instance.undoRetake(opId);
+    await PhotoOutboxService.instance.discard(opId);
+    if (!mounted) return;
+    setState(() {
+      _lastAcceptedOpId = null;
+      _error = null;
+    });
+    _takePhoto(retakeOfClientOpId: opId);
   }
 
   @override

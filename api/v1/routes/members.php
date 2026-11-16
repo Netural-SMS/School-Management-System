@@ -495,6 +495,7 @@ if ($method === 'GET' && is_int($id) && $sub === 'attendance-risk') {
 // ============================================================
 if ($method === 'POST' && is_int($id) && $sub === 'photo') {
     require_once __DIR__ . '/../../../admin/backend/services/PhotoUploadService.php';
+    require_once __DIR__ . '/../../../admin/backend/services/PhotoDevicePairing.php';
 
     if (!apiCanManageMembers($auth)) {
         err('Only Information, HR, or Admin staff can upload member photos.', 403,
@@ -524,10 +525,28 @@ if ($method === 'POST' && is_int($id) && $sub === 'photo') {
         return '';
     };
 
+    $deviceId = $header('X-Photo-Device-Id');
+    $operatorId = (int)($auth['uid'] ?? 0);
+
+    // P7 pairing: look up or create the per-device HMAC key for this
+    // (operator, device_id) pair. We do this BEFORE ingest so the key
+    // header is returned even for replays (the client needs it on
+    // every response until it acknowledges storage).
+    $pairingKey = null;
+    $isNewPairing = false;
+    if ($deviceId !== '' && $operatorId > 0) {
+        $pairingKey = \App\Services\PhotoDevicePairing::getOrCreateKey(
+            $conn, $operatorId, $deviceId, $isNewPairing);
+        if ($pairingKey !== null) {
+            header('X-Photo-Pairing-Key: ' . $pairingKey);
+            header('X-Photo-Pairing-New: ' . ($isNewPairing ? '1' : '0'));
+        }
+    }
+
     $result = \App\Services\PhotoUploadService::ingest($conn, [
         'member_id'         => (int)$id,
-        'operator_admin_id' => (int)($auth['uid'] ?? 0),
-        'device_id'         => $header('X-Photo-Device-Id'),
+        'operator_admin_id' => $operatorId,
+        'device_id'         => $deviceId,
         'client_op_id'      => $header('Idempotency-Key'),
         'field'             => strtolower($header('X-Photo-Field') ?: 'student_photo'),
         'sha256'            => strtolower($header('X-Photo-SHA256')),
@@ -553,12 +572,19 @@ if ($method === 'POST' && is_int($id) && $sub === 'photo') {
         exit;
     }
 
-    echo json_encode([
+    $responsePayload = [
         'status'   => 'success',
         'path'     => $result['path'],
         'replayed' => !empty($result['replayed']),
         'conflict' => !empty($result['conflict']),
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    // Echo pairing key in body too, for HTTP clients that don't read
+    // response headers reliably.
+    if ($pairingKey !== null) {
+        $responsePayload['photo_hmac_key'] = $pairingKey;
+        $responsePayload['photo_pairing_new'] = $isNewPairing;
+    }
+    echo json_encode($responsePayload, JSON_UNESCAPED_UNICODE);
     exit;
 }
 

@@ -17,6 +17,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/access_control.php';
 require_once __DIR__ . '/backend/services/PhotoUploadService.php';
+require_once __DIR__ . '/backend/services/PhotoDevicePairing.php';
 if (session_status() === PHP_SESSION_NONE) @session_start();
 ensureAdminAccess();
 
@@ -110,22 +111,34 @@ function handleUpload(int $operatorId): void {
             throw new RuntimeException('Manifest has no photos listed.');
         }
 
-        // HMAC verification (we don't have server-issued pairing keys yet
-        // so we accept with a warning — v1 behavior matches spec).
-        $sigValid = false; $sigWarning = 'Per-install key only (server pairing pending).';
-        if (is_file($sigPath)) {
-            $sigHex = trim((string)file_get_contents($sigPath));
-            $deviceId = (string)($manifest['device_id'] ?? '');
-            $key = lookupDeviceHmacKey($conn, $deviceId);
-            if ($key !== null) {
-                $expected = hash_hmac('sha256', $manifestRaw, $key);
+        // HMAC verification: if the bundle was signed with a server-paired
+        // key (hmac_key_type = server_paired), look up the stored key for
+        // (operator, device_id) and verify. A mismatch is a hard warning.
+        // per_install bundles cannot be verified server-side (the key
+        // never left the device) — we surface that honestly to the admin.
+        $sigValid = false; $sigWarning = null;
+        $hmacKeyType = (string)($manifest['hmac_key_type'] ?? 'per_install');
+        $sigHex = is_file($sigPath) ? trim((string)file_get_contents($sigPath)) : '';
+        $deviceId = (string)($manifest['device_id'] ?? '');
+        if ($sigHex === '') {
+            $sigWarning = 'Bundle has no manifest.sig (unsigned export).';
+        } elseif ($hmacKeyType === 'server_paired') {
+            $keyHex = \App\Services\PhotoDevicePairing::lookupKey($conn, $operatorId, $deviceId);
+            if ($keyHex === null) {
+                $sigWarning = 'Signed with a server-paired key but this device is not paired for your account. Re-sync the device once over Wi-Fi to establish trust.';
+            } else {
+                $expected = hash_hmac('sha256', $manifestRaw, hex2bin($keyHex));
                 if (hash_equals($expected, $sigHex)) {
                     $sigValid = true;
-                    $sigWarning = null;
                 } else {
-                    $sigWarning = 'HMAC signature does not match the paired device key.';
+                    $sigWarning = 'HMAC signature does not match the paired key for this device. The bundle may have been tampered with or signed by a different app install.';
                 }
             }
+        } else {
+            // per_install (pre-pairing) — we cannot verify. Accept but
+            // tell the admin so they know to verify the chain of custody
+            // (e.g., confirm the USB stick came directly from the field).
+            $sigWarning = 'Bundle signed with a per-install key (device has not yet synced to pair with server). Signature cannot be server-verified — confirm the ZIP came directly from a field device.';
         }
 
         // Begin batch transaction (master row + per-photo ingest inside its own tx).
@@ -287,13 +300,6 @@ function resolveMemberIdByCode(mysqli $conn, string $code): ?int {
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     return $row ? (int)$row['id'] : null;
-}
-
-function lookupDeviceHmacKey(mysqli $conn, string $deviceId): ?string {
-    // Placeholder: when pairing lands (P7) this reads a stored key from
-    // photo_device_identities. For now we return null so callers treat
-    // it as unverified-but-accepted.
-    return null;
 }
 
 function rmdir_recursive(string $dir): void {

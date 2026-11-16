@@ -20,7 +20,8 @@
 | **P6 Batch capture** | ✅ | `9a0f1539` | `photo_batch_capture_screen.dart` — roster walk, auto-advance to first missing, gold/grey/maroon status dots, skip/view-details, done dialog; Take-Photo + Batch buttons on member detail; Batch button on member list |
 | **Z1 ZIP export** | ✅ | `9a0f1539` | `PhotoZipExportService` — store-only ZIP, canonical manifest.json (sorted keys), per-file SHA-256, HMAC-SHA256 manifest.sig (per-install key; server-paired upgrade in P7), share_plus share sheet; Sync Panel Export button now live; app v1.8.1+44 |
 | **Z2-Z5 Server import** | ✅ | `9c941216` | `api_photo_zip_import.php` — upload → extract → manifest parse → per-file validate → `PhotoUploadService::ingestFromFile` (reuses receipt/candidate/conflict pipeline); archive ZIP for audit; `photo_import.php` drag-and-drop admin page with recent-batches table |
-| **P7 hardening (partial)** | ✅ | `0878cc98` | Queue/exports moved to app-support dir (no iCloud backup); LRU eviction of delivered files >30 days; no-cloud-backup method channel reserved (native hookup pending); `photo_importer` role added to admin user-management dropdown |
+| **P7 hardening (partial)** | ✅ | `0878cc98` | Queue/exports moved to app-support dir (no iCloud backup); LRU eviction of delivered files >30 days; no-cloud-backup method channel reserved; `photo_importer` role added to admin user-management dropdown |
+| **P7 HMAC pairing + 30 s undo** | ✅ | (in progress) | Per-device HMAC key paired on first photo upload and persisted client-side; ZIP export signs with paired key (falling back to per-install); ZIP importer verifies server_paired signatures and surfaces per-install warnings honestly; capture screen Retake flows through proper retake/replaced_by semantics; 8-second UNDO snackbar after Accept |
 
 ## File map (committed)
 
