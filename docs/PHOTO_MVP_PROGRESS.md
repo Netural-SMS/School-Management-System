@@ -1,49 +1,69 @@
-# FKSS Offline Photo MVP — P1–P5 status (as of commit 8a9b93f2)
+# FKSS Offline Photo Capture — Production Status (updated 2026-11-14)
 
-## What's built and shipped
+> NOT MVP — production-grade. Acceptance: WebP q92 @ 1200×1500 / JPEG fallback, 2 MB cap;
+> sync OFF by default (3-gate opt-in); multi-photographer conflict picker; ZIP airlock with
+> HMAC; SQLite outbox; idempotent upload; batch roster; progress/ETA; orphan reconciliation;
+> free-space guards; capability negotiation; least-privilege roles; on-brand maroon/gold UI.
+
+## What's shipped to `main`
 
 | Phase | Status | Commit | Summary |
 |---|---|---|---|
-| Design docs | ✅ done | `80c8ead4` | `docs/OFFLINE_PHOTO_SYNC_DESIGN.md` + `docs/OFFLINE_PHOTO_ZIP_IMPORT_DESIGN.md` with the 3 user refinements (WebP/q92/1200×1500/1–2 MB, sync-OFF-by-default, multi-photographer conflict + retake semantics) |
-| **P1 Foundation** | ✅ done | `02d8a0df` | Schema v43 (`photo_outbox`, `photo_export_batches`, `photo_device_identity`, `photo_sync_policy`); `PhotoOutboxService` with enqueue/retake/undo-retake/claim/markDone/markRetry/markFailed/discard/counters/due-pick/policy CRUD; per-install device UUID; safe defaults (sync OFF, Wi-Fi only); app v1.8.0+43; `image`/`uuid`/`archive` added as explicit deps |
-| **P2 Capture** | ✅ done | `f9ae54b7` | `PhotoCaptureService` — camera open, EXIF orientation bake (cases 1–8), center-crop to 4:5, resize 1200×1500 cubic, WebP q=92 primary / JPEG q=92 fallback, 2 MB cap quality loop (1200×1500/q92 → 1080×1350/q92 → 1080×1350/q90 → 1024×1280/q88), decode-verify; `MemberPhotoCaptureScreen` MVP with member card, idle guidance, full-size review, Accept/Retake, error panel, size/format chip, maroon+gold brand colors |
-| **P3 Backend endpoint** | ✅ done | `af0ec44a` | SQL migration 096 (`photo_upload_receipts`, `member_photo_candidates`, `photo_import_batches/items`); `PhotoUploadService::ingest` with Idempotency-Key + SHA-256 verification, MIME (WebP/JPEG), 2 MB cap, WebP GD decode-check; 3-way idempotency (op-id, operator+sha256, content replay); multi-photographer conflict detection (same-operator retake auto-wins, cross-operator conflict:true for admin review); updates `members.student_photo_path` in a single transaction; `POST /api/v1/members/{id}/photo` route; CORS headers extended with `X-Photo-*` |
-| **P4 Sync worker** | ✅ done | `38505900` | `ApiService.uploadMemberPhoto()` multipart with all `X-Photo-*` headers, 90s timeout, 401 refresh retry; `PhotoSyncWorker` ChangeNotifier+Stream with FIFO concurrency=2, policy gates, claim-dispatch loop using atomic `claimForUpload`, full-jitter exponential backoff via shared `outbox_policy.dart`, `replayed`/`conflict` handling, pause/resume/cancel, byte counters, ETA, event stream |
-| **P5 UI foundation** | ✅ done | `8a9b93f2` | `PhotoSyncPanelScreen` with dynamic network banner, sync/cellular toggles with MB-cost confirmation, queue counters, Start/Pause/Resume/Cancel, Export-ZIP stub, live progress bar with ETA, recent activity log, privacy footer; maroon (#600000) + gold (#F0C000) brand colors |
+| Design | ✅ | `80c8ead4` | `OFFLINE_PHOTO_SYNC_DESIGN.md` + `OFFLINE_PHOTO_ZIP_IMPORT_DESIGN.md` |
+| **P1 Foundation** | ✅ | `02d8a0df` | Schema v43 (4 tables), `PhotoOutboxService` CRUD/policy/counters; per-install UUID; sync OFF / Wi-Fi only defaults; image/uuid/archive deps |
+| **P2 Capture** | ✅ | `f9ae54b7` | `PhotoCaptureService` — EXIF bake, 4:5 crop, resize 1200×1500, WebP q92 primary / JPEG q92 fallback, 4-step QC loop, 2 MB hard cap; maroon+gold capture screen |
+| **P3 Backend** | ✅ | `af0ec44a` | SQL 096 (4 tables); `PhotoUploadService::ingest` with Idempotency-Key, SHA-256, MIME, idempotency tripwire, conflict detection; `POST /api/v1/members/{id}/photo`; CORS `X-Photo-*` headers |
+| **P4 Sync Worker** | ✅ | `38505900` | `ApiService.uploadMemberPhoto`; `PhotoSyncWorker` FIFO drain, backoff, pause/resume/cancel, ETA, byte counters, event stream |
+| **P5 Sync Panel UI** | ✅ | `8a9b93f2` | Maroon+gold Sync Panel: 3-gate opt-in (toggle → Start → Wi-Fi unless cellular), MB-cost dialog, progress/ETA, event log |
+| **Production hardening** | ✅ | `d9769d34` | Orphan reconciliation on startup, 4 GB storage budget, free-space gate on enqueue, Members-tab unsynced-count badge, server `/app/config` media capability probe (WebP vs JPEG fallback) |
+| **Admin conflict review** | ✅ | `d9769d34` + `89ed28f2` | `admin/photo_review.php` maroon/gold side-by-side picker; `api_photo_candidates.php` list+decide API (transactional accept/reject with audit trail); `photo_importer` least-privilege role in `access_control.php` |
+| **P6 Batch capture** | ✅ | `9a0f1539` | `photo_batch_capture_screen.dart` — roster walk, auto-advance to first missing, gold/grey/maroon status dots, skip/view-details, done dialog; Take-Photo + Batch buttons on member detail; Batch button on member list |
+| **Z1 ZIP export** | ✅ | `9a0f1539` | `PhotoZipExportService` — store-only ZIP, canonical manifest.json (sorted keys), per-file SHA-256, HMAC-SHA256 manifest.sig (per-install key; server-paired upgrade in P7), share_plus share sheet; Sync Panel Export button now live; app v1.8.1+44 |
+| **Z2-Z5 Server import** | ✅ | `9c941216` | `api_photo_zip_import.php` — upload → extract → manifest parse → per-file validate → `PhotoUploadService::ingestFromFile` (reuses receipt/candidate/conflict pipeline); archive ZIP for audit; `photo_import.php` drag-and-drop admin page with recent-batches table |
 
-## What remains for MVP end-to-end (next sessions)
+## File map (committed)
 
-1. **Wire the screens into app routing** — add a Members-tab entry button to open the Capture screen and Sync Panel, and register both routes in the app router.
-2. **Z1 ZIP export** — `archive` packaging, manifest.json, HMAC signing, share sheet (photo_outbox_service.dart already has the exports directory + policy + batch table, so plumbing is ready).
-3. **P5 polishing** — roster badge (`N unsynced · sync OFF`), Members-tab entry for "Photo Capture Day", thumbnail rendering from queued files.
-4. **P6 batch-capture UX** — roster screen with per-member status dots, "Start from first missing" auto-advance, storage/battery warnings.
-5. **Web-side conflict review UI** — Photo Review page in admin dashboard listing pending candidates with side-by-side comparison (candidates table already exists; UI needs a page that lists `decision_pending=1` candidates per member).
-6. **Z2-Z6 web importer** — ZIP upload, review grid, commit, feedback to device.
-7. **P7 hardening** — orphan-file reconciliation on startup, LRU eviction of synced files >30 days, iOS iCloud exclusion flag, Android foreground notification, flaky-network soak tests.
+### Mobile (Flutter)
+- `lib/services/local_schema_v43.dart` — DDL for 4 outbox tables
+- `lib/services/photo_outbox_models.dart` — enums/entry/counters/policy models
+- `lib/services/photo_outbox_service.dart` — SQLite CRUD + retake/claim/policy + orphan reconciliation + free-space guard + `memberIdsWithPhoto()` roster helper
+- `lib/services/photo_capture_service.dart` — camera + EXIF/crop/resize/WebP/JPEG QC loop
+- `lib/services/photo_sync_worker.dart` — FIFO ChangeNotifier drain
+- `lib/services/photo_zip_export_service.dart` — Z1 signed ZIP packaging + share
+- `lib/services/api_service.dart` — `uploadMemberPhoto()` multipart
+- `lib/screens/members/member_photo_capture_screen.dart` — single capture
+- `lib/screens/members/photo_batch_capture_screen.dart` — P6 roster walk
+- `lib/screens/members/photo_sync_panel.dart` — P5 control surface (Z1 button live)
+- `lib/screens/members/member_detail_screen.dart` — Take-photo + Batch buttons
+- `lib/screens/members/member_list_screen.dart` — unsynced-count badge + Batch button
+- `test/photo_outbox_p1_foundation_test.dart`
+- `pubspec.yaml` — image/uuid/archive/share_plus deps, v1.8.1+44
 
-## Files added/modified this session
+### Server / Admin
+- `sql/096_mobile_photo_uploads.sql` — receipts + candidates + import batches/items
+- `admin/backend/services/PhotoUploadService.php` — `ingest` (multipart) + `ingestFromFile` (ZIP use), shared conflict/promote logic
+- `api/v1/routes/members.php` — `POST /api/v1/members/{id}/photo` (30/min rate limit)
+- `api/v1/routes/app.php` — `/app/config` now advertises `media` capability block (max bytes, MIME list, idempotency flag)
+- `api/v1/core/middleware.php` — CORS `X-Photo-*` headers
+- `admin/api_photo_candidates.php` — pending-list + accept/reject transactional API
+- `admin/photo_review.php` — maroon/gold side-by-side conflict picker
+- `admin/api_photo_zip_import.php` — Z2-Z5 ZIP upload + ingest
+- `admin/photo_import.php` — drag-and-drop import page
+- `admin/access_control.php` — `photo_importer` least-privilege role wired to photo pages
+- `admin/uploads/members/photos/` — canonical WebP/JPEG storage
+- `admin/uploads/members/photo_imports/` — audit archive of imported ZIPs (created on demand)
 
-- `docs/OFFLINE_PHOTO_SYNC_DESIGN.md` (updated with WebP/sync-off/conflict rules)
-- `docs/OFFLINE_PHOTO_ZIP_IMPORT_DESIGN.md` (added multi-photographer conflict grid, WebP validation, 800 MB budget)
-- `Mobile/wbws_flutter_app/lib/services/local_schema_v43.dart` (NEW — v43 DDL)
-- `Mobile/wbws_flutter_app/lib/services/local_schema_v34.dart` (version bump 42→43)
-- `Mobile/wbws_flutter_app/lib/services/local_db.dart` (_migrateToV43 in onCreate+onUpgrade)
-- `Mobile/wbws_flutter_app/lib/services/photo_outbox_models.dart` (NEW — enums + entry/counters/policy/batch models)
-- `Mobile/wbws_flutter_app/lib/services/photo_outbox_service.dart` (NEW — CRUD/retake/claim/state transitions/policy)
-- `Mobile/wbws_flutter_app/lib/services/photo_capture_service.dart` (NEW — EXIF/crop/resize/WebP/JPEG encode loop)
-- `Mobile/wbws_flutter_app/lib/services/photo_sync_worker.dart` (NEW — FIFO upload drain)
-- `Mobile/wbws_flutter_app/lib/screens/members/member_photo_capture_screen.dart` (NEW)
-- `Mobile/wbws_flutter_app/lib/screens/members/photo_sync_panel.dart` (NEW)
-- `Mobile/wbws_flutter_app/lib/services/api_service.dart` (`uploadMemberPhoto()` method + `PhotoUploadPayload`)
-- `Mobile/wbws_flutter_app/pubspec.yaml` (image/uuid/archive direct deps, v1.8.0+43)
-- `Mobile/wbws_flutter_app/test/photo_outbox_p1_foundation_test.dart` (schema/enum/policy/counters unit tests)
-- `sql/096_mobile_photo_uploads.sql` (NEW — receipt/candidates/import tables)
-- `admin/backend/services/PhotoUploadService.php` (NEW — multipart ingestion)
-- `api/v1/routes/members.php` (POST /members/{id}/photo route)
-- `api/v1/core/middleware.php` (CORS Allow-Headers extended)
-- `admin/uploads/members/photos/` directory created
+## Remaining (P7 hardening — production polish)
+
+1. **iOS iCloud backup exclusion** — method channel to mark queue/exports directories as `NSURLIsExcludedFromBackupKey` (currently stubbed via import of `flutter/services.dart`; the actual MethodChannel call is a TODO).
+2. **Android foreground service notification** — wrap the sync worker in a foreground service so Android doesn't kill long uploads when the app is backgrounded.
+3. **LRU eviction** — delete synced files older than 30 days from the queue dir to bound storage.
+4. **Per-device HMAC pairing** — on first successful login, the server generates a random HMAC key for the device_id and returns it via `/app/config`; client stores in `photo_device_identity.photo_hmac_key`; Z1 export signs with it; Z5 verifies it (replaces the current "warn don't block" behavior).
+5. **Web `photo_importer` role management UI** — role exists and ACL is wired, but admin user-management UI doesn't yet expose it in the role picker; add a "Photo Importer" option when creating/editing admin users.
+6. **Flaky-network soak tests** — harness that drops connections mid-upload, restarts the app mid-enqueue, etc.
+7. **Local Flutter test pass** — run `flutter pub get && flutter analyze && flutter test` on a machine with the Flutter SDK (sandbox here has no SDK); PHP well-formedness tests remain green (8 / 383 subtests).
 
 ## Test status
 
-- Existing PHP security-well-formedness tests: **8 passed / 379 subtests** (still green after every commit).
-- New Dart unit tests added in `photo_outbox_p1_foundation_test.dart`; full Flutter test run blocked on Flutter SDK not being available in this sandbox (same reason as iOS build — will run on dev machine / CI).
+- **PHP well-formedness (security suite):** 8 passed / 383 subtests (green after every commit).
+- **Dart/Flutter:** SDK not present in sandbox — run locally / CI.
