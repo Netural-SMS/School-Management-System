@@ -135,7 +135,7 @@ class _PhotoSyncPanelScreenState extends State<PhotoSyncPanelScreen> {
       final zip = await PhotoZipExportService.instance.exportAndShare();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('ZIP ready (${(await zip.length()).~/1024} KB) — '
+        content: Text('ZIP ready (${(await zip.length()) ~/ 1024} KB) — '
             'choose a share target (AirDrop, email, Save to Files…).'),
         duration: const Duration(seconds: 5),
         backgroundColor: const Color(0xFF600000),

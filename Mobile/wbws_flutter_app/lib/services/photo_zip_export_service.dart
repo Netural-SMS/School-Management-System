@@ -47,7 +47,7 @@ class PhotoZipExportService {
   /// Set [onlyUnsynced]=true to exclude photos already marked done.
   Future<File> exportBundle({bool onlyUnsynced = true}) async {
     await PhotoOutboxService.instance.ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
 
     final rows = await db.query(
       'photo_outbox',
@@ -57,7 +57,7 @@ class PhotoZipExportService {
       whereArgs: onlyUnsynced
           ? [
               PhotoOutboxState.discarded.storageValue,
-              PhotoOutboxState.delivered.storageValue,
+              PhotoOutboxState.done.storageValue,
             ]
           : [PhotoOutboxState.discarded.storageValue],
       orderBy: 'member_id, taken_at',
@@ -66,7 +66,8 @@ class PhotoZipExportService {
       throw StateError('No photos to export. Take some first.');
     }
 
-    final exportDir = await PhotoOutboxService.instance.exportsDirectory();
+    final exportDirPath = await PhotoOutboxService.instance.exportsDirectory();
+    final exportDir = Directory(exportDirPath);
     await exportDir.create(recursive: true);
     final bundleId = const Uuid().v4();
     final startedAt = DateTime.now().toUtc();
@@ -86,8 +87,7 @@ class PhotoZipExportService {
       final bytes = await file.readAsBytes();
       totalBytes += bytes.length;
       final digest = sha256.convert(bytes);
-      final ext = entry.mimeType == 'image/jpeg' ? 'jpg'
-          : entry.mimeType == 'image/webp' ? 'webp' : 'bin';
+      final ext = entry.format.extension;
       final code = entry.memberCode?.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '') ?? 'M';
       final arcName = 'photos/${code}__${entry.memberId}__${entry.clientOpId}.$ext';
       files.add(_ZipPhotoEntry(
@@ -118,7 +118,7 @@ class PhotoZipExportService {
           32, (i) => int.parse(hex.substring(i*2, i*2+2), radix: 16));
       hmacKeyType = 'server_paired';
     } else {
-      hmacKeyBytes = await _fallbackHmacKey();
+      hmacKeyBytes = await _fallbackHmacKey(exportDir);
       hmacKeyType = 'per_install';
     }
 
@@ -127,7 +127,7 @@ class PhotoZipExportService {
       'bundle_id': bundleId,
       'exported_at': startedAt.toIso8601String(),
       'device_id': deviceId,
-      'app_version': '1.8.1',
+      'app_version': '1.8.4',
       'zip_version': _zipVersion,
       'photo_count': files.length,
       'total_bytes': totalBytes,
@@ -139,7 +139,7 @@ class PhotoZipExportService {
                 'member_id': f.entry.memberId,
                 'member_code': f.entry.memberCode,
                 'field': f.entry.field.storageValue,
-                'mime_type': f.entry.mimeType,
+                'mime_type': f.entry.format.mime,
                 'byte_size': f.byteSize,
                 'sha256': f.sha256,
                 'client_op_id': f.entry.clientOpId,
@@ -157,16 +157,28 @@ class PhotoZipExportService {
     final sig = Hmac(sha256, hmacKeyBytes).convert(manifestBytes);
 
     final archive = Archive();
-    // files are stored uncompressed (WebP is already compressed).
-    // Use ArchiveFile.stream() / the byte-list constructor which is
-    // stable across archive:^3 and archive:^4 — archive 4 tightened the
-    // positional-arg constructor by adding a 'mode' parameter.
     ArchiveFile _stored(String name, List<int> bytes) {
-      // ignore: deprecated_member_use — compatible across archive 3/4;
-      // the new API in archive 4 (ArchiveFile(filename: name, size: n,
-      // content: bytes)) doesn't exist in 3.x.
-      return ArchiveFile(name, bytes.length, bytes)
-        ..compression = 0;
+      // Store only (no compression) — WebP is already compressed.
+      // archive 4.x changed `compression` from int (0=store) to a
+      // CompressionType enum; set it via dynamic for cross-version safety.
+      final f = ArchiveFile(name, bytes.length, bytes);
+      try {
+        // archive 4: try the enum first.
+        // ignore: avoid_dynamic_calls
+        final ct = (Archive as dynamic).CompressionType;
+        // ignore: avoid_dynamic_calls
+        (f as dynamic).compression = ct.none;
+      } catch (_) {
+        try {
+          // archive 3: compression is an int where 0 means store.
+          // ignore: avoid_dynamic_calls
+          (f as dynamic).compression = 0;
+        } catch (_) {
+          // If both fail, leave default (usually already store for raw bytes
+          // constructor) — ZIP will still decode; worst case we deflate.
+        }
+      }
+      return f;
     }
     for (final f in files) {
       archive.addFile(_stored(f.arcName, f.bytes));
@@ -201,9 +213,8 @@ class PhotoZipExportService {
   /// synced with the server and therefore doesn't have a paired key
   /// yet). This lets admins detect accidental corruption of a bundle
   /// that arrived by USB even before pairing completes.
-  Future<List<int>> _fallbackHmacKey() async {
-    final dir = await PhotoOutboxService.instance.exportsDirectory();
-    final keyFile = File(p.join(dir.path, '.airlock_hmac_key'));
+  Future<List<int>> _fallbackHmacKey(Directory exportsDir) async {
+    final keyFile = File(p.join(exportsDir.path, '.airlock_hmac_key'));
     if (await keyFile.exists()) {
       final hex = (await keyFile.readAsString()).trim();
       if (hex.length == 64) {

@@ -2172,11 +2172,11 @@ class ApiService {
         final hs = _headers(withAuth: true);
         hs.remove('Content-Type'); // multipart writer sets boundary
         hs['Idempotency-Key'] = payload.clientOpId;
-        hs['X-Photo-Field'] = payload.field;
+        hs['X-Photo-Field'] = payload.field.storageValue;
         hs['X-Photo-SHA256'] = payload.sha256;
         hs['X-Photo-Taken-At'] = payload.takenAt.toUtc().toIso8601String();
         hs['X-Photo-Device-Id'] = payload.deviceId;
-        hs['X-Photo-Format'] = payload.format;
+        hs['X-Photo-Format'] = payload.format.mime;
         hs['X-Photo-Width'] = '${payload.width}';
         hs['X-Photo-Height'] = '${payload.height}';
         if (payload.operatorAdminId != null) {

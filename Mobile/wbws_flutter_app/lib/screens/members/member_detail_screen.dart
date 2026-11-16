@@ -10,7 +10,7 @@ import '../../utils/theme.dart';
 import '../../utils/transitions.dart';
 import '../attendance_warnings/attendance_warning_widgets.dart';
 import '../attendance_warnings/attendance_warnings_screen.dart';
-import 'member_photo_capture_screen.dart';
+import 'member_photo_capture_screen.dart' hide AppTheme;
 import 'photo_batch_capture_screen.dart';
 
 class MemberDetailScreen extends StatefulWidget {

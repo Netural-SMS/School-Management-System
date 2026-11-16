@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -7,8 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 
-import 'local_db.dart' show LocalDb, newClientOpId;
+import 'local_db.dart';
 import 'photo_outbox_models.dart';
 
 /// Owns all writes to `photo_outbox`, `photo_export_batches`,
@@ -39,6 +41,7 @@ class PhotoOutboxService {
 
   // ignore: unused_field (used for jitter; kept for future retry scheduling)
   final Random _random = Random.secure();
+  final Uuid _uuid = const Uuid();
 
   /// Subdirectory under getApplicationDocumentsDirectory() where queued
   /// photo files live. Kept in app-private storage (survives reboot, not
@@ -59,7 +62,7 @@ class PhotoOutboxService {
   /// subsequent calls are no-ops after first success.
   Future<void> ensureInitialized() async {
     if (_initialized) return;
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
 
     // Create queue directory if it doesn't exist. We use the app-support
     // directory (not documents) so the photos aren't visible to the user
@@ -130,7 +133,7 @@ class PhotoOutboxService {
   /// LRU or uninstall, and the server is the source of truth.
   Future<void> _reconcileOrphans() async {
     try {
-      final db = await LocalDb.instance.database;
+      final db = await LocalDb().database;
 
       // 2. Missing-file rows → failed.
       final knownPaths = <String>{};
@@ -196,7 +199,7 @@ class PhotoOutboxService {
   /// hex, or null if the server hasn't paired us yet.
   Future<String?> savedHmacKey() async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query('photo_device_identity',
         where: 'id = 1', limit: 1);
     if (rows.isEmpty) return null;
@@ -207,7 +210,7 @@ class PhotoOutboxService {
   Future<void> saveHmacKey(String hexKey) async {
     if (hexKey.isEmpty) return;
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.update('photo_device_identity', {
       'photo_hmac_key': hexKey,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -263,7 +266,7 @@ class PhotoOutboxService {
     await ensureInitialized();
     try {
       // Sum existing queued non-terminal files.
-      final rows = await (await LocalDb.instance.database).rawQuery('''
+      final rows = await (await LocalDb().database).rawQuery('''
         SELECT COALESCE(SUM(byte_size),0) AS used
           FROM photo_outbox
          WHERE state NOT IN (?, ?)
@@ -290,7 +293,7 @@ class PhotoOutboxService {
 
   Future<PhotoSyncPolicyState> readPolicy() async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query('photo_sync_policy', where: 'id = 1');
     if (rows.isEmpty) return PhotoSyncPolicyState.seeded();
     return PhotoSyncPolicyState.fromMap(rows.first);
@@ -298,7 +301,7 @@ class PhotoOutboxService {
 
   Future<void> savePolicy(PhotoSyncPolicyState policy) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.update(
       'photo_sync_policy',
       policy.toUpsertMap(),
@@ -408,7 +411,7 @@ class PhotoOutboxService {
       updatedAt: now,
     );
 
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.transaction((txn) async {
       await txn.insert('photo_outbox', entry.toInsertMap(),
           conflictAlgorithm: ConflictAlgorithm.fail);
@@ -445,7 +448,7 @@ class PhotoOutboxService {
   /// entry, or null if there is nothing to undo.
   Future<PhotoOutboxEntry?> undoRetake(String newClientOpId) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     return db.transaction<PhotoOutboxEntry?>((txn) async {
       final rows = await txn.query('photo_outbox',
           where: 'client_op_id = ?', whereArgs: [newClientOpId], limit: 1);
@@ -490,7 +493,7 @@ class PhotoOutboxService {
 
   Future<PhotoOutboxCounters> counters() async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.rawQuery('''
       SELECT state,
              COUNT(*) AS c,
@@ -537,7 +540,7 @@ class PhotoOutboxService {
   /// review or upload.
   Future<Set<int>> memberIdsWithPhoto({PhotoField field = PhotoField.student}) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query(
       'photo_outbox',
       columns: ['DISTINCT member_id'],
@@ -555,7 +558,7 @@ class PhotoOutboxService {
   Future<PhotoOutboxEntry?> latestForMember(int memberId,
       {PhotoField field = PhotoField.student}) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query(
       'photo_outbox',
       where: 'member_id = ? AND field = ? AND state != ?',
@@ -576,7 +579,7 @@ class PhotoOutboxService {
   /// (the sync worker uses concurrency*2 to keep the pipe full).
   Future<List<PhotoOutboxEntry>> pickDueForUpload({int limit = 4}) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final now = DateTime.now().toUtc().toIso8601String();
     final rows = await db.query(
       'photo_outbox',
@@ -595,7 +598,7 @@ class PhotoOutboxService {
   /// All entries visible in the queue/review UI (skipping discarded).
   Future<List<PhotoOutboxEntry>> listVisibleEntries() async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query(
       'photo_outbox',
       where: 'state != ?',
@@ -617,7 +620,7 @@ class PhotoOutboxService {
   /// WHERE guard — two concurrent claims can't both win.
   Future<bool> claimForUpload(String clientOpId) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final now = DateTime.now().toUtc().toIso8601String();
     final count = await db.rawUpdate('''
       UPDATE photo_outbox
@@ -652,7 +655,7 @@ class PhotoOutboxService {
     bool conflict = false,
   }) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final state = conflict
         ? PhotoOutboxState.conflictPending.storageValue
         : PhotoOutboxState.done.storageValue;
@@ -693,7 +696,7 @@ class PhotoOutboxService {
   Future<int> _evictOldDelivered() async {
     try {
       await ensureInitialized();
-      final db = await LocalDb.instance.database;
+      final db = await LocalDb().database;
       final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 30));
       final rows = await db.query(
         'photo_outbox',
@@ -736,7 +739,7 @@ class PhotoOutboxService {
     required DateTime nextAttemptAt,
   }) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.update(
       'photo_outbox',
       {
@@ -763,7 +766,7 @@ class PhotoOutboxService {
     required String errorMessage,
   }) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.update(
       'photo_outbox',
       {
@@ -783,7 +786,7 @@ class PhotoOutboxService {
   /// Reset a failed entry back to queued (user tapped "Retry").
   Future<void> retryFailed(String clientOpId) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     await db.update(
       'photo_outbox',
       {
@@ -804,7 +807,7 @@ class PhotoOutboxService {
   /// their local file is removed during LRU cleanup, not here.
   Future<void> discard(String clientOpId) async {
     await ensureInitialized();
-    final db = await LocalDb.instance.database;
+    final db = await LocalDb().database;
     final rows = await db.query('photo_outbox',
         where: 'client_op_id = ?', whereArgs: [clientOpId], limit: 1);
     if (rows.isEmpty) return;

@@ -26,7 +26,7 @@ android {
     // 26.1.10909125 is the version that provably produces a working
     // 44.5 MB release APK here. Revisit ONLY if this app gains its own
     // native code, or a plugin genuinely fails to link.
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

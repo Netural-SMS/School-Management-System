@@ -14,6 +14,7 @@ import 'member_detail_screen.dart';
 import '../../widgets/qr_scan_sheet.dart';
 import '../../services/qr_attendance.dart';
 import '../../services/photo_outbox_service.dart';
+import '../../services/photo_outbox_models.dart';
 import '../../services/photo_sync_worker.dart';
 import 'photo_sync_panel.dart';
 import 'photo_batch_capture_screen.dart';
