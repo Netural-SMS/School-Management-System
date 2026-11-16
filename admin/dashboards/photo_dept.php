@@ -22,7 +22,11 @@ $ajaxPrefix = '../';
 // ------------------------------------------------------------
 function pd_fetch_all(mysqli $conn, string $sql, array $params = []): array {
     $rows = [];
-    if (!$stmt = $conn->prepare($sql)) return $rows;
+    // Suppress prepare errors — photo tables (096/097) may not exist on
+    // deployments that haven't run migrations yet, and we don't want the
+    // whole dashboard to fatal. Each caller tolerates empty results.
+    $stmt = @$conn->prepare($sql);
+    if (!$stmt) return $rows;
     if (!empty($params)) {
         $types = ''; $bind = [];
         foreach ($params as $p) {
@@ -33,7 +37,7 @@ function pd_fetch_all(mysqli $conn, string $sql, array $params = []): array {
         }
         $stmt->bind_param($types, ...$bind);
     }
-    if ($stmt->execute()) {
+    if (@$stmt->execute()) {
         $res = $stmt->get_result();
         if ($res) while ($row = $res->fetch_assoc()) $rows[] = $row;
     }
@@ -44,6 +48,11 @@ function pd_fetch_all(mysqli $conn, string $sql, array $params = []): array {
 function pd_fetch_one(mysqli $conn, string $sql, array $params = []): array {
     $rows = pd_fetch_all($conn, $sql, $params);
     return $rows[0] ?? [];
+}
+
+function pd_table_exists(mysqli $conn, string $table): bool {
+    $r = @$conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($table) . "'");
+    return $r && $r->num_rows > 0;
 }
 
 // ------------------------------------------------------------
@@ -74,6 +83,11 @@ $kpi = [
 $recentBatches = [];
 $recentReceipts = [];
 $pendingCandidates = [];
+$allBatches = [];
+$devices = [];
+$missing = [];
+$photoTablesReady = false;
+$devicesTableReady = false;
 
 if (isset($conn)) {
     // Coverage by age_section (7_13, 14_17, 18_plus) and overall
@@ -102,58 +116,88 @@ if (isset($conn)) {
         }
     }
 
-    // Pending review queue (cross-photographer conflicts awaiting decision)
-    $pr = pd_fetch_one($conn,
-        "SELECT COUNT(*) AS c FROM member_photo_candidates
-         WHERE decision_pending = 1 AND archived = 0");
-    $kpi['pending_review'] = (int)($pr['c'] ?? 0);
+    // ---- Photo pipeline KPIs (only if migration 096/097 tables exist) ----
+    $photoTablesReady = pd_table_exists($conn, 'photo_upload_receipts')
+                     && pd_table_exists($conn, 'member_photo_candidates')
+                     && pd_table_exists($conn, 'photo_import_batches')
+                     && pd_table_exists($conn, 'photo_import_items');
+    $devicesTableReady = pd_table_exists($conn, 'photo_device_identities');
 
-    // ZIP import items still pending
-    $pz = pd_fetch_one($conn,
-        "SELECT COUNT(*) AS c FROM photo_import_items WHERE decision = 'pending'");
-    $kpi['pending_zip_items'] = (int)($pz['c'] ?? 0);
+    if ($photoTablesReady) {
+        // Pending review queue (cross-photographer conflicts awaiting decision)
+        $pr = pd_fetch_one($conn,
+            "SELECT COUNT(*) AS c FROM member_photo_candidates
+             WHERE decision_pending = 1 AND archived = 0");
+        $kpi['pending_review'] = (int)($pr['c'] ?? 0);
 
-    // Batches
-    $bt = pd_fetch_one($conn, "SELECT COUNT(*) AS c FROM photo_import_batches");
-    $kpi['total_batches'] = (int)($bt['c'] ?? 0);
-    $bt2 = pd_fetch_one($conn,
-        "SELECT COUNT(*) AS c FROM photo_import_batches WHERE DATE(created_at) = CURDATE()");
-    $kpi['batches_today'] = (int)($bt2['c'] ?? 0);
+        // ZIP import items still pending
+        $pz = pd_fetch_one($conn,
+            "SELECT COUNT(*) AS c FROM photo_import_items WHERE decision = 'pending'");
+        $kpi['pending_zip_items'] = (int)($pz['c'] ?? 0);
 
-    // Receipts (all photos on server, regardless of path)
-    $rc = pd_fetch_one($conn, "SELECT COUNT(*) AS c, COALESCE(SUM(byte_size),0) AS bytes FROM photo_upload_receipts");
-    $kpi['total_receipts'] = (int)($rc['c'] ?? 0);
-    $kpi['storage_bytes']  = (int)($rc['bytes'] ?? 0);
-    $kpi['storage_mb']     = number_format($kpi['storage_bytes'] / (1024*1024), 1);
-    $rc2 = pd_fetch_one($conn,
-        "SELECT COUNT(*) AS c FROM photo_upload_receipts WHERE DATE(created_at) = CURDATE()");
-    $kpi['receipts_today'] = (int)($rc2['c'] ?? 0);
+        // Batches
+        $bt = pd_fetch_one($conn, "SELECT COUNT(*) AS c FROM photo_import_batches");
+        $kpi['total_batches'] = (int)($bt['c'] ?? 0);
+        $bt2 = pd_fetch_one($conn,
+            "SELECT COUNT(*) AS c FROM photo_import_batches WHERE DATE(created_at) = CURDATE()");
+        $kpi['batches_today'] = (int)($bt2['c'] ?? 0);
 
-    // Paired devices
-    $dv = pd_fetch_one($conn,
-        "SELECT COUNT(DISTINCT device_id) AS c FROM photo_device_identities");
-    $kpi['paired_devices'] = (int)($dv['c'] ?? 0);
+        // Receipts (all photos on server, regardless of path)
+        $rc = pd_fetch_one($conn, "SELECT COUNT(*) AS c, COALESCE(SUM(byte_size),0) AS bytes FROM photo_upload_receipts");
+        $kpi['total_receipts'] = (int)($rc['c'] ?? 0);
+        $kpi['storage_bytes']  = (int)($rc['bytes'] ?? 0);
+        $kpi['storage_mb']     = number_format($kpi['storage_bytes'] / (1024*1024), 1);
+        $rc2 = pd_fetch_one($conn,
+            "SELECT COUNT(*) AS c FROM photo_upload_receipts WHERE DATE(created_at) = CURDATE()");
+        $kpi['receipts_today'] = (int)($rc2['c'] ?? 0);
 
-    // Recent batches (last 8)
-    $recentBatches = pd_fetch_all($conn,
-        "SELECT b.id, b.batch_uuid, b.source, b.total_photos, b.committed_photos,
-                b.status, b.created_at, b.committed_at,
-                u.full_name AS operator_name
-         FROM photo_import_batches b
-         LEFT JOIN users u ON u.id = b.operator_admin_id
-         ORDER BY b.created_at DESC LIMIT 8");
+        // Recent batches (last 8)
+        $recentBatches = pd_fetch_all($conn,
+            "SELECT b.id, b.batch_uuid, b.source, b.total_photos, b.committed_photos,
+                    b.status, b.manifest_sig_valid, b.created_at, b.committed_at,
+                    u.full_name AS operator_name
+             FROM photo_import_batches b
+             LEFT JOIN users u ON u.id = b.operator_admin_id
+             ORDER BY b.created_at DESC LIMIT 8");
 
-    // Pending review candidates (top 8)
-    $pendingCandidates = pd_fetch_all($conn,
-        "SELECT c.id, c.member_id, c.field, c.created_at, c.byte_size,
-                u.full_name AS operator_name,
-                m.student_name, m.father_name, m.grandfather_name,
-                m.member_code
-         FROM member_photo_candidates c
-         LEFT JOIN users u ON u.id = c.operator_admin_id
-         LEFT JOIN members m ON m.id = c.member_id
-         WHERE c.decision_pending = 1 AND c.archived = 0
-         ORDER BY c.created_at ASC LIMIT 8");
+        // Pending review candidates (top 8)
+        $pendingCandidates = pd_fetch_all($conn,
+            "SELECT c.id, c.member_id, c.field, c.created_at, c.byte_size,
+                    u.full_name AS operator_name,
+                    m.student_name, m.father_name, m.grandfather_name,
+                    m.member_code
+             FROM member_photo_candidates c
+             LEFT JOIN users u ON u.id = c.operator_admin_id
+             LEFT JOIN members m ON m.id = c.member_id
+             WHERE c.decision_pending = 1 AND c.archived = 0
+             ORDER BY c.created_at ASC LIMIT 8");
+    }
+
+    // Paired devices (separate table from 097)
+    if ($devicesTableReady) {
+        $dv = pd_fetch_one($conn,
+            "SELECT COUNT(DISTINCT device_id) AS c FROM photo_device_identities");
+        $kpi['paired_devices'] = (int)($dv['c'] ?? 0);
+    }
+
+    // Missing-photos list (uses only members table — always available)
+    // Also used by "All batches" history tab.
+    if ($photoTablesReady) {
+        $allBatches = pd_fetch_all($conn,
+            "SELECT b.id, b.batch_uuid, b.source, b.total_photos, b.committed_photos,
+                    b.status, b.manifest_sig_valid, b.created_at, b.committed_at,
+                    u.full_name AS operator_name
+             FROM photo_import_batches b
+             LEFT JOIN users u ON u.id = b.operator_admin_id
+             ORDER BY b.created_at DESC LIMIT 100");
+
+        $devices = pd_fetch_all($conn,
+            "SELECT d.id, d.device_id, d.first_seen_at, d.last_seen_at,
+                    u.full_name AS operator_name, u.username
+             FROM photo_device_identities d
+             LEFT JOIN users u ON u.id = d.operator_admin_id
+             ORDER BY d.last_seen_at DESC LIMIT 100");
+    }
 }
 
 // ------------------------------------------------------------
@@ -176,10 +220,11 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($DEPT_NAME_EN) ?> · <?= htmlspecialchars(SCHOOL_NAME_SHORT) ?></title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<title><?= htmlspecialchars($DEPT_NAME_EN) ?> · <?= defined('SCHOOL_NAME_SHORT') ? htmlspecialchars(SCHOOL_NAME_SHORT) : 'FKSS' ?></title>
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+      integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous">
 <script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="/admin/assets/theme.css">
 <style>
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; }
     .amharic-text { font-family: 'Nyala', 'Noto Sans Ethiopic', serif; }
@@ -347,6 +392,18 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
         <!-- ============ DASHBOARD SECTION ============ -->
         <section id="section-dashboard" class="sec active">
 
+            <?php if (!$photoTablesReady): ?>
+            <div class="panel p-4 border-l-4 border-amber-500 bg-amber-50">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5"></i>
+                    <div>
+                        <h3 class="text-sm font-semibold text-amber-900">Photo pipeline migrations not installed</h3>
+                        <p class="text-xs text-amber-800 mt-1">The photo upload / review / ZIP-import tables (migrations <code>096_mobile_photo_uploads.sql</code> and <code>097_photo_device_pairing.sql</code>) are missing on this server. Coverage KPIs from the <em>members</em> table are shown below; import/review/batch KPIs will appear once migrations are applied.</p>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- KPI grid -->
             <div class="flex items-center justify-between mb-3">
                 <div>
@@ -507,7 +564,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <div class="space-y-2">
                     <?php foreach ($recentBatches as $b):
                         $status = $b['status'] ?? 'uploaded';
-                        if ($status === 'committed')      $statusBadge = '<span class="badge badge-green">Committed</span>';
+                        if ($status === 'done' || $status === 'committed')      $statusBadge = '<span class="badge badge-green">Committed</span>';
                         elseif ($status === 'uploaded')   $statusBadge = '<span class="badge badge-amber">Awaiting review</span>';
                         elseif ($status === 'failed')     $statusBadge = '<span class="badge badge-red">Failed</span>';
                         else                              $statusBadge = '<span class="badge badge-slate">' . htmlspecialchars($status) . '</span>';
@@ -639,16 +696,13 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
             </div>
 
             <div class="panel p-4 sm:p-5">
-                <?php
-                $allBatches = pd_fetch_all($conn,
-                    "SELECT b.id, b.batch_uuid, b.source, b.total_photos, b.committed_photos,
-                            b.status, b.manifest_sig_valid, b.created_at, b.committed_at,
-                            u.full_name AS operator_name
-                     FROM photo_import_batches b
-                     LEFT JOIN users u ON u.id = b.operator_admin_id
-                     ORDER BY b.created_at DESC LIMIT 100");
-                if (empty($allBatches)):
-                ?>
+                <?php if (!$photoTablesReady): ?>
+                <div class="text-center py-8 text-amber-700">
+                    <i class="fa-solid fa-triangle-exclamation text-4xl mb-2"></i>
+                    <p class="text-sm font-semibold">Photo pipeline tables not installed yet.</p>
+                    <p class="text-xs mt-1 text-amber-600">Run migrations <code>096_mobile_photo_uploads.sql</code> and <code>097_photo_device_pairing.sql</code> to enable import history.</p>
+                </div>
+                <?php elseif (empty($allBatches)): ?>
                 <div class="text-center py-8 text-slate-400">
                     <i class="fa-solid fa-inbox text-4xl mb-2"></i>
                     <p class="text-sm">No import history yet.</p>
@@ -661,7 +715,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <?php foreach ($allBatches as $b):
                         $sigOk = ((int)($b['manifest_sig_valid'] ?? 0)) === 1;
                         $status = $b['status'] ?? 'uploaded';
-                        if ($status === 'committed')      $badge = '<span class="badge badge-green">Committed</span>';
+                        if ($status === 'done' || $status === 'committed')      $badge = '<span class="badge badge-green">Committed</span>';
                         elseif ($status === 'uploaded')   $badge = '<span class="badge badge-amber">Awaiting</span>';
                         elseif ($status === 'failed')     $badge = '<span class="badge badge-red">Failed</span>';
                         else                              $badge = '<span class="badge badge-slate">' . htmlspecialchars($status) . '</span>';
@@ -694,15 +748,13 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
             </div>
 
             <div class="panel p-4 sm:p-5">
-                <?php
-                $devices = pd_fetch_all($conn,
-                    "SELECT d.id, d.device_id, d.first_seen_at, d.last_seen_at,
-                            u.full_name AS operator_name, u.username
-                     FROM photo_device_identities d
-                     LEFT JOIN users u ON u.id = d.operator_admin_id
-                     ORDER BY d.last_seen_at DESC LIMIT 100");
-                if (empty($devices)):
-                ?>
+                <?php if (!$devicesTableReady): ?>
+                <div class="text-center py-8 text-amber-700">
+                    <i class="fa-solid fa-triangle-exclamation text-4xl mb-2"></i>
+                    <p class="text-sm font-semibold">Device-pairing table not installed yet.</p>
+                    <p class="text-xs mt-1 text-amber-600">Run migration <code>097_photo_device_pairing.sql</code> to enable device visibility.</p>
+                </div>
+                <?php elseif (empty($devices)): ?>
                 <div class="text-center py-8 text-slate-400">
                     <i class="fa-solid fa-mobile-screen text-4xl mb-2"></i>
                     <p class="text-sm">No devices paired yet. Pairing happens automatically on first successful photo upload from the mobile app.</p>
