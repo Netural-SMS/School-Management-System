@@ -11,8 +11,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/access_control.php';
 if (session_status() === PHP_SESSION_NONE) @session_start();
-ensureAdminAccess();
-
+// access_control.php auto-runs auth + role gating on include.
 $userName = $_SESSION['admin_full_name'] ?? $_SESSION['admin_username'] ?? 'Admin';
 $role = (string)($_SESSION['admin_role'] ?? '');
 $canDecide = in_array($role, ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'], true);

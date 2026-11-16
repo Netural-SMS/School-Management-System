@@ -10,8 +10,10 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/access_control.php';
 if (session_status() === PHP_SESSION_NONE) @session_start();
-ensureAdminAccess();
-
+// access_control.php auto-runs auth + role gating on include; if we reach
+// here the user is logged in. The ACL map in access_control.php already
+// gates photo_import.php to the allowed roles, but we double-check in
+// case the file is reached through a misnamed path.
 $userName = $_SESSION['admin_full_name'] ?? $_SESSION['admin_username'] ?? 'Admin';
 $role = (string)($_SESSION['admin_role'] ?? '');
 $canImport = in_array($role, ['super_admin','school_admin','info_dept','hr_dept','photo_importer'], true);

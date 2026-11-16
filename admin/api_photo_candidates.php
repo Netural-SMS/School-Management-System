@@ -17,7 +17,7 @@ require_once __DIR__ . '/access_control.php';
 require_once __DIR__ . '/backend/services/MemberFileService.php';
 
 if (session_status() === PHP_SESSION_NONE) @session_start();
-ensureAdminAccess();
+// access_control.php auto-runs auth + role gating on include.
 
 header('Content-Type: application/json; charset=utf-8');
 
