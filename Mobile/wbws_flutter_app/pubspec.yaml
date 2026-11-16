@@ -1,7 +1,7 @@
 name: fkss_app
 description: FKSS Sunday School Management System — Mobile App
 publish_to: 'none'
-version: 1.8.2+45
+version: 1.8.3+46
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -132,4 +132,3 @@ flutter_native_splash:
   android_12:
     image: "../splash_logo.png"
     color: "#FFFFFF"
-

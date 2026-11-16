@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'api_service.dart';
 import 'connectivity_service.dart';
@@ -50,6 +51,64 @@ class PhotoSyncWorker extends ChangeNotifier {
   final List<PhotoSyncEvent> _events = [];
   final _eventController = StreamController<PhotoSyncEvent>.broadcast();
 
+  // P7 foreground service bridge (Android-only; iOS no-ops via
+  // MissingPluginException caught below).
+  static const MethodChannel _foregroundChannel =
+      MethodChannel('fkss.app/photo_sync_service');
+  static const MethodChannel _noCloudChannel =
+      MethodChannel('app.fkss.photo/nocloud');
+  bool _fgServiceStarted = false;
+  DateTime? _fgServiceStartedAt;
+
+  Future<void> _startForegroundService() async {
+    if (_fgServiceStarted) return;
+    try {
+      await _foregroundChannel.invokeMethod('start', {
+        'title': 'Uploading photos',
+        'content': 'Preparing…',
+        'progress': 0,
+        'max': _total > 0 ? _total : 1,
+        'indeterminate': _total == 0,
+        'paused': false,
+      });
+      _fgServiceStarted = true;
+      _fgServiceStartedAt = DateTime.now();
+    } on MissingPluginException {
+      // iOS / desktop: no-op.
+    } on PlatformException {
+      // Channel exists but service couldn't start — best-effort.
+    } catch (_) {}
+  }
+
+  Future<void> _updateForegroundService() async {
+    if (!_fgServiceStarted) return;
+    String content;
+    if (_paused) {
+      content = 'Paused';
+    } else if (_currentMemberLabel != null) {
+      content = '$_currentMemberLabel · ${_done + _failed}/$_total · '
+          '${_humanBytes(_bytesUploaded)}/${_humanBytes(_bytesTotal)}';
+    } else {
+      content = '${_done + _failed}/$_total · ${_humanBytes(_bytesUploaded)}';
+    }
+    try {
+      await _foregroundChannel.invokeMethod('update', {
+        'title': _paused ? 'Photo upload paused' : 'Uploading photos',
+        'content': content,
+        'progress': _done + _failed,
+        'max': _total > 0 ? _total : 1,
+        'indeterminate': false,
+        'paused': _paused,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _stopForegroundService() async {
+    if (!_fgServiceStarted) return;
+    _fgServiceStarted = false;
+    try { await _foregroundChannel.invokeMethod('stop'); } catch (_) {}
+  }
+
   Stream<PhotoSyncEvent> get progressStream => _eventController.stream;
 
   bool get isRunning => _running;
@@ -66,6 +125,12 @@ class PhotoSyncWorker extends ChangeNotifier {
 
   double get progress => _total == 0 ? 0 : _done / _total;
   bool get isFinished => _running && !_paused && _done + _failed >= _total;
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    if (_fgServiceStarted) _updateForegroundService();
+  }
 
   /// Compute an ETA string based on observed throughput.
   String estimateEta(Duration elapsed) {
@@ -135,14 +200,30 @@ class PhotoSyncWorker extends ChangeNotifier {
         'Starting sync of $_total photos (${_humanBytes(_bytesTotal)})…'));
     notifyListeners();
 
+    _ensureFgServiceHandler();
+
+    unawaited(_startForegroundService());
     unawaited(_drain(policy.maxConcurrency));
     return true;
+  }
+
+  bool _fgHandlerInstalled = false;
+
+  void _ensureFgServiceHandler() {
+    if (_fgHandlerInstalled) return;
+    _fgHandlerInstalled = true;
+    _foregroundChannel.setMethodCallHandler((call) async {
+      if (call.method == 'stopFromNotification') {
+        cancel();
+      }
+    });
   }
 
   void pause() {
     if (!_running || _paused) return;
     _paused = true;
     _emit(PhotoSyncEvent(PhotoSyncEventType.paused, 'Paused.'));
+    _updateForegroundService();
     notifyListeners();
   }
 
@@ -150,6 +231,7 @@ class PhotoSyncWorker extends ChangeNotifier {
     if (!_running || !_paused) return;
     _paused = false;
     _emit(PhotoSyncEvent(PhotoSyncEventType.resumed, 'Resumed.'));
+    _updateForegroundService();
     notifyListeners();
   }
 
@@ -158,6 +240,7 @@ class PhotoSyncWorker extends ChangeNotifier {
     _cancelled = true;
     _paused = false;
     _emit(PhotoSyncEvent(PhotoSyncEventType.cancelled, 'Cancelled.'));
+    _stopForegroundService();
     notifyListeners();
   }
 
@@ -187,6 +270,7 @@ class PhotoSyncWorker extends ChangeNotifier {
             'Finished with issues. $_done synced, $_conflicts pending review, '
             '$_failed failed (tap to retry).'));
       }
+      _stopForegroundService();
       notifyListeners();
     }
   }

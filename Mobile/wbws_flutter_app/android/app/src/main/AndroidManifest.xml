@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <!-- Target SDK 34+: media playback foreground-service type. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- P7 photo sync: dataSync foreground-service type (Android 14+). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <!-- Android 13+: media-session notifications are exempt, but declaring
          the runtime-notification permission keeps the shutter visible on
          devices where the exemption is not applied. -->
@@ -81,6 +83,26 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+        <!--
+            P7 — photo sync foreground service. Holds the process in the
+            "started" state while the Dart PhotoSyncWorker drains the
+            outbox so Android doesn't kill multi-megabyte uploads when
+            the screen is off. Exported=false so only this app can
+            bind/start it.
+        -->
+        <service
+            android:name=".PhotoSyncForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"
+            tools:ignore="Instantiatable" />
+        <receiver
+            android:name=".PhotoSyncActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.arkeonethiopia.fkss.action.STOP_PHOTO_SYNC" />
+            </intent-filter>
+        </receiver>
+
         <!--
             S3 A.8 — the background sync wake-up.
 
