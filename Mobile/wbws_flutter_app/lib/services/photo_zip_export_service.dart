@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
@@ -168,9 +167,6 @@ class PhotoZipExportService {
     archive.addFile(ArchiveFile.noCompress('manifest.sig', sigBytes.length, sigBytes));
 
     final zipBytes = ZipEncoder().encode(archive);
-    if (zipBytes == null) {
-      throw StateError('ZIP encoder failed.');
-    }
     final stamp = startedAt.toIso8601String().replaceAll(':', '').split('.').first;
     final zipPath = p.join(exportDir.path, 'fkss-photos-$stamp-$bundleId.zip');
     final out = File(zipPath);

@@ -55,10 +55,7 @@ class PhotoSyncWorker extends ChangeNotifier {
   // MissingPluginException caught below).
   static const MethodChannel _foregroundChannel =
       MethodChannel('fkss.app/photo_sync_service');
-  static const MethodChannel _noCloudChannel =
-      MethodChannel('app.fkss.photo/nocloud');
   bool _fgServiceStarted = false;
-  DateTime? _fgServiceStartedAt;
 
   Future<void> _startForegroundService() async {
     if (_fgServiceStarted) return;
@@ -72,7 +69,6 @@ class PhotoSyncWorker extends ChangeNotifier {
         'paused': false,
       });
       _fgServiceStarted = true;
-      _fgServiceStartedAt = DateTime.now();
     } on MissingPluginException {
       // iOS / desktop: no-op.
     } on PlatformException {

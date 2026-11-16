@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../services/connectivity_service.dart';
@@ -35,7 +33,6 @@ class _PhotoSyncPanelScreenState extends State<PhotoSyncPanelScreen> {
   StreamSubscription<bool>? _radio;
   Timer? _tick;
   DateTime? _startedAt;
-  String? _startBlockReason;
 
   @override
   void initState() {
@@ -114,7 +111,6 @@ class _PhotoSyncPanelScreenState extends State<PhotoSyncPanelScreen> {
   Future<void> _startSync() async {
     final check = await _worker.canStart();
     if (!check.ok) {
-      setState(() => _startBlockReason = check.reason);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(check.reason ?? 'Cannot start sync.'),
         backgroundColor: _Colors.maroon,
@@ -122,7 +118,6 @@ class _PhotoSyncPanelScreenState extends State<PhotoSyncPanelScreen> {
       return;
     }
     _startedAt = DateTime.now();
-    _startBlockReason = null;
     await _worker.start();
   }
 

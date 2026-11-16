@@ -4,7 +4,6 @@ import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/local_db.dart';
 import '../../services/photo_outbox_models.dart';
-import '../../services/photo_outbox_service.dart';
 import '../../utils/ethiopian_calendar.dart';
 import '../../utils/theme.dart';
 import '../../utils/transitions.dart';

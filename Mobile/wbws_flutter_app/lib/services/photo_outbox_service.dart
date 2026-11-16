@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -234,27 +233,7 @@ class PhotoOutboxService {
   /// null as "assume enough" rather than blocking capture.
   Future<int?> freeDiskBytes() async {
     await ensureInitialized();
-    try {
-      final dir = Directory(_queueDirPath!);
-      // stat() on the directory gives filesystem stats. On Android/iOS
-      // FileStat.size for a directory is the free space? No — we use
-      // the platform-native approach: try statvfs via `df` as a fallback.
-      // Most reliable portable approach in Dart: read the parent
-      // directory's available stat via DirectoryStat via dart:io.
-      // FileStat doesn't expose free space; we approximate by checking
-      // a dedicated `.free` probe file doesn't exist — instead, we
-      // check total size of all existing queued photos against the
-      // directory's file-system via `df` when available, but that's
-      // fragile. For production the answer is: if we can't read free
-      // space we still run a conservative threshold based on current
-      // queue size (see hasEnoughSpace).
-      //
-      // For now expose a conservative estimate from known queue size +
-      // documented app budget.
-      return null;
-    } catch (_) {
-      return null;
-    }
+    return null;
   }
 
   /// Whether the queue directory has room for another photo. We require
@@ -659,10 +638,6 @@ class PhotoOutboxService {
     final state = conflict
         ? PhotoOutboxState.conflictPending.storageValue
         : PhotoOutboxState.done.storageValue;
-    String? localPath;
-    final existing = await db.query('photo_outbox',
-        columns: ['local_path'], where: 'client_op_id = ?', whereArgs: [clientOpId], limit: 1);
-    if (existing.isNotEmpty) localPath = existing.first['local_path'] as String?;
     await db.update(
       'photo_outbox',
       {

@@ -128,8 +128,7 @@ class PhotoCaptureService {
     // 1. Decode. img.decodeImage auto-detects JPEG/PNG/WebP/etc.
     img.Image? decoded = img.decodeImage(bytes);
     if (decoded == null) {
-      throw PhotoCaptureException(
-          'Could not read the photo data. Try again.');
+      throw PhotoCaptureException('Could not read the photo data. Try again.');
     }
 
     // 2. EXIF orientation correction (bake orientation into pixels).
@@ -172,14 +171,10 @@ class PhotoCaptureService {
         interpolation: img.Interpolation.cubic,
       );
 
-      // Try WebP first. image 4.9.x signature (verified against the
-      // published API): encodeWebP(Image, {lossless, quality, method, ...}).
+      // Try WebP first. The current image package exposes the lossless WebP
+      // encoder as `encodeWebP(Image)` with no quality/lossless knobs.
       try {
-        final Uint8List encodedBytes = img.encodeWebP(
-          resized,
-          lossless: false,
-          quality: spec.quality,
-        );
+        final Uint8List encodedBytes = img.encodeWebP(resized);
         if (encodedBytes.length <= hardCapBytes) {
           final dest = await _writeEncoded(
             tempDestPath,
@@ -246,31 +241,6 @@ class PhotoCaptureService {
       // Android/iOS camera stacks already produce up-right pixel buffers
       // so this is a no-op on the common path.
       return src;
-    }
-  }
-
-  // Legacy manual switch kept as dead code for documentation only;
-  // bakeOrientation in image 4.9.1 covers all 8 cases above.
-  img.Image _manualOrientationFallback(img.Image src, int orientation) {
-    switch (orientation) {
-      case 1:
-        return src;
-      case 2:
-        return img.flipHorizontal(src);
-      case 3:
-        return img.copyRotate(src, angle: 180);
-      case 4:
-        return img.flipVertical(src);
-      case 5:
-        return img.flipHorizontal(img.copyRotate(src, angle: 90));
-      case 6:
-        return img.copyRotate(src, angle: 90);
-      case 7:
-        return img.flipHorizontal(img.copyRotate(src, angle: -90));
-      case 8:
-        return img.copyRotate(src, angle: -90);
-      default:
-        return src;
     }
   }
 

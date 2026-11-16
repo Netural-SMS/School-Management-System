@@ -44,22 +44,7 @@ class _MezmurCategoriesState extends State<MezmurCategoriesScreen> {
   bool _loading = true;
   int _uploadingId = 0;
 
-  static const _palettes = [
-    [Color(0xFF5A1212), Color(0xFFD4AF37)],
-    [Color(0xFF4f46e5), Color(0xFF7c3aed)],
-    [Color(0xFF0ea5e9), Color(0xFF2563eb)],
-    [Color(0xFF059669), Color(0xFF0d9488)],
-    [Color(0xFFd97706), Color(0xFFdc2626)],
-    [Color(0xFFdb2777), Color(0xFF9333ea)],
-  ];
 
-  List<Color> _gradientFor(String name) {
-    var h = 0;
-    for (final c in name.codeUnits) {
-      h = ((h << 5) - h + c) & 0x7fffffff;
-    }
-    return _palettes[h % _palettes.length];
-  }
 
   @override
   void initState() {
@@ -136,9 +121,9 @@ class _MezmurCategoriesState extends State<MezmurCategoriesScreen> {
 
   Future<void> _nameDialog({Map<String, dynamic>? category, int? parentId}) async {
     final isEdit = category != null;
-    final isSub = isEdit ? category!['parent_id'] != null : parentId != null;
+    final isSub = isEdit ? category['parent_id'] != null : parentId != null;
     final ctrl =
-        TextEditingController(text: isEdit ? '${category!['name']}' : '');
+        TextEditingController(text: isEdit ? '${category['name']}' : '');
     String? fieldError;
     // P34: guards the double-add. An async onPressed with no in-flight
     // flag lets a double tap (or an impatient second tap during the
@@ -198,12 +183,12 @@ class _MezmurCategoriesState extends State<MezmurCategoriesScreen> {
                   fieldError = null;
                 });
                 final err = await _store.saveCategory({
-                  if (isEdit) 'id': category!['id'],
+                  if (isEdit) 'id': category['id'],
                   'name': ctrl.text,
                   if (!isEdit && isSub) 'parent_id': parentId,
-                  if (isEdit && isSub) 'parent_id': category!['parent_id'],
+                  if (isEdit && isSub) 'parent_id': category['parent_id'],
                   'sort_order': isEdit
-                      ? _asInt(category!['sort_order'])
+                      ? _asInt(category['sort_order'])
                       : (isSub
                           ? _subsOf(parentId!).length + 1
                           : _mains.length + 1),

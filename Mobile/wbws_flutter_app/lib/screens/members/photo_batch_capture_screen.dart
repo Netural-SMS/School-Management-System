@@ -6,7 +6,6 @@ import '../../services/local_db.dart';
 import '../../services/photo_capture_service.dart';
 import '../../services/photo_outbox_models.dart';
 import '../../services/photo_outbox_service.dart';
-import '../../utils/transitions.dart';
 import 'member_detail_screen.dart';
 
 /// FKSS maroon+gold brand palette for photo workflows.
