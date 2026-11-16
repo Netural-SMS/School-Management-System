@@ -172,7 +172,9 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             // photo_importer is a least-privilege role for volunteers who
             // only resolve photo conflicts and import ZIPs.
             'api_photo_candidates.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
+            'api_photo_zip_import.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
             'photo_review.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
+            'photo_import.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
             'info_archive_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'info_restore_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'info_get_archived_members.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],

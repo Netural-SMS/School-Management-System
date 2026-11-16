@@ -123,7 +123,10 @@ body {
       <h1><i class="fa-solid fa-camera-retro"></i> Photo Review</h1>
       <p>Resolve photos where more than one photographer captured a member. Pick the better shot.</p>
     </div>
-    <button class="btn btn-primary" onclick="load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+    <div style="display:flex;gap:8px;">
+      <a class="btn btn-primary" href="/admin/photo_import.php"><i class="fa-solid fa-file-zipper"></i> Import ZIP</a>
+      <button class="btn btn-primary" onclick="load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+    </div>
   </div>
   <div id="list">Loading…</div>
 </div>

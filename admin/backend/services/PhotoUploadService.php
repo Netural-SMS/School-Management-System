@@ -293,6 +293,184 @@ final class PhotoUploadService
         }
     }
 
+    /**
+     * Ingest a photo from an on-disk file (used by the ZIP airlock
+     * importer). Same conflict/idempotency/audit semantics as
+     * {@see ingest()} but no multipart dependency and an optional
+     * $importItemId for lineage. The file at $path is COPIED into the
+     * photos directory (caller still owns the source temp file).
+     *
+     * Result shape matches ingest().
+     */
+    public static function ingestFromFile(mysqli $conn, array $opts): array
+    {
+        $memberId     = (int)($opts['member_id'] ?? 0);
+        $operatorId   = (int)($opts['operator_admin_id'] ?? 0);
+        $deviceId     = (string)($opts['device_id'] ?? '');
+        $clientOpId   = (string)($opts['client_op_id'] ?? '');
+        $importItemId = isset($opts['import_item_id']) ? (int)$opts['import_item_id'] : null;
+        $field        = (string)($opts['field'] ?? 'student_photo');
+        $claimedSha256 = strtolower((string)($opts['sha256'] ?? ''));
+        $claimedTakenAt = (string)($opts['taken_at'] ?? '');
+        $width        = (int)($opts['width'] ?? 0);
+        $height       = (int)($opts['height'] ?? 0);
+        $srcPath      = (string)($opts['source_path'] ?? '');
+
+        if ($memberId <= 0) return self::err(400,'invalid_member','Member id is required.');
+        if ($operatorId <= 0) return self::err(401,'auth_required','You must be logged in.');
+        if ($field !== 'student_photo' && $field !== 'guardian_photo') {
+            return self::err(400,'invalid_field','Field must be student_photo or guardian_photo.');
+        }
+        if ($claimedSha256 === '' || !preg_match('/^[a-f0-9]{64}$/D', $claimedSha256)) {
+            return self::err(400,'invalid_sha256','SHA-256 must be 64 hex chars.');
+        }
+        if ($srcPath === '' || !is_file($srcPath) || !is_readable($srcPath)) {
+            return self::err(400,'missing_file','Source file is not readable.');
+        }
+        $size = @filesize($srcPath);
+        if ($size === false || $size <= 0 || $size > self::MAX_BYTES) {
+            return self::err(413,'file_too_large','Photos must be between 1 byte and 2 MB.');
+        }
+        $takenAt = null;
+        if ($claimedTakenAt !== '') {
+            try { $takenAt = new \DateTimeImmutable($claimedTakenAt); }
+            catch (\Throwable $e) { return self::err(400,'invalid_taken_at','Invalid taken_at timestamp.'); }
+        }
+
+        // Member exists / not archived.
+        $stmt = $conn->prepare('SELECT id, status FROM members WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $memberId);
+        $stmt->execute();
+        $member = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$member) return self::err(404,'member_not_found','Member does not exist.');
+        if (($member['status'] ?? '') === 'archived') {
+            return self::err(410,'member_archived','Member is archived; photos cannot be updated.');
+        }
+
+        // Idempotency: same client_op_id (when present) → replay.
+        if ($clientOpId !== '') {
+            $existing = self::findReceiptByOpId($conn, $clientOpId);
+            if ($existing) {
+                return ['ok'=>true,'status'=>200,'replayed'=>true,'conflict'=>false,
+                    'path'=>$existing['stored_path'],'receipt_id'=>(int)$existing['id'],
+                    'error'=>null,'code'=>null];
+            }
+        }
+        // Actual sha256 match.
+        $actualSha = hash_file('sha256', $srcPath);
+        if ($actualSha === false || !hash_equals($claimedSha256, $actualSha)) {
+            return self::err(400,'sha256_mismatch','File does not match declared SHA-256.');
+        }
+        $mime = self::detectMime($srcPath);
+        $ext = self::ACCEPTED_MIMES[$mime] ?? null;
+        if ($ext === null) {
+            return self::err(415,'invalid_image','File does not decode as WebP or JPEG.');
+        }
+        if (!self::isValidImage($srcPath, $mime)) {
+            return self::err(400,'invalid_image','The image could not be decoded.');
+        }
+        // Duplicate content from same operator → replay.
+        $dupReceipt = self::findReceiptBySha($conn, $operatorId, $claimedSha256);
+        if ($dupReceipt) {
+            return ['ok'=>true,'status'=>200,'replayed'=>true,'conflict'=>false,
+                'path'=>$dupReceipt['stored_path'],'receipt_id'=>(int)$dupReceipt['id'],
+                'error'=>null,'code'=>null];
+        }
+
+        // Copy into public photos directory.
+        $randomName = bin2hex(random_bytes(16)) . '.' . $ext;
+        $publicDir  = self::publicPhotoRoot();
+        if (!self::ensureDir($publicDir, 0755)) {
+            return self::err(500,'storage_unavailable','Photo storage directory is not writable.');
+        }
+        $targetPath = $publicDir . '/' . $randomName;
+        if (!copy($srcPath, $targetPath)) {
+            return self::err(500,'storage_failed','Could not save the photo.');
+        }
+        @chmod($targetPath, 0644);
+        $webPath = 'uploads/members/photos/' . $randomName;
+
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare(
+                'INSERT INTO photo_upload_receipts
+                   (client_op_id, import_item_id, member_id, field,
+                    operator_admin_id, device_id, sha256, stored_path, mime,
+                    byte_size, width, height, taken_at, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+            );
+            $stmt->bind_param(
+                'siisssssssiiis',
+                $clientOpId, $importItemId, $memberId, $field,
+                $operatorId, $deviceId, $claimedSha256, $webPath, $mime,
+                $size, $width, $height,
+                $takenAt ? $takenAt->format('Y-m-d H:i:s') : null
+            );
+            if (!$stmt->execute()) throw new \RuntimeException('receipt_insert_failed');
+            $receiptId = (int)$conn->insert_id;
+            $stmt->close();
+
+            // Conflict decision — same as ingest().
+            $current = self::findCurrentCandidate($conn, $memberId, $field);
+            $isConflict = false; $shouldBecomeCurrent = false;
+            if ($current === null) {
+                $shouldBecomeCurrent = true;
+            } else {
+                $curOp = (int)$current['operator_admin_id'];
+                $curTaken = $current['taken_at'] ? strtotime($current['taken_at']) : 0;
+                $newTaken = $takenAt ? $takenAt->getTimestamp() : time();
+                if ($curOp === $operatorId && $newTaken >= $curTaken) {
+                    $shouldBecomeCurrent = true;
+                } else {
+                    $isConflict = true; $shouldBecomeCurrent = false;
+                }
+            }
+
+            $stmt = $conn->prepare(
+                'INSERT INTO member_photo_candidates
+                   (member_id, field, receipt_id, operator_admin_id, device_id,
+                    sha256, stored_path, mime, byte_size, width, height, taken_at,
+                    is_current, decision_pending, archived,
+                    created_at, decided_at, decided_by_admin_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW(), NULL, NULL)'
+            );
+            $isCurrentInt = $shouldBecomeCurrent ? 1 : 0;
+            $pendingInt = $isConflict ? 1 : 0;
+            $stmt->bind_param(
+                'isiissssiiisi',
+                $memberId, $field, $receiptId, $operatorId, $deviceId,
+                $claimedSha256, $webPath, $mime, $size, $width, $height,
+                $takenAt ? $takenAt->format('Y-m-d H:i:s') : null,
+                $isCurrentInt, $pendingInt
+            );
+            if (!$stmt->execute()) throw new \RuntimeException('candidate_insert_failed');
+            $candidateId = (int)$conn->insert_id;
+            $stmt->close();
+
+            if ($shouldBecomeCurrent) {
+                $conn->query(
+                    "UPDATE member_photo_candidates SET is_current = 0
+                      WHERE member_id = $memberId AND field = '" . $conn->real_escape_string($field) . "'
+                        AND is_current = 1 AND id <> $candidateId"
+                );
+                $conn->query("UPDATE member_photo_candidates SET is_current = 1 WHERE id = $candidateId");
+                $col = $field === 'guardian_photo' ? 'guardian_photo_path' : 'student_photo_path';
+                $u = $conn->prepare("UPDATE members SET $col = ? WHERE id = ?");
+                $u->bind_param('si', $webPath, $memberId);
+                $u->execute(); $u->close();
+            }
+
+            $conn->commit();
+            return ['ok'=>true,'status'=>200,'replayed'=>false,'conflict'=>$isConflict,
+                'path'=>$webPath,'receipt_id'=>$receiptId,'error'=>null,'code'=>null];
+        } catch (\Throwable $e) {
+            $conn->rollback();
+            if (is_file($targetPath)) @unlink($targetPath);
+            return self::err(500,'server_error','Photo could not be saved: '.$e->getMessage());
+        }
+    }
+
     // ---------- Helpers ----------
 
     /** @return array{id:int,operator_admin_id:int,taken_at:?string}|null */
