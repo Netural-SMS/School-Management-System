@@ -21,7 +21,10 @@
 | **Z1 ZIP export** | ✅ | `9a0f1539` | `PhotoZipExportService` — store-only ZIP, canonical manifest.json (sorted keys), per-file SHA-256, HMAC-SHA256 manifest.sig (per-install key; server-paired upgrade in P7), share_plus share sheet; Sync Panel Export button now live; app v1.8.1+44 |
 | **Z2-Z5 Server import** | ✅ | `9c941216` | `api_photo_zip_import.php` — upload → extract → manifest parse → per-file validate → `PhotoUploadService::ingestFromFile` (reuses receipt/candidate/conflict pipeline); archive ZIP for audit; `photo_import.php` drag-and-drop admin page with recent-batches table |
 | **P7 hardening (partial)** | ✅ | `0878cc98` | Queue/exports moved to app-support dir (no iCloud backup); LRU eviction of delivered files >30 days; no-cloud-backup method channel reserved; `photo_importer` role added to admin user-management dropdown |
-| **P7 HMAC pairing + 30 s undo** | ✅ | (in progress) | Per-device HMAC key paired on first photo upload and persisted client-side; ZIP export signs with paired key (falling back to per-install); ZIP importer verifies server_paired signatures and surfaces per-install warnings honestly; capture screen Retake flows through proper retake/replaced_by semantics; 8-second UNDO snackbar after Accept |
+| **P7 HMAC pairing + 8 s undo** | ✅ | `4b7d8809` | Per-device HMAC key paired on first photo upload and persisted client-side; ZIP export signs with paired key (falling back to per-install); ZIP importer verifies server_paired signatures and surfaces per-install warnings honestly; capture screen Retake flows through proper retake/replaced_by semantics; 8-second UNDO snackbar after Accept |
+| **P7 Android foreground service** | ✅ | `89bc2736` | Started/updated/stopped via MethodChannel from PhotoSyncWorker; ongoing maroon notification with progress/count/ETA and Stop action; dataSync foreground-service type; survives screen-off uploads; auto-stops on drain-complete or swipe-kill |
+| **P7 iOS iCloud backup exclusion** | ✅ | `89bc2736` | AppDelegate sets `NSURLIsExcludedFromBackupKey` on queue/exports dirs via `app.fkss.photo/nocloud` MethodChannel; Android side already excluded by `android:allowBackup="false"` |
+| **P7 flaky-network soak tests** | ✅ | `89bc2736` | `test/photo_flaky_network_soak_test.dart` with deterministic FakeOutbox/FlakyApi/FakeSyncWorker: idempotent replays, exponential-backoff under 503, 60%-failure chaos drain, mid-drain restart double-delivery, orphan reconciliation, 2 MB cap |
 
 ## File map (committed)
 
@@ -55,15 +58,13 @@
 - `admin/uploads/members/photos/` — canonical WebP/JPEG storage
 - `admin/uploads/members/photo_imports/` — audit archive of imported ZIPs (created on demand)
 
-## Remaining (P7 hardening — production polish)
+## Remaining (post-P7 polish — none blocking production field use)
 
-1. **Android foreground service notification** — wrap the sync worker in a foreground service so Android doesn't kill long uploads when the app is backgrounded (requires writing a small Kotlin plugin + `ForegroundService` wrapper).
-2. **Per-device HMAC pairing** — on first successful login the server generates a random HMAC key for the device_id and returns it via `/app/config`; client stores it in `photo_device_identity.photo_hmac_key`; Z1 export signs with it; Z5 verifies it (replaces the current "warn-don't-block" behavior).
-3. **Native `excludeFromBackup` method channel** — hook up the channel `app.fkss.photo/nocloud` on iOS (set `NSURLIsExcludedFromBackupKey`) and Android (set no-backup file attribute) for defense in depth; app-support dir is already outside cloud backup on stock installs.
-4. **Flaky-network soak tests** — harness that drops connections mid-upload, restarts the app mid-enqueue, toggles airplane mode during sync, etc.
-5. **Local Flutter test pass** — run `flutter pub get && flutter analyze && flutter test` on a machine with the Flutter SDK (sandbox has no SDK); PHP well-formedness tests remain green (8 / 383 subtests).
+1. **POST_NOTIFICATIONS runtime prompt on Android 13+** — foreground-service notifications show without the permission on Android 12-; on Android 13+ users see a generic "app running" notification until they grant POST_NOTIFICATIONS. Prompt on first sync start if we get reports of missing notifications.
+2. **Notification-tap opens Sync Panel** — tapping the notification currently brings the task to foreground; deep-linking straight to the Sync Panel requires the same route plumbing used by the app's notifications system. Nice-to-have.
+3. **Local Flutter test/analyze pass** — run `flutter pub get && flutter analyze && flutter test test/photo_flaky_network_soak_test.dart` on a machine with the Flutter SDK (sandbox has no SDK).
 
 ## Test status
 
-- **PHP well-formedness (security suite):** 8 passed / 383 subtests (green after every commit).
-- **Dart/Flutter:** SDK not present in sandbox — run locally / CI.
+- **PHP well-formedness (security suite):** 8 passed / 384 subtests (green after every commit).
+- **Dart/Flutter:** SDK not present in sandbox — run `flutter pub get && flutter analyze && flutter test` locally / CI. Soak tests in `test/photo_flaky_network_soak_test.dart` cover idempotency, backoff, chaos drain, restart double-delivery, orphan reconciliation, and the 2 MB cap.
