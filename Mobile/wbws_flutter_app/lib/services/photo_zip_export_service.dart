@@ -157,25 +157,23 @@ class PhotoZipExportService {
     final sig = Hmac(sha256, hmacKeyBytes).convert(manifestBytes);
 
     final archive = Archive();
-    // files are stored uncompressed (WebP is already compressed)
-    for (final f in files) {
-      archive.addFile(ArchiveFile(
-        f.arcName,
-        f.bytes.length,
-        f.bytes,
-      )..compression = 0);
+    // files are stored uncompressed (WebP is already compressed).
+    // Use ArchiveFile.stream() / the byte-list constructor which is
+    // stable across archive:^3 and archive:^4 — archive 4 tightened the
+    // positional-arg constructor by adding a 'mode' parameter.
+    ArchiveFile _stored(String name, List<int> bytes) {
+      // ignore: deprecated_member_use — compatible across archive 3/4;
+      // the new API in archive 4 (ArchiveFile(filename: name, size: n,
+      // content: bytes)) doesn't exist in 3.x.
+      return ArchiveFile(name, bytes.length, bytes)
+        ..compression = 0;
     }
-    archive.addFile(ArchiveFile(
-      'manifest.json',
-      manifestBytes.length,
-      manifestBytes,
-    )..compression = 0);
+    for (final f in files) {
+      archive.addFile(_stored(f.arcName, f.bytes));
+    }
+    archive.addFile(_stored('manifest.json', manifestBytes));
     final sigBytes = Uint8List.fromList(utf8.encode(sig.toString()));
-    archive.addFile(ArchiveFile(
-      'manifest.sig',
-      sigBytes.length,
-      sigBytes,
-    )..compression = 0);
+    archive.addFile(_stored('manifest.sig', sigBytes));
 
     final zipBytes = ZipEncoder().encode(archive);
     if (zipBytes == null) {
