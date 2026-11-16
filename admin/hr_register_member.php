@@ -679,7 +679,13 @@ try {
     // positions, issue the member code, derive legacy flags and refresh
     // the QR. Never fails the registration itself — worst case the code
     // stays pending and the Identity hub completes it later.
-    if ($upgrade_id === 0 && $newId > 0) {
+    // M8: waiting registrations NEVER mint here — applyPositions() would
+    // otherwise undo the waiting=>null above and hand a code to a member
+    // the doctrine keeps pending until promotion (the position picker is
+    // permanent-only in the UI, so waiting rows hold no positions anyway).
+    // This also silences the M17 no-op 'Member Positions Synced' audit for
+    // the waiting path.
+    if ($upgrade_id === 0 && $newId > 0 && $registration_type !== 'waiting') {
         try {
             require_once __DIR__ . '/backend/services/PositionSyncService.php';
             $posRes = \App\Services\PositionSyncService::applyPositions(

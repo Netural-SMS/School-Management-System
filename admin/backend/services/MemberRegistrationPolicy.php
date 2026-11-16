@@ -42,11 +42,20 @@ final class MemberRegistrationPolicy
             throw new InvalidArgumentException('Gender is required.');
         }
         $gender = self::enum($genderRaw === '' ? 'male' : $genderRaw, self::GENDERS, 'gender');
-        $registrationType = self::enum(
-            trim((string)($input['registration_type'] ?? 'waiting')),
-            self::REGISTRATION_TYPES,
-            'registration type'
-        );
+        // M8: temporary tier is ALWAYS waiting type (import coerces the same
+        // way; the HR form locks it client-side). A crafted temp+direct POST
+        // used to slip through and mint a code immediately, contradicting the
+        // codes-pending doctrine for waiting members.
+        $tierEarly = $quickAdd
+            ? 'permanent'
+            : self::enum($input['membership_tier'] ?? 'permanent', self::TIERS, 'membership tier');
+        $registrationType = ($tierEarly === 'temporary')
+            ? 'waiting'
+            : self::enum(
+                trim((string)($input['registration_type'] ?? 'waiting')),
+                self::REGISTRATION_TYPES,
+                'registration type'
+            );
         $phone = self::text($input['phone_number'] ?? '', 30, 'Phone number');
         if ($phone !== '' && !preg_match('/^[0-9+()\- .]+$/', $phone)) {
             throw new InvalidArgumentException('Phone number contains unsupported characters.');
@@ -65,9 +74,7 @@ final class MemberRegistrationPolicy
                 ? 'active'
                 : self::enum($input['status'] ?? 'active', self::STATUSES, 'status'),
             'gender' => $gender,
-            'membership_tier' => $quickAdd
-                ? 'permanent'
-                : self::enum($input['membership_tier'] ?? 'permanent', self::TIERS, 'membership tier'),
+            'membership_tier' => $tierEarly,
             'phone_number' => $phone,
             'current_section' => self::text($input['current_section'] ?? '', 100, 'Section'),
         ];
