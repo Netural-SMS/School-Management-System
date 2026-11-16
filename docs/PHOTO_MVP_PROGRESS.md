@@ -20,6 +20,7 @@
 | **P6 Batch capture** | ✅ | `9a0f1539` | `photo_batch_capture_screen.dart` — roster walk, auto-advance to first missing, gold/grey/maroon status dots, skip/view-details, done dialog; Take-Photo + Batch buttons on member detail; Batch button on member list |
 | **Z1 ZIP export** | ✅ | `9a0f1539` | `PhotoZipExportService` — store-only ZIP, canonical manifest.json (sorted keys), per-file SHA-256, HMAC-SHA256 manifest.sig (per-install key; server-paired upgrade in P7), share_plus share sheet; Sync Panel Export button now live; app v1.8.1+44 |
 | **Z2-Z5 Server import** | ✅ | `9c941216` | `api_photo_zip_import.php` — upload → extract → manifest parse → per-file validate → `PhotoUploadService::ingestFromFile` (reuses receipt/candidate/conflict pipeline); archive ZIP for audit; `photo_import.php` drag-and-drop admin page with recent-batches table |
+| **P7 hardening (partial)** | ✅ | `0878cc98` | Queue/exports moved to app-support dir (no iCloud backup); LRU eviction of delivered files >30 days; no-cloud-backup method channel reserved (native hookup pending); `photo_importer` role added to admin user-management dropdown |
 
 ## File map (committed)
 
@@ -55,13 +56,11 @@
 
 ## Remaining (P7 hardening — production polish)
 
-1. **iOS iCloud backup exclusion** — method channel to mark queue/exports directories as `NSURLIsExcludedFromBackupKey` (currently stubbed via import of `flutter/services.dart`; the actual MethodChannel call is a TODO).
-2. **Android foreground service notification** — wrap the sync worker in a foreground service so Android doesn't kill long uploads when the app is backgrounded.
-3. **LRU eviction** — delete synced files older than 30 days from the queue dir to bound storage.
-4. **Per-device HMAC pairing** — on first successful login, the server generates a random HMAC key for the device_id and returns it via `/app/config`; client stores in `photo_device_identity.photo_hmac_key`; Z1 export signs with it; Z5 verifies it (replaces the current "warn don't block" behavior).
-5. **Web `photo_importer` role management UI** — role exists and ACL is wired, but admin user-management UI doesn't yet expose it in the role picker; add a "Photo Importer" option when creating/editing admin users.
-6. **Flaky-network soak tests** — harness that drops connections mid-upload, restarts the app mid-enqueue, etc.
-7. **Local Flutter test pass** — run `flutter pub get && flutter analyze && flutter test` on a machine with the Flutter SDK (sandbox here has no SDK); PHP well-formedness tests remain green (8 / 383 subtests).
+1. **Android foreground service notification** — wrap the sync worker in a foreground service so Android doesn't kill long uploads when the app is backgrounded (requires writing a small Kotlin plugin + `ForegroundService` wrapper).
+2. **Per-device HMAC pairing** — on first successful login the server generates a random HMAC key for the device_id and returns it via `/app/config`; client stores it in `photo_device_identity.photo_hmac_key`; Z1 export signs with it; Z5 verifies it (replaces the current "warn-don't-block" behavior).
+3. **Native `excludeFromBackup` method channel** — hook up the channel `app.fkss.photo/nocloud` on iOS (set `NSURLIsExcludedFromBackupKey`) and Android (set no-backup file attribute) for defense in depth; app-support dir is already outside cloud backup on stock installs.
+4. **Flaky-network soak tests** — harness that drops connections mid-upload, restarts the app mid-enqueue, toggles airplane mode during sync, etc.
+5. **Local Flutter test pass** — run `flutter pub get && flutter analyze && flutter test` on a machine with the Flutter SDK (sandbox has no SDK); PHP well-formedness tests remain green (8 / 383 subtests).
 
 ## Test status
 
