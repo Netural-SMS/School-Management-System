@@ -1,0 +1,589 @@
+import 'dart:io';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
+
+import 'local_db.dart' show LocalDb, newClientOpId;
+import 'photo_outbox_models.dart';
+
+/// Owns all writes to `photo_outbox`, `photo_export_batches`,
+/// `photo_device_identity`, and `photo_sync_policy`.
+///
+/// Responsibilities for P1 (foundation):
+///   - Ensure/return the per-install device_id UUID.
+///   - Seed the safe-defaults sync-policy row.
+///   - Enqueue a newly-captured photo (file already written by the capture
+///     service) with all metadata and a fresh client_op_id.
+///   - Implement retake semantics (mark prior capture discarded with a
+///     replaced_by pointer, undoable for ~30 seconds).
+///   - Surface counters for the roster badge and sync panel.
+///   - List due entries for the (later) sync worker.
+///   - Transition entry state with proper attempt/backoff metadata.
+///
+/// The capture service and the sync worker are the only two intended
+/// callers. The UI talks to this service only for reads (counters, lists)
+/// and policy toggles.
+///
+/// P2 (camera + encode), P4 (sync worker), and Z1 (ZIP export) will add
+/// methods here as they land; this file is the seam.
+class PhotoOutboxService {
+  PhotoOutboxService._();
+  // Non-final so integration tests can reset the singleton between cases.
+  // Production code always reads through PhotoOutboxService.instance.
+  static PhotoOutboxService instance = PhotoOutboxService._();
+
+  // ignore: unused_field (used for jitter; kept for future retry scheduling)
+  final Random _random = Random.secure();
+
+  /// Subdirectory under getApplicationDocumentsDirectory() where queued
+  /// photo files live. Kept in app-private storage (survives reboot, not
+  /// auto-cleared by OS, not readable by other apps). On iOS we additionally
+  /// set NSURLIsExcludedFromBackupKey=YES so pending photos don't fill
+  /// iCloud (handled by the capture service when it creates the file).
+  static const queueSubdir = 'photo_queue';
+
+  /// Subdirectory where completed ZIP exports live.
+  static const exportsSubdir = 'photo_exports';
+
+  String? _cachedDeviceId;
+  String? _queueDirPath;
+  String? _exportsDirPath;
+  bool _initialized = false;
+
+  /// Must be awaited before any other method. Safe to call multiple times;
+  /// subsequent calls are no-ops after first success.
+  Future<void> ensureInitialized() async {
+    if (_initialized) return;
+    final db = await LocalDb.instance.database;
+
+    // Create queue directory if it doesn't exist.
+    final appDir = await getApplicationDocumentsDirectory();
+    final qDir = Directory(p.join(appDir.path, queueSubdir));
+    if (!await qDir.exists()) await qDir.create(recursive: true);
+    _queueDirPath = qDir.path;
+    final eDir = Directory(p.join(appDir.path, exportsSubdir));
+    if (!await eDir.exists()) await eDir.create(recursive: true);
+    _exportsDirPath = eDir.path;
+
+    // Ensure device_id row exists.
+    final rows = await db.query('photo_device_identity', where: 'id = 1');
+    if (rows.isEmpty) {
+      final deviceId = _uuid.v4();
+      final now = DateTime.now().toUtc().toIso8601String();
+      await db.insert('photo_device_identity', {
+        'id': 1,
+        'device_id': deviceId,
+        'photo_hmac_key': null, // set by server after first login (v2)
+        'created_at': now,
+        'updated_at': now,
+      });
+      _cachedDeviceId = deviceId;
+    } else {
+      _cachedDeviceId = rows.first['device_id'] as String;
+    }
+
+    // Ensure sync-policy row is seeded.
+    final policyRows = await db.query('photo_sync_policy', where: 'id = 1');
+    if (policyRows.isEmpty) {
+      await db.insert(
+        'photo_sync_policy',
+        PhotoSyncPolicyState.seeded().toUpsertMap(),
+      );
+    }
+
+    _initialized = true;
+  }
+
+  /// Per-install UUID that identifies this device for multi-photographer
+  /// conflict attribution.
+  Future<String> deviceId() async {
+    await ensureInitialized();
+    return _cachedDeviceId!;
+  }
+
+  /// Absolute path to the queue directory (app-private).
+  Future<String> queueDirectory() async {
+    await ensureInitialized();
+    return _queueDirPath!;
+  }
+
+  /// Absolute path to the exports directory (app-private).
+  Future<String> exportsDirectory() async {
+    await ensureInitialized();
+    return _exportsDirPath!;
+  }
+
+  /// Generate a new client_op_id for the next capture (UUID v4).
+  /// Reuses the same generator that every other outbox uses so all
+  /// client_op_ids in the app share one format.
+  String generateClientOpId() => newClientOpId();
+
+  // -------------------------------------------------------------------
+  // Sync policy
+  // -------------------------------------------------------------------
+
+  Future<PhotoSyncPolicyState> readPolicy() async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query('photo_sync_policy', where: 'id = 1');
+    if (rows.isEmpty) return PhotoSyncPolicyState.seeded();
+    return PhotoSyncPolicyState.fromMap(rows.first);
+  }
+
+  Future<void> savePolicy(PhotoSyncPolicyState policy) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    await db.update(
+      'photo_sync_policy',
+      policy.toUpsertMap(),
+      where: 'id = 1',
+    );
+  }
+
+  /// Convenience: flip the master sync toggle. Does NOT start the worker —
+  /// the UI still requires an explicit Start Sync tap.
+  Future<void> setSyncEnabled(bool enabled) async {
+    final current = await readPolicy();
+    await savePolicy(current.copyWith(syncEnabled: enabled));
+  }
+
+  Future<void> setAllowCellular(bool allow) async {
+    final current = await readPolicy();
+    await savePolicy(current.copyWith(allowCellular: allow));
+  }
+
+  // -------------------------------------------------------------------
+  // Enqueue a newly-captured photo
+  // -------------------------------------------------------------------
+
+  /// Enqueue a photo whose bytes are already on disk at [absoluteFilePath].
+  ///
+  /// The file is moved/renamed into the queue directory under a canonical
+  /// name so it is decoupled from any camera temp path. The outbox row is
+  /// inserted in the same transaction after the rename succeeds, so a
+  /// crash mid-enqueue can at worst leave an orphan file that the
+  /// reconciliation step (P7) will sweep.
+  ///
+  /// If [retakeOfClientOpId] is non-null, that prior entry is marked
+  /// `discarded` with `replaced_by` set to the new op id (retake semantics
+  /// per design doc §3.6).
+  ///
+  /// Returns the enqueued entry.
+  Future<PhotoOutboxEntry> enqueueCapturedPhoto({
+    required int memberId,
+    String? memberCode,
+    required PhotoField field,
+    required String absoluteFilePath,
+    required PhotoFormat format,
+    required int width,
+    required int height,
+    required DateTime takenAt,
+    int? operatorAdminId,
+    String? retakeOfClientOpId,
+  }) async {
+    await ensureInitialized();
+    final file = File(absoluteFilePath);
+    if (!await file.exists()) {
+      throw StateError('Cannot enqueue: file $absoluteFilePath does not exist');
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw StateError('Cannot enqueue: zero-byte file at $absoluteFilePath');
+    }
+    if (bytes.lengthInBytes > 2 * 1024 * 1024) {
+      throw StateError(
+        'Cannot enqueue: file is ${bytes.lengthInBytes} bytes, exceeds 2 MB cap',
+      );
+    }
+    final sha = sha256.convert(bytes).toString().toLowerCase();
+
+    final clientOpId = newClientOpId();
+    final canonicalName =
+        'photo_${memberId}_${field.storageValue}_${clientOpId}.${format.extension}';
+    final destPath = p.join(_queueDirPath!, canonicalName);
+    await file.rename(destPath);
+
+    final now = DateTime.now().toUtc();
+    final entry = PhotoOutboxEntry(
+      clientOpId: clientOpId,
+      memberId: memberId,
+      memberCode: memberCode,
+      field: field,
+      localPath: destPath,
+      sha256: sha,
+      byteSize: bytes.lengthInBytes,
+      format: format,
+      width: width,
+      height: height,
+      takenAt: takenAt.toUtc(),
+      operatorAdminId: operatorAdminId,
+      deviceId: _cachedDeviceId!,
+      replacedBy: null,
+      retakeOf: retakeOfClientOpId,
+      state: PhotoOutboxState.queued,
+      attempts: 0,
+      nextAttemptAt: now, // due immediately if sync is running
+      lastAttemptAt: null,
+      lastError: null,
+      lastErrorCode: null,
+      lastHttpCode: null,
+      serverPath: null,
+      serverReceiptId: null,
+      conflict: false,
+      batchExportId: null,
+      exportedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    final db = await LocalDb.instance.database;
+    await db.transaction((txn) async {
+      await txn.insert('photo_outbox', entry.toInsertMap(),
+          conflictAlgorithm: ConflictAlgorithm.fail);
+
+      if (retakeOfClientOpId != null) {
+        // Retake: mark the prior capture as discarded, pointing at us.
+        await txn.update(
+          'photo_outbox',
+          {
+            'state': PhotoOutboxState.discarded.storageValue,
+            'replaced_by': clientOpId,
+            'updated_at': now.toIso8601String(),
+          },
+          where: 'client_op_id = ? AND state NOT IN (?, ?)',
+          whereArgs: [
+            retakeOfClientOpId,
+            PhotoOutboxState.done.storageValue,
+            PhotoOutboxState.discarded.storageValue,
+          ],
+        );
+      } else {
+        // First capture for this member+field: if any OTHER queued/retry
+        // entry exists for the same (member_id, field) it's a leftover
+        // from a previous session — leave it alone; roster UI flags it.
+        // (Same-session retakes come through retakeOfClientOpId above.)
+      }
+    });
+
+    return entry;
+  }
+
+  /// Undo a retake within the undo window (~30 s after capture). Re-discards
+  /// the newer op and un-discards the one it replaced. Returns the restored
+  /// entry, or null if there is nothing to undo.
+  Future<PhotoOutboxEntry?> undoRetake(String newClientOpId) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    return db.transaction<PhotoOutboxEntry?>((txn) async {
+      final rows = await txn.query('photo_outbox',
+          where: 'client_op_id = ?', whereArgs: [newClientOpId], limit: 1);
+      if (rows.isEmpty) return null;
+      final newOne = PhotoOutboxEntry.fromMap(rows.first);
+      if (newOne.retakeOf == null) return null;
+      if (newOne.state == PhotoOutboxState.done ||
+          newOne.state == PhotoOutboxState.uploading) {
+        return null; // too late
+      }
+      final now = DateTime.now().toUtc().toIso8601String();
+      await txn.update(
+        'photo_outbox',
+        {
+          'state': PhotoOutboxState.discarded.storageValue,
+          'updated_at': now,
+        },
+        where: 'client_op_id = ?',
+        whereArgs: [newClientOpId],
+      );
+      await txn.update(
+        'photo_outbox',
+        {
+          'state': PhotoOutboxState.queued.storageValue,
+          'replaced_by': null,
+          'next_attempt_at': now,
+          'updated_at': now,
+        },
+        where: 'client_op_id = ?',
+        whereArgs: [newOne.retakeOf],
+      );
+      final restored = await txn.query('photo_outbox',
+          where: 'client_op_id = ?', whereArgs: [newOne.retakeOf], limit: 1);
+      if (restored.isEmpty) return null;
+      return PhotoOutboxEntry.fromMap(restored.first);
+    });
+  }
+
+  // -------------------------------------------------------------------
+  // Queries
+  // -------------------------------------------------------------------
+
+  Future<PhotoOutboxCounters> counters() async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.rawQuery('''
+      SELECT state,
+             COUNT(*) AS c,
+             COALESCE(SUM(byte_size), 0) AS bytes
+      FROM photo_outbox
+      GROUP BY state
+    ''');
+    int byState(PhotoOutboxState s) {
+      for (final r in rows) {
+        if (r['state'] == s.storageValue) return (r['c'] as num).toInt();
+      }
+      return 0;
+    }
+
+    int queuedBytes = 0;
+    final activeStates = [
+      PhotoOutboxState.queued,
+      PhotoOutboxState.uploading,
+      PhotoOutboxState.retryWait,
+      PhotoOutboxState.conflictPending,
+    ];
+    for (final r in rows) {
+      final state = PhotoOutboxState.fromStorage(r['state'] as String);
+      if (activeStates.contains(state)) {
+        queuedBytes += (r['bytes'] as num).toInt();
+      }
+    }
+
+    return PhotoOutboxCounters(
+      queued: byState(PhotoOutboxState.queued),
+      uploading: byState(PhotoOutboxState.uploading),
+      retryWait: byState(PhotoOutboxState.retryWait),
+      done: byState(PhotoOutboxState.done),
+      conflictPending: byState(PhotoOutboxState.conflictPending),
+      failed: byState(PhotoOutboxState.failed),
+      discarded: byState(PhotoOutboxState.discarded),
+      totalBytesQueued: queuedBytes,
+    );
+  }
+
+  /// The latest (non-discarded) photo for a member+field, or null. Used by
+  /// the roster to show a thumbnail status dot.
+  Future<PhotoOutboxEntry?> latestForMember(int memberId,
+      {PhotoField field = PhotoField.student}) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query(
+      'photo_outbox',
+      where: 'member_id = ? AND field = ? AND state != ?',
+      whereArgs: [
+        memberId,
+        field.storageValue,
+        PhotoOutboxState.discarded.storageValue,
+      ],
+      orderBy: 'taken_at DESC, created_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return PhotoOutboxEntry.fromMap(rows.first);
+  }
+
+  /// Entries due for upload: queued or retry_wait whose next_attempt_at
+  /// has passed, excluding discarded/done/conflict. Up to [limit] entries
+  /// (the sync worker uses concurrency*2 to keep the pipe full).
+  Future<List<PhotoOutboxEntry>> pickDueForUpload({int limit = 4}) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final rows = await db.query(
+      'photo_outbox',
+      where: 'state IN (?, ?) AND next_attempt_at <= ?',
+      whereArgs: [
+        PhotoOutboxState.queued.storageValue,
+        PhotoOutboxState.retryWait.storageValue,
+        now,
+      ],
+      orderBy: 'next_attempt_at ASC, created_at ASC',
+      limit: limit,
+    );
+    return rows.map(PhotoOutboxEntry.fromMap).toList();
+  }
+
+  /// All entries visible in the queue/review UI (skipping discarded).
+  Future<List<PhotoOutboxEntry>> listVisibleEntries() async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query(
+      'photo_outbox',
+      where: 'state != ?',
+      whereArgs: [PhotoOutboxState.discarded.storageValue],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(PhotoOutboxEntry.fromMap).toList();
+  }
+
+  // -------------------------------------------------------------------
+  // State transitions (used by the sync worker in P4)
+  // -------------------------------------------------------------------
+
+  /// Transition an entry to `uploading` (claim). Returns false if the row
+  /// was no longer eligible (another worker claimed it, or user discarded
+  /// it), which the sync worker uses as a skip signal.
+  ///
+  /// Uses rawUpdate so `attempts = attempts + 1` is atomic against the
+  /// WHERE guard — two concurrent claims can't both win.
+  Future<bool> claimForUpload(String clientOpId) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final count = await db.rawUpdate('''
+      UPDATE photo_outbox
+         SET state = ?,
+             attempts = attempts + 1,
+             last_attempt_at = ?,
+             last_error = NULL,
+             last_error_code = NULL,
+             last_http_code = NULL,
+             updated_at = ?
+       WHERE client_op_id = ?
+         AND state IN (?, ?)
+    ''', [
+      PhotoOutboxState.uploading.storageValue,
+      now,
+      now,
+      clientOpId,
+      PhotoOutboxState.queued.storageValue,
+      PhotoOutboxState.retryWait.storageValue,
+    ]);
+    return count > 0;
+  }
+
+  /// Mark entry as done (accepted by server, possibly with conflict flag).
+  Future<void> markDone(
+    String clientOpId, {
+    required String serverPath,
+    String? serverReceiptId,
+    bool conflict = false,
+  }) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final state = conflict
+        ? PhotoOutboxState.conflictPending.storageValue
+        : PhotoOutboxState.done.storageValue;
+    await db.update(
+      'photo_outbox',
+      {
+        'state': state,
+        'server_path': serverPath,
+        'server_receipt_id': serverReceiptId,
+        'conflict': conflict ? 1 : 0,
+        'last_error': null,
+        'last_error_code': null,
+        'last_http_code': 200,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'client_op_id = ?',
+      whereArgs: [clientOpId],
+    );
+  }
+
+  /// Mark entry as needing retry (schedules next attempt via full-jitter
+  /// backoff using the shared retry ladder).
+  Future<void> markRetry({
+    required String clientOpId,
+    required int httpCode,
+    required String errorCode,
+    required String errorMessage,
+    required int attemptCount,
+    required DateTime nextAttemptAt,
+  }) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    await db.update(
+      'photo_outbox',
+      {
+        'state': PhotoOutboxState.retryWait.storageValue,
+        'attempts': attemptCount,
+        'next_attempt_at': nextAttemptAt.toUtc().toIso8601String(),
+        'last_http_code': httpCode,
+        'last_error_code': errorCode,
+        'last_error': errorMessage.length > 500
+            ? errorMessage.substring(0, 500)
+            : errorMessage,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'client_op_id = ?',
+      whereArgs: [clientOpId],
+    );
+  }
+
+  /// Mark entry as terminal failure (non-retryable 4xx etc.).
+  Future<void> markFailed({
+    required String clientOpId,
+    required int httpCode,
+    required String errorCode,
+    required String errorMessage,
+  }) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    await db.update(
+      'photo_outbox',
+      {
+        'state': PhotoOutboxState.failed.storageValue,
+        'last_http_code': httpCode,
+        'last_error_code': errorCode,
+        'last_error': errorMessage.length > 500
+            ? errorMessage.substring(0, 500)
+            : errorMessage,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'client_op_id = ?',
+      whereArgs: [clientOpId],
+    );
+  }
+
+  /// Reset a failed entry back to queued (user tapped "Retry").
+  Future<void> retryFailed(String clientOpId) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    await db.update(
+      'photo_outbox',
+      {
+        'state': PhotoOutboxState.queued.storageValue,
+        'attempts': 0,
+        'next_attempt_at': DateTime.now().toUtc().toIso8601String(),
+        'last_error': null,
+        'last_error_code': null,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'client_op_id = ? AND state = ?',
+      whereArgs: [clientOpId, PhotoOutboxState.failed.storageValue],
+    );
+  }
+
+  /// Discard a queued/failed entry (and delete its file from disk). Safe on
+  /// already-done entries: they stay in receipts (server has them) but
+  /// their local file is removed during LRU cleanup, not here.
+  Future<void> discard(String clientOpId) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query('photo_outbox',
+        where: 'client_op_id = ?', whereArgs: [clientOpId], limit: 1);
+    if (rows.isEmpty) return;
+    final entry = PhotoOutboxEntry.fromMap(rows.first);
+    await db.update(
+      'photo_outbox',
+      {
+        'state': PhotoOutboxState.discarded.storageValue,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'client_op_id = ?',
+      whereArgs: [clientOpId],
+    );
+    // Best-effort file deletion for non-synced entries; done entries' files
+    // are left until LRU eviction (P6).
+    if (entry.state != PhotoOutboxState.done &&
+        entry.state != PhotoOutboxState.conflictPending) {
+      try {
+        final f = File(entry.localPath);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    }
+  }
+
+}
