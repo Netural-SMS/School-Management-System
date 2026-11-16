@@ -598,11 +598,13 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
             to   { transform: translateY(0); opacity: 1; }
         }
 
-        /* Badge colors */
-        .badge-active   { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
-        .badge-warning  { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
-        .badge-inactive { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
-        .badge-archived { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; }
+        /* Status chips (P1: one recipe — same look as the JS list chips).
+           .chip was never defined, so these rendered as unpadded squares. */
+        .chip           { display: inline-block; padding: .125rem .5rem; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 1.4; }
+        .badge-active   { background: #d1fae5; color: #047857; }
+        .badge-warning  { background: #fef3c7; color: #b45309; }
+        .badge-inactive { background: #f1f5f9; color: #475569; }
+        .badge-archived { background: #e2e8f0; color: #475569; }
 
         /* Advanced search pills */
         .filter-pill {
