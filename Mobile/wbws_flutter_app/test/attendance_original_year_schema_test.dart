@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:fkss_app/services/local_db.dart';
+import 'package:fkss_app/services/local_schema_v43.dart';
 
 void main() {
   test('real fresh LocalDb retains an explicit unknown original-year slot',
@@ -23,7 +24,7 @@ void main() {
       expect(column['type'], 'INTEGER');
       expect(column['notnull'], 0);
       expect(column['dflt_value'], isNull);
-      expect(await db.getVersion(), 42);
+      expect(await db.getVersion(), localDatabaseSchemaVersionV43);
     } finally {
       await db.close();
       await dir.delete(recursive: true);

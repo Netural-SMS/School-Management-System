@@ -102,6 +102,7 @@ Future<void> _workerMain(Map<String, Object?> message) async {
           ),
           now: DateTime.now().toUtc(),
         );
+        await (await db.database).close();
         reply.send(<String, Object?>{
           'ok': true,
           'phase': 'stale_settlement',
@@ -122,6 +123,7 @@ Future<void> _workerMain(Map<String, Object?> message) async {
       final raw = await db.database;
       final rows = await raw.query('pending_attendance');
       final attempts = await raw.query('sync_attempts');
+      await raw.close();
       reply.send(<String, Object?>{
         'ok': false,
         'error': 'competitor did not claim',
@@ -198,6 +200,7 @@ Future<void> _inspectWorker(Map<String, Object?> message) async {
       orderBy: 'attempt_number',
     );
     final integrity = await raw.rawQuery('PRAGMA integrity_check');
+    await raw.close();
     reply.send(<String, Object?>{
       'ok': true,
       'rows': rows,
@@ -294,7 +297,7 @@ void main() {
       expect(attempts[1]['retry_decision'], 'COMPLETED');
       expect(inspected['integrity'], 'ok');
     } finally {
-      await directory.delete(recursive: true).catchError((_) {});
+      await directory.delete(recursive: true);
     }
   });
 }
