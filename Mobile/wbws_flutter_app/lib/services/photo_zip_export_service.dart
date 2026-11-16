@@ -157,35 +157,15 @@ class PhotoZipExportService {
     final sig = Hmac(sha256, hmacKeyBytes).convert(manifestBytes);
 
     final archive = Archive();
-    ArchiveFile _stored(String name, List<int> bytes) {
-      // Store only (no compression) — WebP is already compressed.
-      // archive 4.x changed `compression` from int (0=store) to a
-      // CompressionType enum; set it via dynamic for cross-version safety.
-      final f = ArchiveFile(name, bytes.length, bytes);
-      try {
-        // archive 4: try the enum first.
-        // ignore: avoid_dynamic_calls
-        final ct = (Archive as dynamic).CompressionType;
-        // ignore: avoid_dynamic_calls
-        (f as dynamic).compression = ct.none;
-      } catch (_) {
-        try {
-          // archive 3: compression is an int where 0 means store.
-          // ignore: avoid_dynamic_calls
-          (f as dynamic).compression = 0;
-        } catch (_) {
-          // If both fail, leave default (usually already store for raw bytes
-          // constructor) — ZIP will still decode; worst case we deflate.
-        }
-      }
-      return f;
-    }
+    // Store only (no DEFLATE) — WebP is already compressed.
+    // ArchiveFile.noCompress was re-added in archive 4.0.5 and is the
+    // stable cross-version helper for "store uncompressed" entries.
     for (final f in files) {
-      archive.addFile(_stored(f.arcName, f.bytes));
+      archive.addFile(ArchiveFile.noCompress(f.arcName, f.bytes.length, f.bytes));
     }
-    archive.addFile(_stored('manifest.json', manifestBytes));
+    archive.addFile(ArchiveFile.noCompress('manifest.json', manifestBytes.length, manifestBytes));
     final sigBytes = Uint8List.fromList(utf8.encode(sig.toString()));
-    archive.addFile(_stored('manifest.sig', sigBytes));
+    archive.addFile(ArchiveFile.noCompress('manifest.sig', sigBytes.length, sigBytes));
 
     final zipBytes = ZipEncoder().encode(archive);
     if (zipBytes == null) {

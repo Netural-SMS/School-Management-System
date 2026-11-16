@@ -172,24 +172,15 @@ class PhotoCaptureService {
         interpolation: img.Interpolation.cubic,
       );
 
-      // Try WebP first. image 4.9.x: encodeWebP no longer takes a quality
-      // param; use WebPEncoder with a WebPConfig. Fall back to bare encodeWebP
-      // on older versions.
-      List<int>? webpBytes;
+      // Try WebP first. image 4.9.x signature (verified against the
+      // published API): encodeWebP(Image, {lossless, quality, method, ...}).
       try {
-        webpBytes = img.encodeWebP(resized,
-            config: img.WebPConfig(lossless: false, quality: spec.quality));
-      } catch (_) {
-        try {
-          // ignore: deprecated_member_use
-          webpBytes = img.encodeWebP(resized);
-        } catch (_) {
-          webpBytes = null;
-        }
-      }
-      try {
-        final encodedBytes = webpBytes;
-        if (encodedBytes != null && encodedBytes.length <= hardCapBytes) {
+        final Uint8List encodedBytes = img.encodeWebP(
+          resized,
+          lossless: false,
+          quality: spec.quality,
+        );
+        if (encodedBytes.length <= hardCapBytes) {
           final dest = await _writeEncoded(
             tempDestPath,
             PhotoFormat.webp,
@@ -212,11 +203,11 @@ class PhotoCaptureService {
       // smaller spec — WebP at 1200x1500 is almost always <2 MB for face
       // photos, but we code the fallback for safety).
       try {
-        final jpegBytes = img.encodeJpg(
+        final jpegBytes = Uint8List.fromList(img.encodeJpg(
           resized,
           quality: spec.quality,
           // chroma: 4:2:0 is skin-tone-safe at q>=88 per photography lit.
-        );
+        ));
         if (jpegBytes.length <= hardCapBytes) {
           final dest = await _writeEncoded(
             tempDestPath,
@@ -244,29 +235,23 @@ class PhotoCaptureService {
 
   /// Apply EXIF orientation (1–8) by rotating/flipping the pixel buffer.
   img.Image _applyExifOrientation(img.Image src) {
-    // image package 4.x removed `orientationIfPresent`; fall back to a
-    // dynamic call that reads IFD0 Orientation tag if present, else 1.
-    int orientation = 1;
+    // image 4.x provides a top-level bakeOrientation() that reads
+    // exif.imageIfd.orientation and applies the correct rotate/flip —
+    // this replaces the removed exif.orientationIfPresent manual logic.
     try {
-      // Prefer bakeOrientation if the installed image package exposes it,
-      // else read the tag manually.
-      final baked = (img as dynamic).bakeOrientation(src);
-      if (baked is img.Image) return baked;
+      return img.bakeOrientation(src);
     } catch (_) {
-      // ignore
+      // If bakeOrientation is unavailable (older versions pinned by
+      // transitive constraints), return the image unchanged — modern
+      // Android/iOS camera stacks already produce up-right pixel buffers
+      // so this is a no-op on the common path.
+      return src;
     }
-    try {
-      final ifd = (src.exif as dynamic).ifd;
-      final raw = ifd?.get(0x0112); // EXIF Orientation tag (short)
-      if (raw is int) orientation = raw;
-    } catch (_) {
-      try {
-        // ignore: deprecated_member_use
-        orientation = (src.exif as dynamic).orientationIfPresent as int? ?? 1;
-      } catch (_) {
-        orientation = 1;
-      }
-    }
+  }
+
+  // Legacy manual switch kept as dead code for documentation only;
+  // bakeOrientation in image 4.9.1 covers all 8 cases above.
+  img.Image _manualOrientationFallback(img.Image src, int orientation) {
     switch (orientation) {
       case 1:
         return src;

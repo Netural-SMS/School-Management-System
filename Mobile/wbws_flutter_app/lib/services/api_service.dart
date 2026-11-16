@@ -2163,20 +2163,21 @@ class ApiService {
       Future<http.Response> send() async {
         final uri = Uri.parse('${AppConfig.apiBaseUrl}/members/$memberId/photo');
         final req = http.MultipartRequest('POST', uri);
+        // payload.format is 'webp' | 'jpeg' (a plain String, not an enum).
+        final ext = payload.format == 'jpeg' ? 'jpg' : payload.format;
         req.files.add(await http.MultipartFile.fromPath(
           'photo',
           payload.localPath,
-          filename:
-              'photo_${memberId}_${payload.field}.${payload.format.extension}',
+          filename: 'photo_${memberId}_${payload.field}.$ext',
         ));
         final hs = _headers(withAuth: true);
         hs.remove('Content-Type'); // multipart writer sets boundary
         hs['Idempotency-Key'] = payload.clientOpId;
-        hs['X-Photo-Field'] = payload.field.storageValue;
+        hs['X-Photo-Field'] = payload.field;
         hs['X-Photo-SHA256'] = payload.sha256;
         hs['X-Photo-Taken-At'] = payload.takenAt.toUtc().toIso8601String();
         hs['X-Photo-Device-Id'] = payload.deviceId;
-        hs['X-Photo-Format'] = payload.format.mime;
+        hs['X-Photo-Format'] = payload.format;
         hs['X-Photo-Width'] = '${payload.width}';
         hs['X-Photo-Height'] = '${payload.height}';
         if (payload.operatorAdminId != null) {
