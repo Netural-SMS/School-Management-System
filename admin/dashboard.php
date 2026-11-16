@@ -131,6 +131,15 @@ switch ($role) {
         require __DIR__ . '/dashboards/content_editor.php';
         break;
 
+    case 'photo_importer':
+        // Least-privilege volunteer: their only jobs are ZIP import and
+        // photo conflict review. Send them straight to the import page
+        // (which links back to review). No other admin surfaces are
+        // reachable because access_control.php gates each page to the
+        // allowed roles list.
+        header('Location: /admin/photo_import.php');
+        exit;
+
     case 'accounts_office':
         require __DIR__ . '/acm_overview.php';
         break;

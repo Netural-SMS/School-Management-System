@@ -554,6 +554,22 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <span class="font-semibold">Exports & Reports</span>
             </button>
 
+            <a href="/admin/photo_import.php"
+               class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
+                    <i class="fa-solid fa-file-zipper text-sm text-amber-300"></i>
+                </span>
+                <span class="font-semibold">Photo Import (ZIP)</span>
+            </a>
+
+            <a href="/admin/photo_review.php"
+               class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
+                    <i class="fa-solid fa-camera-retro text-sm text-amber-300"></i>
+                </span>
+                <span class="font-semibold">Photo Review</span>
+            </a>
+
             <button data-section="settings"
                     class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition">
                 <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
