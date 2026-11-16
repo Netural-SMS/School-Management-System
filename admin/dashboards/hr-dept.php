@@ -1316,7 +1316,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                 <tbody id="membersTableBody" class="divide-y divide-slate-100"></tbody>
                             </table>
                         </div>
-                        <div class="px-3 py-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+                        <div class="px-3 py-2 border-t border-slate-100 text-[10px] text-slate-500 flex items-center justify-between">
                             <span id="membersVisibleCount"></span>
                         </div>
                     </div>
@@ -1364,7 +1364,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                     Next Member ID:
                                     <span id="nextMemberIdDisplay" class="font-semibold text-slate-800"><?= e($nextMemberCode) ?></span>
                                 </p>
-                                <p class="text-[10px] text-slate-400">
+                                <p class="text-[10px] text-slate-500">
                                     Waiting-list members will not get an ID until they complete 6 months.
                                 </p>
 
@@ -1600,7 +1600,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                     <div class="w-24 h-32 rounded-2xl bg-slate-50 border-2 border-yellow-400 overflow-hidden flex items-center justify-center">
                                         <img id="studentPhotoPreview" src="" alt="Preview"
                                              class="hidden w-full h-full object-cover">
-                                        <span id="studentPhotoPlaceholder" class="text-[11px] text-slate-400 text-center px-2">
+                                        <span id="studentPhotoPlaceholder" class="text-[11px] text-slate-500 text-center px-2">
                                             3×4 Photo
                                         </span>
                                     </div>
@@ -1622,7 +1622,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                                class="mobile-touch-target w-full px-3 py-2 rounded-xl border border-slate-200 text-xs placeholder:text-[11px] focus:ring-emerald-200 focus:border-emerald-400"
                                                placeholder="ሙሉ ስም (ስም አባት ወይም አያት)"
                                                title="Enter full name separated by spaces: First Father Grandfather">
-                                        <p class="text-[10px] text-slate-400 mt-1">Separate First, Father, and Grandfather names with spaces</p>
+                                        <p class="text-[10px] text-slate-500 mt-1">Separate First, Father, and Grandfather names with spaces</p>
                                     </div>
 
                                     <div>
@@ -1656,7 +1656,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                                    placeholder="Year (E.C.)"
                                                    oninput="calculateAgeSection()">
                                         </div>
-                                        <p class="mt-1 text-[10px] text-slate-400">
+                                        <p class="mt-1 text-[10px] text-slate-500">
                                             Section auto-calculated (uses current Ethiopian year).
                                         </p>
                                     </div>
@@ -1754,7 +1754,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                             </option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <p class="text-[10px] text-slate-400 mt-1">
+                                        <p class="text-[10px] text-slate-500 mt-1">
                                             Assigns the member to this Education class for the active academic year. Education can still transfer or unenroll them.
                                             <?php if (empty($hrClasses)): ?>
                                             <span class="text-amber-600">No classes found — Education must create classes first.</span>
@@ -1902,7 +1902,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                     <div class="w-24 h-32 rounded-2xl bg-slate-50 border-2 border-yellow-400 overflow-hidden flex items-center justify-center">
                                         <img id="guardianPhotoPreview" src="" alt="Preview"
                                              class="hidden w-full h-full object-cover">
-                                        <span id="guardianPhotoPlaceholder" class="text-[11px] text-slate-400 text-center px-2">
+                                        <span id="guardianPhotoPlaceholder" class="text-[11px] text-slate-500 text-center px-2">
                                             3×4 Guardian Photo
                                         </span>
                                     </div>
@@ -2059,7 +2059,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                     <label class="block font-medium text-slate-700 mb-1">
                                         Signed Form
                                         <span class="text-red-500">*</span>
-                                        <span class="block text-[10px] text-slate-400">
+                                        <span class="block text-[10px] text-slate-500">
                                             Required for all registration types except Waiting list.
                                         </span>
                                     </label>
@@ -2101,7 +2101,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                             </h3>
                             <p class="text-xs text-slate-500 mt-0.5">One guardian record per parent; every child linked to it. Edit the guardian once — all siblings follow. Nothing is merged without HR approval.</p>
                         </div>
-                        <div class="text-[11px] text-slate-400 sm:text-right">
+                        <div class="text-[11px] text-slate-500 sm:text-right">
                             <div><i class="fa-regular fa-lightbulb text-amber-500"></i> Registering a child? Use the <b>guardian picker</b> on the registration form to attach an existing parent.</div>
                         </div>
                     </div>
@@ -2131,7 +2131,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                 <button type="button" class="fam-chip" data-filter="recent">Updated 30 d</button>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between mb-2"><div id="famListMeta" class="text-[11px] text-slate-400"></div><div id="famPager" class="flex items-center gap-2"></div></div>
+                        <div class="flex items-center justify-between mb-2"><div id="famListMeta" class="text-[11px] text-slate-500"></div><div id="famPager" class="flex items-center gap-2"></div></div>
                         <div id="famList"></div>
                     </div>
 
@@ -2141,7 +2141,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                             <div class="flex-1"><b>How this works.</b> Pairs below look like the same parent recorded twice (same phone, near-identical names). Compare them side by side, open either record or a child, then <b>merge</b> (children move to the kept record, the other spelling becomes an alias, reversible) or mark them <b>different people</b>.</div>
                             <div class="text-right shrink-0">
                                 <button type="button" id="famRematchBtn" class="fam-btn" onclick="FamilyLink.runRematch()"><i class="fa-solid fa-magnifying-glass-arrow-right"></i> Run re-match now</button>
-                                <div id="famLastRematch" class="text-[11px] text-slate-400 mt-1"></div>
+                                <div id="famLastRematch" class="text-[11px] text-slate-500 mt-1"></div>
                                 <div id="famRematchBar" class="fam-progress" style="display:none"><div></div></div>
                             </div>
                         </div>
@@ -2154,7 +2154,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                             <div class="flex-1"><b>Members registered before Family Link.</b> They have a guardian name/phone typed on their record but no guardian record yet. <b>Link</b> matches each one to an existing guardian (same phone or near-identical name) or creates a new guardian record; near-misses go to <i>Needs review</i>. Safe to run any time.</div>
                             <div class="shrink-0"><button type="button" id="famLinkAllBtn" class="fam-btn fam-btn-primary" style="display:none" onclick="FamilyLink.linkAll()"><i class="fa-solid fa-wand-magic-sparkles"></i> Link all</button></div>
                         </div>
-                        <div class="flex items-center justify-between mb-2"><div id="famUnlinkedMeta" class="text-[11px] text-slate-400"></div><div id="famUnlinkedPager" class="flex items-center gap-2"></div></div>
+                        <div class="flex items-center justify-between mb-2"><div id="famUnlinkedMeta" class="text-[11px] text-slate-500"></div><div id="famUnlinkedPager" class="flex items-center gap-2"></div></div>
                         <div id="famUnlinked"></div>
                     </div>
 

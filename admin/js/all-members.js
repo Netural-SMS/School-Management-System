@@ -59,7 +59,7 @@
             '<span class="text-[9px] text-emerald-600 font-semibold">Permanent</span>';
         row.appendChild(td(
             '<div class="font-semibold text-slate-800">' + esc(name) + '</div>' +
-            '<div class="text-[10px] text-slate-400">' + esc(member.age_group ? sectionLabel(member.age_group) : '') + ' · ' + tier + '</div>'
+            '<div class="text-[10px] text-slate-500">' + esc(member.age_group ? sectionLabel(member.age_group) : '') + ' · ' + tier + '</div>'
         ));
 
         // Code
