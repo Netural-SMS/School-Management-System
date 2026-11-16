@@ -295,8 +295,33 @@ final class MemberDirectoryService
                 $columnSql = implode(', ', array_map(static function (string $column): string {
                     return '`' . $column . '`';
                 }, $searchColumns));
-                $where[] = "MATCH ({$columnSql}) AGAINST (? IN BOOLEAN MODE)";
-                $params[] = self::booleanSearch($criteria['q']);
+                $ftWhere = "MATCH ({$columnSql}) AGAINST (? IN BOOLEAN MODE)";
+                $ftParams = [self::booleanSearch($criteria['q'])];
+                // M19: tolerate separators in phone/code queries. Boolean mode
+                // splits '0911-23' into +0911* +23* (the second token kills the
+                // match) and 'A 71045' never equals stored 'A-71045' — so also
+                // try the digits-only phone prefix and the separator-stripped
+                // code prefix. Gated at 3+ chars like the FULLTEXT branch.
+                $digits = (string)preg_replace('/\D+/', '', $criteria['q']);
+                $alnum = (string)preg_replace('/[^A-Za-z0-9]+/', '', $criteria['q']);
+                $extraWhere = [];
+                $extraParams = [];
+                if (strlen($digits) >= 3) {
+                    $extraWhere[] = "`phone_number` LIKE ? ESCAPE '='";
+                    $extraParams[] = self::escapeLike($digits) . '%';
+                }
+                if (strlen($alnum) >= 3) {
+                    $extraWhere[] = "REPLACE(`member_code`, '-', '') LIKE ? ESCAPE '='";
+                    $extraParams[] = self::escapeLike($alnum) . '%';
+                }
+                if ($extraWhere !== []) {
+                    $ftWhere = '(' . $ftWhere . ' OR ' . implode(' OR ', $extraWhere) . ')';
+                    $ftParams = array_merge($ftParams, $extraParams);
+                }
+                $where[] = $ftWhere;
+                foreach ($ftParams as $fp) {
+                    $params[] = $fp;
+                }
             } else {
                 // Short terms use indexable prefixes. SQLite uses this branch in
                 // integration tests because it has no MariaDB FULLTEXT syntax.

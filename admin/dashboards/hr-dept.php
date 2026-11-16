@@ -1247,7 +1247,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                 <input autocomplete="off" id="memberSearchInput"
                                        type="text"
                                        class="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-full"
-                                       placeholder="Search any field (name, code, phone, profession, education, city...)">
+                                       placeholder="Search name, code, phone, city… (matches the start of words)">
                                 <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
                             </div>
 
@@ -2264,7 +2264,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                             <div class="relative">
                                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="manageSearchInput" autocomplete="off" placeholder="Search anything: names, phone, address, guardian, profession, ID..."
+                                <input type="text" id="manageSearchInput" autocomplete="off" placeholder="Search names, phone, address, guardian, profession, ID… (matches the start of words)"
                                        class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-indigo-200 focus:border-indigo-400">
                             </div>
                             <select id="manageFilterType" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
