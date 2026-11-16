@@ -1263,7 +1263,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div>
                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Report type</label>
                             <select id="pdfReportType" onchange="InfoReports.toggleFields()"
-                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 <option value="general">General (all departments)</option>
                                 <option value="sections">Section-based (Mezmur)</option>
                                 <option value="classes">Class-based (Education)</option>
@@ -1274,7 +1274,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div id="pdfSourceWrap" style="display:none">
                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Source</label>
                             <select id="pdfReportSource"
-                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 <option value="mezmur">Mezmur (sections)</option>
                             </select>
                         </div>
@@ -1282,19 +1282,19 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Member</label>
                             <input autocomplete="off" type="search" inputmode="search" id="pdfMemberSearch"
                                    data-member-picker-target="pdfMemberId" data-member-picker-status="active"
-                                   class="w-full px-3 py-2 mb-1 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                                   class="w-full px-3 py-2 mb-1 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                                    placeholder="Search member…">
-                            <select id="pdfMemberId" data-optional="true" class="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                            <select id="pdfMemberId" data-optional="true" class="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                 <option value="">— pick member —</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">From</label>
-                            <input type="date" id="pdfFrom" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                            <input type="date" id="pdfFrom" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                         </div>
                         <div>
                             <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">To</label>
-                            <input type="date" id="pdfTo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                            <input type="date" id="pdfTo" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                         </div>
                     </div>
 
