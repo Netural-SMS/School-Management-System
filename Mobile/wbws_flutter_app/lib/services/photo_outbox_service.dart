@@ -494,6 +494,25 @@ class PhotoOutboxService {
     );
   }
 
+  /// Set of member_ids that have a non-discarded outbox row for [field]
+  /// (queued, uploaded, conflict_pending, or failed). Used by the batch
+  /// capture roster to skip members who already have a capture pending
+  /// review or upload.
+  Future<Set<int>> memberIdsWithPhoto({PhotoField field = PhotoField.student}) async {
+    await ensureInitialized();
+    final db = await LocalDb.instance.database;
+    final rows = await db.query(
+      'photo_outbox',
+      columns: ['DISTINCT member_id'],
+      where: 'field = ? AND state != ?',
+      whereArgs: [field.storageValue, PhotoOutboxState.discarded.storageValue],
+    );
+    return rows
+        .map((r) => (r['member_id'] as int?) ?? 0)
+        .where((id) => id > 0)
+        .toSet();
+  }
+
   /// The latest (non-discarded) photo for a member+field, or null. Used by
   /// the roster to show a thumbnail status dot.
   Future<PhotoOutboxEntry?> latestForMember(int memberId,

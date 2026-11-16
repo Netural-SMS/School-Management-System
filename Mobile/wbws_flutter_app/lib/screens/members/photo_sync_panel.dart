@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/photo_outbox_models.dart';
 import '../../services/photo_outbox_service.dart';
 import '../../services/photo_sync_worker.dart';
+import '../../services/photo_zip_export_service.dart';
 
 /// P5 minimal Sync Panel screen.
 ///
@@ -124,27 +126,30 @@ class _PhotoSyncPanelScreenState extends State<PhotoSyncPanelScreen> {
     await _worker.start();
   }
 
+  bool _exportingZip = false;
+
   Future<void> _exportZip() async {
-    // Z1 ships the real ZIP generation + share sheet. P5 shows the button
-    // and a "coming soon" dialog so the UX is discoverable now.
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Export ZIP'),
-        content: const Text(
-          'Export to ZIP is coming next (it packages every queued photo '
-          'into one file you can hand in via USB). For now, capture is '
-          'fully offline and photos stay in your queue until sync is '
-          'enabled.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    if (_exportingZip) return;
+    setState(() => _exportingZip = true);
+    try {
+      final zip = await PhotoZipExportService.instance.exportAndShare();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('ZIP ready (${(await zip.length()).~/1024} KB) — '
+            'choose a share target (AirDrop, email, Save to Files…).'),
+        duration: const Duration(seconds: 5),
+        backgroundColor: const Color(0xFF600000),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('ZIP export failed: $e'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ));
+    } finally {
+      if (mounted) setState(() => _exportingZip = false);
+    }
   }
 
   @override

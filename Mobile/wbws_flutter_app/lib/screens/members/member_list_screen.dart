@@ -16,6 +16,7 @@ import '../../services/qr_attendance.dart';
 import '../../services/photo_outbox_service.dart';
 import '../../services/photo_sync_worker.dart';
 import 'photo_sync_panel.dart';
+import 'photo_batch_capture_screen.dart';
 
 class MemberListScreen extends StatefulWidget {
   const MemberListScreen({super.key});
@@ -417,6 +418,14 @@ class _MemberListScreenState extends State<MemberListScreen>
         title: const Text('Members'),
         automaticallyImplyLeading: Navigator.canPop(context),
         actions: [
+          // Batch roster photo capture — walks the member list and
+          // prompts for each missing photo (P6).
+          IconButton(
+            tooltip: 'Batch photo capture',
+            icon: const Icon(Icons.photo_library_outlined, size: 22),
+            onPressed: () => Navigator.of(context).push(
+                SmoothPageRoute(page: const PhotoBatchCaptureScreen())),
+          ),
           // Photo sync panel with unsynced-count badge.
           Stack(
             alignment: Alignment.center,

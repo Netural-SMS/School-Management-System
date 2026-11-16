@@ -1,7 +1,7 @@
 name: fkss_app
 description: FKSS Sunday School Management System — Mobile App
 publish_to: 'none'
-version: 1.8.0+43
+version: 1.8.1+44
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -65,6 +65,7 @@ dependencies:
   image: ^4.5.3          # EXIF rotation, resize, WebP/JPEG encode (pure Dart)
   uuid: ^4.5.1           # client_op_id + per-install device_id (UUID v4)
   archive: ^3.6.1        # ZIP packaging for the airlock export (store-only)
+  share_plus: ^10.0.2    # Z1 — system share sheet for USB/AirDrop/email handoff
 
   # P33 offline downloads: hymn audio is stored under the app-support
   # directory (survives cache sweeps, excluded from cloud backup) so a
