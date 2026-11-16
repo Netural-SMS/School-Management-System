@@ -67,6 +67,16 @@ if ($method === 'GET' && ($action === 'config' || $action === '' || $action === 
         'banner' => $banner,
         'features' => $features,
         'tiles' => $rel['tiles'],
+        // P3 photo upload: media capabilities tell the mobile client which
+        // MIME types the server can decode/store so it can fall back from
+        // WebP to JPEG on hosts that lack GD WebP support.
+        'media' => [
+            'photo_upload_max_bytes' => 2 * 1024 * 1024,
+            'photo_upload_mime_types' => function_exists('imagewebp')
+                ? ['image/jpeg', 'image/webp']
+                : ['image/jpeg'],
+            'photo_upload_idempotency_required' => true,
+        ],
     ]);
 }
 

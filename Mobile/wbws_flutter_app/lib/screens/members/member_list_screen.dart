@@ -13,6 +13,9 @@ import '../../widgets/paged_list_footer.dart';
 import 'member_detail_screen.dart';
 import '../../widgets/qr_scan_sheet.dart';
 import '../../services/qr_attendance.dart';
+import '../../services/photo_outbox_service.dart';
+import '../../services/photo_sync_worker.dart';
+import 'photo_sync_panel.dart';
 
 class MemberListScreen extends StatefulWidget {
   const MemberListScreen({super.key});
@@ -47,6 +50,19 @@ class _MemberListScreenState extends State<MemberListScreen>
   String? _lastSynced; // MAX(cached_members.updated_at)
 
   StreamSubscription<bool>? _radioSub;
+  StreamSubscription<PhotoSyncEvent>? _photoEvents;
+  Timer? _photoCounterTimer;
+  PhotoOutboxCounters _photoCounters = PhotoOutboxCounters.zero;
+  bool _photoServiceReady = false;
+
+  void _refreshPhotoCounters() async {
+    if (!_photoServiceReady) {
+      await PhotoOutboxService.instance.ensureInitialized();
+      _photoServiceReady = true;
+    }
+    final c = await PhotoOutboxService.instance.counters();
+    if (mounted) setState(() => _photoCounters = c);
+  }
 
   @override
   void initState() {
@@ -64,12 +80,21 @@ class _MemberListScreenState extends State<MemberListScreen>
         });
       }
     });
+    // Photo-outbox badge refresh every 5s and on any sync event.
+    _refreshPhotoCounters();
+    _photoEvents = PhotoSyncWorker.instance.progressStream.listen((_) {
+      _refreshPhotoCounters();
+    });
+    _photoCounterTimer = Timer.periodic(
+        const Duration(seconds: 5), (_) => _refreshPhotoCounters());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _radioSub?.cancel();
+    _photoEvents?.cancel();
+    _photoCounterTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -392,6 +417,42 @@ class _MemberListScreenState extends State<MemberListScreen>
         title: const Text('Members'),
         automaticallyImplyLeading: Navigator.canPop(context),
         actions: [
+          // Photo sync panel with unsynced-count badge.
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Photo sync',
+                icon: const Icon(Icons.photo_camera_outlined, size: 22),
+                onPressed: () => Navigator.of(context).push(
+                    SmoothPageRoute(page: const PhotoSyncPanelScreen())),
+              ),
+              if (_photoCounters.unsynced > 0)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF600000),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16),
+                    child: Text(
+                      _photoCounters.unsynced > 99
+                          ? '99+'
+                          : '${_photoCounters.unsynced}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           // Phase 9: scan a member-card QR to jump straight to the file.
           IconButton(
               tooltip: 'Scan member QR',
