@@ -131,14 +131,18 @@ switch ($role) {
         require __DIR__ . '/dashboards/content_editor.php';
         break;
 
+    case 'photo_dept':
+        // Full Photo Department dashboard (ZIP import, review/conflicts,
+        // capture coverage analytics, import-history audit, profile).
+        require __DIR__ . '/dashboards/photo_dept.php';
+        break;
+
     case 'photo_importer':
-        // Least-privilege volunteer: their only jobs are ZIP import and
-        // photo conflict review. Send them straight to the import page
-        // (which links back to review). No other admin surfaces are
-        // reachable because access_control.php gates each page to the
-        // allowed roles list.
-        header('Location: /admin/photo_import.php');
-        exit;
+        // Legacy alias — accounts created before the role was promoted
+        // to a full department still land here. Redirect to the proper
+        // photo department dashboard (access_control allows both roles).
+        require __DIR__ . '/dashboards/photo_dept.php';
+        break;
 
     case 'accounts_office':
         require __DIR__ . '/acm_overview.php';

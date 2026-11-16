@@ -168,13 +168,15 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             'members_check.php'       => ['super_admin', 'school_admin', 'hr_dept'],
             'info_manage_member.php'        => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'member_file.php'               => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            // Photo review: pending multi-photographer conflict resolution.
-            // photo_importer is a least-privilege role for volunteers who
-            // only resolve photo conflicts and import ZIPs.
-            'api_photo_candidates.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
-            'api_photo_zip_import.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
-            'photo_review.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
-            'photo_import.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_importer'],
+            // Photo department: ZIP airlock import and multi-photographer
+            // conflict resolution. photo_dept is the primary role;
+            // photo_importer is kept as a legacy alias for accounts
+            // created before the role was promoted to a full department.
+            'api_photo_candidates.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
+            'api_photo_zip_import.php'      => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
+            'photo_review.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
+            'photo_import.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
+            'photo_dept.php'                => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
             'info_archive_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'info_restore_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'info_get_archived_members.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
