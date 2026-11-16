@@ -1,7 +1,7 @@
 name: fkss_app
 description: FKSS Sunday School Management System — Mobile App
 publish_to: 'none'
-version: 1.7.5+42
+version: 1.8.4+47
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -60,6 +60,12 @@ dependencies:
   sqflite: ^2.3.0
   path: ^1.8.0
   crypto: ^3.0.3
+
+  # Offline photo capture & sync (P1 foundation / WebP encode / ZIP export)
+  image: ^4.5.3          # EXIF rotation, resize, WebP/JPEG encode (pure Dart)
+  uuid: ^4.5.1           # client_op_id + per-install device_id (UUID v4)
+  archive: ^4.0.9        # ZIP packaging for the airlock export (store-only); pinned for image:^4.5.3 compatibility
+  share_plus: ^10.0.2    # Z1 — system share sheet for USB/AirDrop/email handoff
 
   # P33 offline downloads: hymn audio is stored under the app-support
   # directory (survives cache sweeps, excluded from cloud backup) so a
@@ -126,4 +132,3 @@ flutter_native_splash:
   android_12:
     image: "../splash_logo.png"
     color: "#FFFFFF"
-

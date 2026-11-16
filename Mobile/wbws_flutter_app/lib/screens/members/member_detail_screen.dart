@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/local_db.dart';
+import '../../services/photo_outbox_models.dart';
 import '../../utils/ethiopian_calendar.dart';
 import '../../utils/theme.dart';
 import '../../utils/transitions.dart';
 import '../attendance_warnings/attendance_warning_widgets.dart';
 import '../attendance_warnings/attendance_warnings_screen.dart';
+import 'member_photo_capture_screen.dart' hide AppTheme;
+import 'photo_batch_capture_screen.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final int memberId;
@@ -172,6 +175,35 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         : '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _openSingleCapture() async {
+    if (_member == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MemberPhotoCaptureScreen(),
+        settings: RouteSettings(arguments: {
+          'memberId': widget.memberId,
+          'memberCode': _member!['member_code'] as String?,
+          'memberName':
+              '${_member!['student_name'] ?? ''} ${_member!['father_name'] ?? ''}'
+                  .trim(),
+          'field': PhotoField.student,
+        }),
+      ),
+    );
+    // After returning, let the sync badge (on the list) refresh on its timer;
+    // nothing cached on the detail screen depends on photo state.
+  }
+
+  Future<void> _openBatchCapture() async {
+    if (_member == null) return;
+    await Navigator.of(context).push(
+      SmoothPageRoute(
+        page: const PhotoBatchCaptureScreen(),
+        settings: RouteSettings(arguments: {'startFromMemberId': widget.memberId}),
+      ),
+    );
+  }
+
   String get _cachedBannerText {
     final base = 'Showing cached data';
     if (_refreshing) return '$base — updating…';
@@ -184,6 +216,18 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_member?['student_name'] ?? 'Member Details'),
+        actions: [
+          IconButton(
+            tooltip: 'Take photo',
+            icon: const Icon(Icons.camera_alt_outlined),
+            onPressed: _member == null ? null : _openSingleCapture,
+          ),
+          IconButton(
+            tooltip: 'Batch capture roster',
+            icon: const Icon(Icons.photo_library_outlined),
+            onPressed: _member == null ? null : _openBatchCapture,
+          ),
+        ],
       ),
       body: _loading
           ? const MemberDetailSkeleton()

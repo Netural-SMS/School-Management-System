@@ -788,6 +788,22 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                 <span class="font-semibold">Exports & Reports</span>
             </button>
 
+            <a href="/admin/photo_import.php"
+               class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
+                    <i class="fa-solid fa-file-zipper text-sm text-amber-300"></i>
+                </span>
+                <span class="font-semibold">Photo Import (ZIP)</span>
+            </a>
+
+            <a href="/admin/photo_review.php"
+               class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
+                    <i class="fa-solid fa-camera-retro text-sm text-amber-300"></i>
+                </span>
+                <span class="font-semibold">Photo Review</span>
+            </a>
+
             <button data-section="settings"
                     class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition">
                 <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
@@ -1247,7 +1263,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                 <input autocomplete="off" id="memberSearchInput"
                                        type="text"
                                        class="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-full"
-                                       placeholder="Search name, code, phone, city… (matches the start of words)">
+                                       placeholder="Search any field (name, code, phone, profession, education, city...)">
                                 <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
                             </div>
 
@@ -1363,7 +1379,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                                     <span id="nextMemberIdDisplay" class="font-semibold text-slate-800"><?= e($nextMemberCode) ?></span>
                                 </p>
                                 <p class="text-[10px] text-slate-400">
-                                    Waiting-list members will not get an ID until they complete 6 months.
+                                    Waiting-list members will not get an ID until they complete 3 months.
                                 </p>
 
                                 <input type="hidden" name="student_id" id="studentIdField" value="">
@@ -2070,7 +2086,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <p class="text-[11px] text-slate-500">
-                                *Required. Waiting-list: signed form optional; full ID + card only after 6 months (backend logic later).
+                                *Required. Waiting-list: signed form optional; full ID + card only after 3 months (backend logic later).
                             </p>
                             <div class="flex gap-2 justify-end">
                                 <button type="button"
@@ -2264,7 +2280,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                             <div class="relative">
                                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="manageSearchInput" autocomplete="off" placeholder="Search names, phone, address, guardian, profession, ID… (matches the start of words)"
+                                <input type="text" id="manageSearchInput" autocomplete="off" placeholder="Search anything: names, phone, address, guardian, profession, ID..."
                                        class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-indigo-200 focus:border-indigo-400">
                             </div>
                             <select id="manageFilterType" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
@@ -2304,13 +2320,14 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                             </select>
                             <select id="manageFilterEducation" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
                                 <option value="">All Education Levels</option>
-                                <?php
-                                // M2: options single-sourced from the canonical vocabulary —
-                                // the old hardcoded set matched nothing the forms store.
-                                require_once __DIR__ . '/../backend/services/EducationLabels.php';
-                                foreach (\App\Services\EducationLabels::options() as $eduCode => $eduLabel): ?>
-                                <option value="<?= e($eduCode) ?>"><?= e($eduLabel) ?></option>
-                                <?php endforeach; ?>
+                                <option value="illiterate">Illiterate</option>
+                                <option value="elementary">Elementary</option>
+                                <option value="high_school">High School</option>
+                                <option value="certificate">Certificate</option>
+                                <option value="diploma">Diploma</option>
+                                <option value="degree">Degree</option>
+                                <option value="masters">Masters</option>
+                                <option value="phd">PhD</option>
                             </select>
                         </div>
                         <div class="mt-3 flex flex-col sm:flex-row gap-2 justify-end">
@@ -2342,7 +2359,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
 <script src="/admin/js/paginated-list.js?v=20261022p"></script>
 <script>window.WBWS_SECTIONS=<?= json_encode(array_map(static function($sec){return $sec['am'].' ('.$sec['letter'].')';}, \App\Services\MemberCategory::sections()), JSON_UNESCAPED_UNICODE) ?>;</script>
-        <script src="/admin/js/all-members.js?v=20261115a" defer></script>
+        <script src="/admin/js/all-members.js?v=20261022p" defer></script>
 <script src="/admin/js/manage-members.js" defer></script>
 <script src="/admin/js/guardian_picker.js?v=<?= SSMS_ASSET_VER ?>"></script>
 <script src="/admin/js/member_nav.js?v=<?= SSMS_ASSET_VER ?>"></script>
@@ -2451,7 +2468,14 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 <!-- ID CARD SECTION END -->
 
             <!-- GROUPS -->
-            <!-- M20: placeholder section removed — Groups lives at /admin/groups.php (see sidebar + mobile nav). -->
+            <section id="section-groups" class="content-section">
+                <div class="panel p-4 mobile-card">
+                    <h3 class="text-sm font-semibold text-slate-800 mb-1">Groups</h3>
+                    <p class="text-xs text-slate-500">
+                        Group & section management UI placeholder. Add CRUD later.
+                    </p>
+                </div>
+            </section>
 
             <!-- ATTENDANCE -->
             <!-- ════════════════════════════════════════════════════════
@@ -2859,17 +2883,6 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                     <i class="fa-solid fa-users text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">Members</span>
                 </button>
-                <!-- M3: Family + Register were desktop-sidebar-only; mobile had no path to them. -->
-                <button data-section="family"
-                        class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
-                    <i class="fa-solid fa-people-roof text-base mb-0.5"></i>
-                    <span class="text-[10px] whitespace-nowrap">Family Link</span>
-                </button>
-                <button data-section="newmembers"
-                        class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
-                    <i class="fa-solid fa-user-plus text-base mb-0.5"></i>
-                    <span class="text-[10px] whitespace-nowrap">New Members</span>
-                </button>
                 <button data-section="manage"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-pen-to-square text-base mb-0.5"></i>
@@ -2885,12 +2898,11 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                     <i class="fa-solid fa-id-card text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">ID Cards</span>
                 </button>
-                <!-- M20: mobile goes to the real Groups module, like the sidebar (was: placeholder section). -->
-                <a href="/admin/groups.php"
+                <button data-section="groups"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-layer-group text-base mb-0.5"></i>
                     <span class="text-[10px] whitespace-nowrap">Groups</span>
-                </a>
+                </button>
                 <button data-section="reports"
                         class="flex flex-col items-center min-w-[64px] px-2 py-1.5 rounded-xl mobile-touch-target opacity-80">
                     <i class="fa-solid fa-file-lines text-base mb-0.5"></i>
@@ -3238,29 +3250,13 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
             ['house_number','house_number'],
             ['education_level','education_level'],
             ['spiritual_education','spiritual_education'],
-            ['member_code','student_id'],
-            // H1: prefill the birth date so promotion keeps it even if the
-            // officer submits without touching DOB (server keeps stored DOB
-            // too, but the form must show the truth).
-            ['dob_ec_day','dob_day'],
-            ['dob_ec_month','dob_month'],
-            ['dob_ec_year','dob_year']
+            ['member_code','student_id']
         ];
         direct.forEach(function (pair) {
             if (m[pair[0]] != null && String(m[pair[0]]).trim() !== '') {
                 setFormField(f, pair[1], m[pair[0]]);
             }
         });
-        // Refresh the live age display from the prefilled DOB, then restore
-        // the STORED group on top: a manual override must survive promotion
-        // even when it disagrees with the DOB-derived group.
-        if (typeof calculateAgeSection === 'function' && (m.dob_ec_year || m.date_of_birth)) {
-            calculateAgeSection();
-            if (m.age_group != null && String(m.age_group).trim() !== '') {
-                setFormField(f, 'age_group', m.age_group);
-                setFormField(f, 'current_section', m.current_section || '');
-            }
-        }
         // membership_tier forced to permanent on promotion
         setFormField(f, 'membership_tier', 'permanent');
         // Sync member-type button UI + conditional sections
@@ -3281,10 +3277,6 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         toggleMemberRegistrationForm(true, 'permanent', 'Upgrade to Permanent Member');
         var upgradeIdInput = document.getElementById('upgradeMemberIdField');
         if (upgradeIdInput) upgradeIdInput.value = memberId;
-        // M13: flag the signed form required the moment promotion mode opens
-        // (type stays 'waiting', so the type switcher would leave it optional).
-        var signedForUpgrade = document.getElementById('docSignedFormField');
-        if (signedForUpgrade) signedForUpgrade.required = true;
 
         // Override reason (for non-eligible promotions) — captured for audit
         var existingReason = document.getElementById('promotion_override_reason');
@@ -3346,12 +3338,8 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
             if (idField) idField.value = idField.value || '<?= e($nextMemberCode) ?>';
         }
 
-        // Signed form required for transfer/direct — and ALWAYS in promotion
-        // mode (server rejects upgrades without a fresh upload). The submit
-        // guard above is the real enforcement (fetch bypasses native
-        // validation); this keeps the attribute truthful.
-        const upgradeMode = parseInt((document.getElementById('upgradeMemberIdField') || {}).value || '0', 10) > 0;
-        if (signedInput) signedInput.required = upgradeMode || type === 'transfer' || type === 'direct';
+        // Signed form required ONLY for transfer or direct
+        if (signedInput) signedInput.required = (type === 'transfer' || type === 'direct');
 
         document.querySelectorAll('.registration-type-btn').forEach(b => {
             b.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50', 'border-emerald-300');
@@ -3425,17 +3413,6 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         if (!form) return;
         form.reset();
 
-        // M12: form.reset() already restores upgradeMemberIdField to its
-        // value="0" default — make that invariant explicit so no future
-        // markup change can leave promotion mode armed after Clear.
-        const upgradeIdInput = document.getElementById('upgradeMemberIdField');
-        if (upgradeIdInput) upgradeIdInput.value = '0';
-        // The early-promotion reason input is created dynamically, so reset()
-        // does NOT remove it — a stale reason must not ride along on the next
-        // submit.
-        const staleReason = document.getElementById('promotion_override_reason');
-        if (staleReason) staleReason.remove();
-
         // Default registration type: waiting
         const defaultRegBtn = document.querySelector('.registration-type-btn[data-registration-type="waiting"]');
         if (defaultRegBtn) selectRegistrationType('waiting', defaultRegBtn);
@@ -3487,12 +3464,8 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
     // Calculate age & section (same value used as school section)
     function calculateAgeSection() {
-        const day = parseInt(document.getElementById('dobDay')?.value || '0', 10);
-        const month = parseInt(document.getElementById('dobMonth')?.value || '0', 10);
         const year = parseInt(document.getElementById('dobYear')?.value || '0', 10);
         const currentYearEC = <?php echo (int) ethio_date_format(new DateTime('now', new DateTimeZone('Africa/Addis_Ababa')), 'Y'); ?>;
-        const currentMonthEC = <?php echo (int) ethio_date_format(new DateTime('now', new DateTimeZone('Africa/Addis_Ababa')), 'n'); ?>;
-        const currentDayEC = <?php echo (int) ethio_date_format(new DateTime('now', new DateTimeZone('Africa/Addis_Ababa')), 'j'); ?>;
 
         if (!year || year > currentYearEC) {
             ['ageDisplay','ageField','sectionDisplay','currentSectionField','ageGroupField'].forEach(id=>{
@@ -3504,33 +3477,11 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
         let age = currentYearEC - year;
         if (age < 0) age = 0;
-        // Birthday-aware like the server (MemberAge EC branch): subtract
-        // one when this year's birthday has not occurred yet. The server
-        // re-decides authoritatively at submit; this is a live preview.
-        if (month >= 1 && month <= 13 && day >= 1) {
-            const maxDay = month === 13 ? ((year % 4 === 3) ? 6 : 5) : 30;
-            if (day <= maxDay && (currentMonthEC < month || (currentMonthEC === month && currentDayEC < day))) {
-                age--;
-                if (age < 0) age = 0;
-            }
-        }
 
-        // Same thresholds as MemberCategory::groupForAge(): <=13 A, <=17 B, else C.
-        let sectionLabel = 'ህጻናት';
-        let ageGroup = '7_13';
-        if (age >= 14 && age <= 17) {
-            sectionLabel = 'ማዕከላዊያን';
-            ageGroup = '14_17';
-        } else if (age >= 18) {
-            sectionLabel = 'ወጣቶች';
-            ageGroup = '18_plus';
-        }
-
+        // Age is informational only. Category (ህጻናት/ማዕከላዊያን/ወጣቶች) and
+        // section are assigned manually by staff — no automatic assignment.
         if (document.getElementById('ageDisplay')) document.getElementById('ageDisplay').value = age.toString();
         if (document.getElementById('ageField')) document.getElementById('ageField').value = age.toString();
-        if (document.getElementById('sectionDisplay')) document.getElementById('sectionDisplay').value = sectionLabel;
-        if (document.getElementById('currentSectionField')) document.getElementById('currentSectionField').value = sectionLabel;
-        if (document.getElementById('ageGroupField')) document.getElementById('ageGroupField').value = ageGroup;
     }
 
     // Toggle custom registration date fields
@@ -3708,18 +3659,6 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
         const form = document.getElementById('memberRegistrationForm');
         if (!form) return;
-
-        // M13: promotion always requires a fresh signed-form upload (server
-        // rejects without one), but the form stays on type 'waiting' where
-        // the field looks optional — and native `required` never fires on
-        // fetch submits. Block here so HR learns before any round-trip.
-        const upgradeIdVal = parseInt((document.getElementById('upgradeMemberIdField') || {}).value || '0', 10);
-        const signedFileInput = document.getElementById('docSignedFormField');
-        if (upgradeIdVal > 0 && signedFileInput && signedFileInput.files.length === 0) {
-            if (typeof showToast === 'function') showToast('The signed registration form must be uploaded to promote a member.', 'warning');
-            else alert('The signed registration form must be uploaded to promote a member.');
-            return;
-        }
 
         const overlay = document.getElementById('formLoadingOverlay');
         if (overlay) overlay.classList.remove('hidden');
@@ -3956,27 +3895,28 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
         if (!previewBtn || !editBtn || !viewPreview || !editForm) return;
 
-        if (tab === 'preview') {
-            previewBtn.classList.add('border-emerald-600', 'text-emerald-700');
-            previewBtn.classList.remove('border-transparent', 'text-slate-500');
-            editBtn.classList.remove('border-emerald-600', 'text-emerald-700');
-            editBtn.classList.add('border-transparent', 'text-slate-500');
-            
-            viewPreview.classList.remove('hidden');
-            viewPreview.style.display = 'block';
-            editForm.classList.add('hidden');
-            editForm.style.display = 'none';
-        } else {
-            editBtn.classList.add('border-emerald-600', 'text-emerald-700');
-            editBtn.classList.remove('border-transparent', 'text-slate-500');
-            previewBtn.classList.remove('border-emerald-600', 'text-emerald-700');
-            previewBtn.classList.add('border-transparent', 'text-slate-500');
-            
-            editForm.classList.remove('hidden');
-            editForm.style.display = 'block';
-            viewPreview.classList.add('hidden');
-            viewPreview.style.display = 'none';
-        }
+        const showPrev = (tab === 'preview');
+        previewBtn.classList.toggle('active', showPrev);
+        previewBtn.classList.toggle('border-emerald-600', showPrev);
+        previewBtn.classList.toggle('text-emerald-700', showPrev);
+        previewBtn.classList.toggle('border-transparent', !showPrev);
+        previewBtn.classList.toggle('text-slate-500', !showPrev);
+        editBtn.classList.toggle('active', !showPrev);
+        editBtn.classList.toggle('border-emerald-600', !showPrev);
+        editBtn.classList.toggle('text-emerald-700', !showPrev);
+        editBtn.classList.toggle('border-transparent', showPrev);
+        editBtn.classList.toggle('text-slate-500', showPrev);
+
+        viewPreview.classList.toggle('hidden', !showPrev);
+        viewPreview.style.display = showPrev ? 'block' : 'none';
+        editForm.classList.toggle('hidden', showPrev);
+        editForm.style.display = showPrev ? 'none' : 'block';
+
+        // Scroll sheet content to top between tabs so the user isn't lost
+        try {
+            var c = document.getElementById('manageSheetContent');
+            if (c) c.scrollTop = 0;
+        } catch(e){}
     }
 
     // In-page Image Viewer Logic
@@ -4077,68 +4017,61 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
     function submitEditForm(e) {
         e.preventDefault();
         const form = e.target;
-        // M9: button-disable alone still allows re-entry (Enter key, second
-        // sheet, impatient re-click after .finally re-enables mid-flight in
-        // slow networks). One save per form until the round-trip settles.
-        if (form.dataset.saving === '1') return;
-        form.dataset.saving = '1';
+        // Ensure csrf_token is present (form may already include it from info_manage_member.php)
         const formData = new FormData(form);
-        formData.append('csrf_token', CSRF_TOKEN);
+        if (!formData.has('csrf_token') && typeof CSRF_TOKEN !== 'undefined') formData.append('csrf_token', CSRF_TOKEN);
         const btn = form.querySelector('button[type="submit"]');
-        
+        const alertBox = document.getElementById('mm-alert');
+
         if(btn) {
             btn.disabled = true;
-            btn.textContent = 'Saving...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
         }
+        if (alertBox){ alertBox.style.display='none'; alertBox.className='mm-alert'; alertBox.innerHTML=''; }
 
         fetch('/admin/info_manage_member.php', {
             method: 'POST',
             body: formData
         })
-        .then(response => {
-            // M22: mirror registration — a non-JSON reply (login page after
-            // full session loss) means re-login, not 'Network error'.
-            const ct = response.headers.get('content-type') || '';
-            if (!ct.includes('application/json')) {
-                throw { _type: 'session_expired', message: 'Session expired. The page will reload.' };
-            }
-            return response.json();
-        })
+        .then(r => r.json().catch(() => ({status:'error',message:'Invalid server response'})))
         .then(data => {
-            if (data && (data.status === 'session_expired' || data.status === 'csrf_expired' || data.action === 'reload')) {
-                alert(data.message || 'Session expired. The page will reload.');
-                window.location.reload();
-                return;
-            }
             if(data.status === 'success') {
-                closeManageSheet();
-                // M21: no full-page reload — refresh the lists in place so
-                // the officer keeps section, scroll position and filters.
-                try { if (typeof loadManageMembers === 'function') loadManageMembers(); } catch (e) { console.warn(e); }
-                try { if (typeof loadAllMembers === 'function') loadAllMembers(); } catch (e) { console.warn(e); }
-                if (typeof showToast === 'function') showToast('Saved successfully!', 'success');
-                else alert('Saved successfully!');
+                if (alertBox){
+                    alertBox.className = 'mm-alert ok';
+                    alertBox.innerHTML = '<i class="fas fa-check-circle"></i> ' + (data.message || 'Saved successfully.');
+                    alertBox.style.display = 'flex';
+                }
+                // Re-open the same member to refresh data (preserves nav history)
+                const id = parseInt(form.querySelector('input[name="id"]').value, 10);
+                setTimeout(() => {
+                    if (id && typeof openManageSheet === 'function') openManageSheet(id);
+                    else { closeManageSheet(); try { window.location.reload(); } catch(e2){} }
+                }, 700);
             } else {
-                alert('Error: ' + data.message);
+                const msg = (data && data.message) ? data.message : 'Unable to save.';
+                if (alertBox){
+                    alertBox.className = 'mm-alert err';
+                    alertBox.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' + msg;
+                    alertBox.style.display = 'flex';
+                } else {
+                    alert('Error: ' + msg);
+                }
+                if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Changes'; }
             }
         })
         .catch(err => {
-            if (err && err._type === 'session_expired') {
-                alert(err.message); window.location.reload(); return;
+            const msg = 'Network error. Please try again.';
+            if (alertBox){
+                alertBox.className = 'mm-alert err';
+                alertBox.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' + msg;
+                alertBox.style.display = 'flex';
+            } else {
+                alert(msg);
             }
-            if (err instanceof SyntaxError) {
-                alert('Session may have expired. The page will reload.'); window.location.reload(); return;
-            }
-            alert('Network error');
             console.error(err);
-        })
-        .finally(() => {
-            form.dataset.saving = '';
-            if(btn) {
-                btn.disabled = false;
-                btn.textContent = 'Save Changes';
-            }
+            if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Changes'; }
         });
+        return false;
     }
 </script>
 
@@ -4407,11 +4340,11 @@ function showDuplicateWarning(matches) {
                         </div>
                         <div class="mt-3 flex gap-2">
                             ${isArchived 
-                                ? `<button type="button" data-restore-id="${escapeAttr(m.id)}" data-restore-name="${escapeAttr(fullName)}"
+                                ? `<button onclick="restoreAndClose(${m.id}, '${fullName.replace(/'/g, "\\'")}')" 
                                         class="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-rotate-left mr-1"></i> Restore This Member
                                    </button>`
-                                : `<button type="button" data-view-id="${escapeAttr(m.id)}"
+                                : `<button onclick="viewExistingMember(${m.id})" 
                                         class="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition">
                                     <i class="fa-solid fa-eye mr-1"></i> View Member
                                    </button>`
@@ -4422,20 +4355,7 @@ function showDuplicateWarning(matches) {
             </div>
         `;
     }).join('');
-
-    // H3: no JS-in-attribute — wire the buttons with listeners so a member
-    // name can never break out of an onclick string (stored XSS).
-    container.querySelectorAll('[data-restore-id]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (typeof restoreAndClose === 'function') restoreAndClose(btn.getAttribute('data-restore-id'), btn.getAttribute('data-restore-name') || '');
-        });
-    });
-    container.querySelectorAll('[data-view-id]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (typeof viewExistingMember === 'function') viewExistingMember(btn.getAttribute('data-view-id'));
-        });
-    });
-
+    
     // Show modal
     document.getElementById('duplicateModal').classList.remove('hidden');
     document.getElementById('duplicateModal').classList.add('flex');

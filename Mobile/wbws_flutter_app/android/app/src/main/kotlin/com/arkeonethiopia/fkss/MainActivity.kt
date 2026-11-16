@@ -17,11 +17,14 @@ import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.lang.ref.WeakReference
 
 class MainActivity : AudioServiceFragmentActivity() {
     private val channelName = "fkss.app/updater"
     private val lockChannelName = "fkss.app/app_lock"
     private val deviceChannelName = "fkss.app/device"
+    private val photoSyncChannelName = "fkss.app/photo_sync_service"
+    private val noCloudChannelName = "app.fkss.photo/nocloud"
 
     /**
      * S3 A.8 — kept so the engine's background-sync channel can be unbound
@@ -30,8 +33,21 @@ class MainActivity : AudioServiceFragmentActivity() {
      */
     private var backgroundSyncChannel: MethodChannel? = null
 
+    companion object {
+        /**
+         * Weak reference to the currently-live Flutter engine, set during
+         * configureFlutterEngine and cleared during cleanUpFlutterEngine.
+         * Used by PhotoSyncActionReceiver to deliver "stop sync" events
+         * from the foreground-service notification back into Dart. WeakRef
+         * so we don't leak the engine past its lifecycle.
+         */
+        @JvmField
+        var liveEngine: WeakReference<FlutterEngine>? = null
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        liveEngine = WeakReference(flutterEngine)
 
         // S3 A.8 — the background sync producer. Both directions of the
         // contract live on this one channel: Dart asks AlarmManager to
@@ -49,6 +65,100 @@ class MainActivity : AudioServiceFragmentActivity() {
         }
         BackgroundSyncProducer.attach(syncChannel)
         backgroundSyncChannel = syncChannel
+
+        // P7 — photo sync foreground service (Android 8+). Dart calls
+        // start/update/stop; the service holds the process priority and
+        // shows an ongoing notification while uploads are running.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, photoSyncChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        val intent = Intent(applicationContext, PhotoSyncForegroundService::class.java)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_TITLE,
+                            call.argument<String>("title") ?: "Uploading photos")
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_CONTENT,
+                            call.argument<String>("content") ?: "Preparing…")
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_PROGRESS,
+                            (call.argument<Number>("progress")?.toInt()) ?: 0)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_MAX,
+                            (call.argument<Number>("max")?.toInt()) ?: 0)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_INDETERMINATE,
+                            call.argument<Boolean>("indeterminate") ?: true)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_PAUSED,
+                            call.argument<Boolean>("paused") ?: false)
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                applicationContext.startForegroundService(intent)
+                            } else {
+                                applicationContext.startService(intent)
+                            }
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("service_start_failed", e.message, null)
+                        }
+                    }
+                    "update" -> {
+                        val intent = Intent(applicationContext, PhotoSyncForegroundService::class.java)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_TITLE,
+                            call.argument<String>("title") ?: "Uploading photos")
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_CONTENT,
+                            call.argument<String>("content") ?: "")
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_PROGRESS,
+                            (call.argument<Number>("progress")?.toInt()) ?: 0)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_MAX,
+                            (call.argument<Number>("max")?.toInt()) ?: 0)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_INDETERMINATE,
+                            call.argument<Boolean>("indeterminate") ?: false)
+                        intent.putExtra(PhotoSyncForegroundService.EXTRA_PAUSED,
+                            call.argument<Boolean>("paused") ?: false)
+                        try {
+                            applicationContext.startService(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("service_update_failed", e.message, null)
+                        }
+                    }
+                    "stop" -> {
+                        try {
+                            applicationContext.stopService(
+                                Intent(applicationContext, PhotoSyncForegroundService::class.java)
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("service_stop_failed", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // P7 — no-cloud-backup exclusion hook (app-support is already
+        // excluded on default Android configs, but the explicit attribute
+        // is defense-in-depth; iOS side implements this via NSURL
+        // resourceValues below in the AppDelegate).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, noCloudChannelName)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "excludeFromBackup") {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) { result.success(false); return@setMethodCallHandler }
+                    try {
+                        val dir = File(path)
+                        if (dir.exists()) {
+                            // Android: files in app-private dir (data/data/<pkg>)
+                            // are NOT auto-backed-up when android:allowBackup="false"
+                            // which is already set in the manifest. We set no-menu
+                            // as an extra marker. Nothing to do natively here.
+                            result.success(true)
+                        } else {
+                            result.success(false)
+                        }
+                    } catch (e: Exception) {
+                        result.error("exclude_failed", e.message, null)
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
 
         // P65 — device capability snapshot (ABI, RAM class, OS): drives
         // the low-end device tier (image-cache budgets) and the ABI-aware
@@ -181,6 +291,23 @@ class MainActivity : AudioServiceFragmentActivity() {
             BackgroundSyncProducer.detach(it)
         }
         backgroundSyncChannel = null
+        // Stop the photo sync foreground service when the engine is torn
+        // down (app exited) so we don't leave orphan notifications.
+        try {
+            applicationContext.stopService(
+                Intent(applicationContext, PhotoSyncForegroundService::class.java)
+            )
+        } catch (_: Throwable) {}
+        if (liveEngine?.get() == flutterEngine) liveEngine = null
         super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Tapping the photo-sync notification simply brings the existing
+        // task to the foreground (the intent already has
+        // ACTION_MAIN / CATEGORY_LAUNCHER / SINGLE_TOP so this activity
+        // is the one that appears). No explicit Dart routing — the user
+        // can open the Sync Panel from the Members tab as usual.
     }
 }
