@@ -61,14 +61,27 @@ class PhotoOutboxService {
     if (_initialized) return;
     final db = await LocalDb.instance.database;
 
-    // Create queue directory if it doesn't exist.
-    final appDir = await getApplicationDocumentsDirectory();
+    // Create queue directory if it doesn't exist. We use the app-support
+    // directory (not documents) so the photos aren't visible to the user
+    // via iTunes file sharing and (on iOS) aren't uploaded to iCloud by
+    // default — photo queues can be multiple GB and we don't want them
+    // consuming the user's iCloud quota.
+    final appDir = await getApplicationSupportDirectory();
     final qDir = Directory(p.join(appDir.path, queueSubdir));
     if (!await qDir.exists()) await qDir.create(recursive: true);
     _queueDirPath = qDir.path;
     final eDir = Directory(p.join(appDir.path, exportsSubdir));
     if (!await eDir.exists()) await eDir.create(recursive: true);
     _exportsDirPath = eDir.path;
+    // Best-effort flag to tell the OS "don't back this up to cloud".
+    // The method channel isn't registered yet on either platform (P7
+    // polish); if the call fails (MissingPluginException) we silently
+    // fall through — files are already in app-support which Android
+    // excludes from backup by default via android:allowBackup=false for
+    // the app's private dir, and iOS excludes app-support unless the
+    // app declares the UIBackupModes "iCloud Documents" entitlement.
+    await _markNoCloudBackup(qDir.path);
+    await _markNoCloudBackup(eDir.path);
 
     // Ensure device_id row exists.
     final rows = await db.query('photo_device_identity', where: 'id = 1');
@@ -605,6 +618,9 @@ class PhotoOutboxService {
   }
 
   /// Mark entry as done (accepted by server, possibly with conflict flag).
+  /// After commit we opportunistically schedule LRU eviction of delivered
+  /// files older than 30 days (P7 hardening) so the queue dir does not
+  /// grow without bound after many capture days.
   Future<void> markDone(
     String clientOpId, {
     required String serverPath,
@@ -616,6 +632,10 @@ class PhotoOutboxService {
     final state = conflict
         ? PhotoOutboxState.conflictPending.storageValue
         : PhotoOutboxState.done.storageValue;
+    String? localPath;
+    final existing = await db.query('photo_outbox',
+        columns: ['local_path'], where: 'client_op_id = ?', whereArgs: [clientOpId], limit: 1);
+    if (existing.isNotEmpty) localPath = existing.first['local_path'] as String?;
     await db.update(
       'photo_outbox',
       {
@@ -631,6 +651,54 @@ class PhotoOutboxService {
       where: 'client_op_id = ?',
       whereArgs: [clientOpId],
     );
+    // Fire-and-forget LRU sweep — runs async, never blocks the worker.
+    unawaited(_evictOldDelivered());
+  }
+
+  /// P7 hardening: delete local files for delivered/conflict-resolved
+  /// entries older than 30 days to reclaim device storage. The DB row is
+  /// kept (for audit/history) with local_path nulled; we only delete the
+  /// file. We intentionally keep queued/retry/failed/conflict_pending
+  /// files so the operator can retry or review.
+  static const _platform = MethodChannel('app.fkss.photo/nocloud');
+  Future<void> _markNoCloudBackup(String dirPath) async {
+    try { await _platform.invokeMethod('excludeFromBackup', {'path': dirPath}); }
+    catch (_) {} // no-op when channel not registered
+  }
+
+  Future<int> _evictOldDelivered() async {
+    try {
+      await ensureInitialized();
+      final db = await LocalDb.instance.database;
+      final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 30));
+      final rows = await db.query(
+        'photo_outbox',
+        columns: ['id', 'local_path'],
+        where: 'state IN (?, ?) AND updated_at < ? AND local_path IS NOT NULL AND local_path != ?',
+        whereArgs: [
+          PhotoOutboxState.done.storageValue,
+          PhotoOutboxState.discarded.storageValue,
+          cutoff.toIso8601String(),
+          '',
+        ],
+        limit: 200,
+      );
+      int removed = 0;
+      for (final r in rows) {
+        final p = r['local_path'] as String?;
+        if (p == null) continue;
+        final f = File(p);
+        if (await f.exists()) {
+          try { await f.delete(); } catch (_) {}
+        }
+        await db.update('photo_outbox', {'local_path': ''},
+            where: 'id = ?', whereArgs: [r['id']]);
+        removed++;
+      }
+      return removed;
+    } catch (_) {
+      return 0; // never let cleanup crash the sync worker
+    }
   }
 
   /// Mark entry as needing retry (schedules next attempt via full-jitter
