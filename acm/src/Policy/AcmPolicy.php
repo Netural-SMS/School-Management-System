@@ -42,7 +42,14 @@ class AcmPolicy
             // 'code' issue/view runs the D3.2 issuance panel.
             'ticket'   => ['create', 'view', 'claim', 'note', 'approve', 'reject', 'request_changes', 'cancel'],
             'person'   => ['create', 'view', 'edit'],
-            'account'  => ['view'],
+            // S7: office suspends/reactivates member/parent
+            // accounts (target-role guard lives in the service;
+            // staff/officers stay in user administration).
+            // S8: 'deactivate' is intentionally ABSENT: the
+            // terminal action is super_admin-only (#25) via the
+            // bypass above. Deactivating a seat here would need a
+            // second thought, not a second entry.
+            'account'  => ['view', 'suspend', 'reactivate'],
             'audit'    => ['view'],
             'code'     => ['issue', 'view'],
             // S4: console device list + revoke (officer-only;

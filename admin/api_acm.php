@@ -39,6 +39,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/backend/services/SecurityAuditService.php';
 require_once __DIR__ . '/backend/services/RefreshTokenService.php';
+require_once __DIR__ . '/backend/services/AccountCredentialService.php';
 require_once __DIR__ . '/../acm/autoload.php';
 
 use SSMS\Acm\Accounts\AccountProvisioner;
@@ -49,6 +50,7 @@ use SSMS\Acm\Contracts\AccountContext;
 use SSMS\Acm\Contracts\CodePurpose;
 use SSMS\Acm\Device\DeviceCrypto;
 use SSMS\Acm\Device\DeviceService;
+use SSMS\Acm\Enrollment\StaffEnrollmentRequestService;
 use SSMS\Acm\Identity\AcmPersonService;
 use SSMS\Acm\Office\AcmOfficeService;
 use SSMS\Acm\OfficeNetwork\OfficeNetworkSignal;
@@ -90,7 +92,15 @@ $persons = new AcmPersonService($pdo);
 $tickets = new AcmTicketService($pdo, $persons);
 $ceremony = new ActivationService($pdo, $tickets, $persons);
 $office = new AcmOfficeService($pdo);
-$provisioner = new AccountProvisioner($pdo);
+// S7 suspension (revoker mirrors the S4 shape: mysqli-backed,
+// fails closed without a live handle -- suspend refuses rather
+// than half-suspending).
+$consoleSessionRevoker = null;
+if (isset($conn) && $conn instanceof \mysqli) {
+    $consoleSessionRevoker = static function (int $userId) use ($conn): void {
+        (new \App\Services\MysqliCredentialRepository($conn))->revokeAllRefreshSessions($userId);
+    };
+}
 // S4 device registry (revoker mirrors the mobile route: mysqli-backed,
 // fails closed without a live handle).
 $consoleRevoker = null;
@@ -110,6 +120,22 @@ if (isset($conn) && $conn instanceof \mysqli) {
     };
 }
 $devices = new DeviceService($pdo, $tickets, $consoleRevoker);
+// S8 deactivation (device kill loop over the S4 service: the
+// revoke is idempotent, so a crash mid-loop converges on
+// retry. Fails closed without a live handle, like S4/S7).
+$consoleDeviceRevoker = null;
+if ($consoleRevoker !== null) {
+    $consoleDeviceRevoker = function (int $userId, string $reason) use ($devices, $actorId, $role): int {
+        $officer = new AccountContext($actorId, $role);
+        $processed = 0;
+        foreach ($devices->listForUser($userId) as $device) {
+            $devices->revokeWithReport($officer, (string)$device['uuid'], $reason);
+            $processed++;
+        }
+        return $processed;
+    };
+}
+$provisioner = new AccountProvisioner($pdo, $consoleSessionRevoker, $consoleDeviceRevoker);
 $isSuperAdmin = $role === 'super_admin';
 
 function acm_audit(PDO $pdo, string $action, array $details, ?string $entityType, ?int $entityId): void
@@ -492,16 +518,21 @@ try {
                 && !$signal->allows(OfficeNetworkSignal::resolveClientIp($_SERVER, $signal->trustedProxies()))) {
                 acm_err('Code issuance is not available from this network.', 403);
             }
-            // S4: device_add issuance for add-a-device ceremonies
-            // (strict purpose vocabulary; reset stays closed).
+            // S6: reset issuance for credential-recovery
+            // ceremonies (strict purpose vocabulary).
             $purposeRaw = (string)($_POST['purpose'] ?? 'activation');
-            if ($purposeRaw !== 'activation' && $purposeRaw !== 'device_add') {
+            if ($purposeRaw !== 'activation'
+                && $purposeRaw !== 'device_add'
+                && $purposeRaw !== 'reset'
+            ) {
                 acm_err('Unknown code purpose.', 400);
             }
             $issued = $ceremony->issueCode(
                 new AccountContext($actorId, $role),
                 (string)($_POST['id'] ?? ''),
-                $purposeRaw === 'device_add' ? CodePurpose::DeviceAdd : CodePurpose::Activation
+                $purposeRaw === 'device_add'
+                    ? CodePurpose::DeviceAdd
+                    : ($purposeRaw === 'reset' ? CodePurpose::Reset : CodePurpose::Activation)
             );
             $ticket = $tickets->get((int)($_POST['id'] ?? 0));
             // Audit carries the public selector only — never the
@@ -627,6 +658,175 @@ try {
                 'already' => $report['already'],
             ], 'acm_ticket', (int)$ticket['id']);
             acm_ok(['revoked' => true, 'families' => $report['families']]);
+            break;
+        }
+
+        case 'account_suspend': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_ACCOUNT, 'suspend')) {
+                acm_err('Access denied.', 403);
+            }
+            $result = $provisioner->suspend(
+                (int)($_POST['id'] ?? 0),
+                (string)($_POST['reason'] ?? ''),
+                new AccountContext($actorId, $role)
+            );
+            // Reviewer-visible: the office report only lists
+            // `acm.`-prefixed actions (LIKE 'acm.%').
+            acm_audit($pdo, 'acm.account.suspended', [
+                'username' => $result['username'],
+                'account_type' => $result['account_type'],
+                'reason' => trim((string)($_POST['reason'] ?? '')),
+                'link' => 'active->suspended',
+            ], 'user', $result['user_id']);
+            acm_ok(['suspended' => true, 'account' => $result]);
+            break;
+        }
+
+        case 'account_reactivate': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_ACCOUNT, 'reactivate')) {
+                acm_err('Access denied.', 403);
+            }
+            $result = $provisioner->reactivate(
+                (int)($_POST['id'] ?? 0),
+                (string)($_POST['reason'] ?? ''),
+                new AccountContext($actorId, $role)
+            );
+            acm_audit($pdo, 'acm.account.reactivated', [
+                'username' => $result['username'],
+                'account_type' => $result['account_type'],
+                'reason' => trim((string)($_POST['reason'] ?? '')),
+                'link' => 'suspended->active',
+            ], 'user', $result['user_id']);
+            acm_ok(['reactivated' => true, 'account' => $result]);
+            break;
+        }
+
+        case 'account_deactivate': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_ACCOUNT, 'deactivate')) {
+                acm_err('Access denied.', 403);
+            }
+            $result = $provisioner->deactivate(
+                (int)($_POST['id'] ?? 0),
+                (string)($_POST['reason'] ?? ''),
+                new AccountContext($actorId, $role)
+            );
+            acm_audit($pdo, 'acm.account.deactivated', [
+                'username' => $result['username'],
+                'account_type' => $result['account_type'],
+                'reason' => trim((string)($_POST['reason'] ?? '')),
+                'devices' => $result['devices'],
+                'link' => 'active/suspended->revoked',
+            ], 'user', $result['user_id']);
+            acm_ok(['deactivated' => true, 'account' => $result]);
+            break;
+        }
+
+        // S10: staff enrollment request queue. Same issuance-class
+        // policy (RES_CODE/issue) + office-network gate as code
+        // issuance — no new policy surface. Audit uses the `acm.`
+        // prefix so the reviewer report picks events up with zero
+        // report changes.
+        case 'staff_enroll_queue': {
+            if (!AcmPolicy::can($role, AcmPolicy::RES_CODE, 'view')) {
+                acm_err('Access denied.', 403);
+            }
+            $requests = new StaffEnrollmentRequestService($pdo);
+            $result = $requests->queue(
+                trim((string)($_GET['status'] ?? '')),
+                25,
+                max(0, (int)($_GET['offset'] ?? 0))
+            );
+            acm_ok(['rows' => $result['rows'], 'total' => $result['total']]);
+            break;
+        }
+
+        case 'staff_enroll_request': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_CODE, 'issue')) {
+                acm_err('Access denied.', 403);
+            }
+            $requests = new StaffEnrollmentRequestService($pdo);
+            $row = $requests->request(
+                (int)($_POST['user_id'] ?? 0),
+                $actorId,
+                (string)($_POST['operation'] ?? 'activation')
+            );
+            acm_audit($pdo, 'acm.staff_enroll.requested', [
+                'request_id' => (int)$row['id'],
+                'user_id' => (int)$row['user_id'],
+                'operation' => (string)$row['operation'],
+            ], 'acm_staff_enrollment_request', (int)$row['id']);
+            acm_ok(['request' => $row]);
+            break;
+        }
+
+        case 'staff_enroll_decide': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_CODE, 'issue')) {
+                acm_err('Access denied.', 403);
+            }
+            $signal = $ceremony->networkSignal();
+            if ($signal->gatesIssuance()
+                && !$signal->allows(OfficeNetworkSignal::resolveClientIp($_SERVER, $signal->trustedProxies()))) {
+                acm_err('Enrollment approval is not available from this network.', 403);
+            }
+            $requests = new StaffEnrollmentRequestService($pdo);
+            $result = $requests->decide(
+                (int)($_POST['id'] ?? 0),
+                $actorId,
+                (string)($_POST['decision'] ?? ''),
+                (string)($_POST['note'] ?? ''),
+                static function (array $req) use ($ceremony): array {
+                    return $ceremony->mintStaffEnrollGrant($req);
+                }
+            );
+            $req = $result['request'];
+            // Audit carries the grant fingerprint only — never the
+            // token (same secret rule as code_issue).
+            $grantFp = is_array($result['grant'])
+                ? substr((string)($result['grant']['fingerprint'] ?? ''), 0, 6) . '...'
+                : null;
+            acm_audit($pdo, 'acm.staff_enroll.' . (string)$req['status'], [
+                'request_id' => (int)$req['id'],
+                'user_id' => (int)$req['user_id'],
+                'operation' => (string)$req['operation'],
+                'grant_fp' => $grantFp,
+            ], 'acm_staff_enrollment_request', (int)$req['id']);
+            // Plaintext travels ONLY in this response: the page shows
+            // it once (officer relays to the staffer out-of-band, same
+            // as an issued code), then masks it (D3.2). Never logged,
+            // never stored.
+            acm_ok(['request' => $req, 'grant' => $result['grant']]);
+            break;
+        }
+
+        case 'staff_enroll_cancel': {
+            if ($method !== 'POST') {
+                acm_err('Method not allowed.', 405);
+            }
+            if (!AcmPolicy::can($role, AcmPolicy::RES_CODE, 'issue')) {
+                acm_err('Access denied.', 403);
+            }
+            $requests = new StaffEnrollmentRequestService($pdo);
+            $row = $requests->cancel((int)($_POST['id'] ?? 0), $actorId);
+            acm_audit($pdo, 'acm.staff_enroll.canceled', [
+                'request_id' => (int)$row['id'],
+                'user_id' => (int)$row['user_id'],
+            ], 'acm_staff_enrollment_request', (int)$row['id']);
+            acm_ok(['request' => $row]);
             break;
         }
 

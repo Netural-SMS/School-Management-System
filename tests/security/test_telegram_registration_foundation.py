@@ -48,10 +48,10 @@ class TelegramRegistrationFoundationTests(unittest.TestCase):
         self.assertIn("$text === '/resume'", self.service)
         self.assertIn("private function resume(", self.service)
         self.assertIn("private function editAnswer(", self.service)
-        self.assertIn("/edit field_key", self.service)
+        self.assertIn("private function editAnswer(", self.service)
         begin = self.service[self.service.index("private function begin"):self.service.index("private function profileChoice")]
         self.assertNotIn("cancelActive", begin)
-        self.assertIn("You already have an unfinished draft", begin)
+        self.assertIn("ያልተጠናቀቀ ምዝገባ አለ", begin)
         self.assertIn("edit_return_to_review=0", self.service)
         self.assertIn("TelegramFormRegistry::label($key)", self.service)
         self.assertIn("edit_return_to_review", self.phase2_migration)
@@ -117,11 +117,165 @@ class TelegramRegistrationFoundationTests(unittest.TestCase):
         self.assertIn("can_transfer", transfer)
         self.assertIn("'waiting','direct','transfer'", transfer)
         self.assertIn("$profile==='transfer'?'transfer':'direct'", approval)
-        self.assertIn("WHERE s.status IN ('submitted','approved')", api)
+        self.assertIn("s.status IN ('submitted','approved')", api)
         self.assertIn('data-profile="transfer"', page)
         self.assertIn("name=\"can_transfer\"", page)
         self.assertIn("dialog-close", page)
         self.assertIn("aria-label','ዝጋ'", page)
+
+    def test_amharic_identity_policy_and_full_size_editor(self):
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        approval = (ROOT / "admin/backend/services/TelegramMemberApprovalService.php").read_text(encoding="utf-8")
+        self.assertIn("'script'=>'ethiopic'", self.registry)
+        self.assertIn("በአማርኛ ፊደል ብቻ", self.registry)
+        for key in ["guardian_phone2", "alt_phone_number", "block_number", "work_profession", "guardian_house"]:
+            self.assertIn(f"'{key}'", self.registry)
+            self.assertIn(f"'{key}'=>", approval)
+        self.assertIn('class="editor-workspace"', page)
+        self.assertIn("height:94vh", page)
+        self.assertIn("የቦት ጥያቄ", page)
+        self.assertIn("body.set('title_en',formEditor.elements.namedItem('title_en').value)", page)
+
+    def test_desktop_sidebar_and_readable_approval_queue(self):
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns:240px minmax(0,1fr)", page)
+        self.assertIn("position:sticky;top:18px", page)
+        self.assertIn("class=\"sessionSelect\"", page)
+        for alias in ["member_name", "baptismal_name", "dob_ec", "current_section"]:
+            self.assertIn(alias, api)
+        self.assertIn("an.field_key='full_name_am'", api)
+
+    def test_analytics_are_bounded_and_aggregated(self):
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("case 'analytics'", api)
+        self.assertIn("max(7,min(365", api)
+        self.assertIn("GROUP BY profile_key", api)
+        self.assertIn("ORDER BY total DESC LIMIT 20", api)
+
+    def test_analytics_dashboard_has_period_filters_and_safe_rendering(self):
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn('data-tab="analytics"', page)
+        self.assertIn('id="analyticsDays"', page)
+        self.assertIn("async function loadAnalytics", page)
+        self.assertIn("registration_types", page)
+        self.assertIn("duplicate_attention", page)
+
+    def test_batch_approval_is_bounded_and_reports_skips(self):
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("case 'review_batch_approve'", api)
+        self.assertIn("count($ids)>50", api)
+        self.assertIn("'approved'=>$approved,'skipped'=>$skipped", api)
+        self.assertIn('id="batchApprove"', page)
+        self.assertIn('id="batchDialog"', page)
+        self.assertIn("review_batch_approve", page)
+
+    def test_bot_primary_flow_is_button_driven_and_amharic(self):
+        self.assertIn("'⏭️ ዝለል'", self.service)
+        self.assertIn("'⬅️ ወደ ኋላ'", self.service)
+        self.assertIn("'📋 መረጃውን አሳይ'", self.service)
+        self.assertIn("'❌ ሰርዝ'", self.service)
+        self.assertIn("'▶️ ቀጥል'", self.service)
+        self.assertNotIn("/new — start", self.service)
+
+    def test_approval_queue_filters_are_allowlisted_bounded_and_debounced(self):
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("['waiting','direct','transfer']", api)
+        self.assertIn("['not_checked','none','possible','likely','error']", api)
+        self.assertIn("mb_substr($search,0,80", api)
+        self.assertIn("an.value_text LIKE ?", api)
+        self.assertIn('id="sessionProfile"', page)
+        self.assertIn('id="sessionDuplicate"', page)
+        self.assertIn("setTimeout(()=>loadSessions", page)
+
+    def test_queue_sort_and_pagination_are_bounded(self):
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("$sortMap=['newest'", api)
+        self.assertIn("$limit+1", api)
+        self.assertIn("min(100000", api)
+        self.assertIn("'has_more'=>$hasMore", api)
+        self.assertIn('id="sessionSort"', page)
+        self.assertIn('id="sessionPrev"', page)
+        self.assertIn('id="sessionNext"', page)
+
+    def test_bot_questions_do_not_duplicate_english_prompts(self):
+        self.assertNotIn("$field['prompt_en']", self.service)
+        self.assertNotIn("skip this optional question", self.service)
+        self.assertIn("ይህ ጥያቄ አማራጭ ነው", self.service)
+        self.assertIn("የምዝገባ ዓይነት ይምረጡ።", self.service)
+
+    def test_attachment_schema_is_quarantined_and_bounded(self):
+        migration = (ROOT / "sql/087_telegram_registration_attachments.sql").read_text(encoding="utf-8")
+        self.assertIn("telegram_registration_attachments", migration)
+        self.assertIn("UNIQUE KEY uniq_tg_attachment_field", migration)
+        self.assertIn("status ENUM('pending','stored','attached','rejected','deleted')", migration)
+        for key in ["student_photo", "guardian_photo", "doc_school_records", "doc_spiritual", "doc_signed_form"]:
+            self.assertIn(f"'{key}'", self.registry)
+
+    def test_telegram_files_are_bounded_verified_and_privately_quarantined(self):
+        bot = (ROOT / "admin/backend/services/TelegramBotApiService.php").read_text(encoding="utf-8")
+        attachments = (ROOT / "admin/backend/services/TelegramAttachmentService.php").read_text(encoding="utf-8")
+        self.assertIn("public function downloadFile", bot)
+        self.assertIn("$size>$maxBytes", bot)
+        self.assertIn("str_contains($path,'..')", bot)
+        self.assertIn("CURLOPT_FOLLOWLOCATION=>false", bot)
+        self.assertIn(r"new \finfo(FILEINFO_MIME_TYPE)", attachments)
+        self.assertIn("file_get_contents($tmp,false,null,0,5)==='%PDF-'", attachments)
+        self.assertIn("ssms_private/telegram_quarantine", attachments)
+        self.assertIn("@chmod($target,0600)", attachments)
+
+    def test_file_messages_are_processed_only_for_active_file_questions(self):
+        self.assertIn("private function acceptAttachment", self.service)
+        self.assertIn("TelegramBotApiService())->downloadFile", self.service)
+        self.assertIn("TelegramAttachmentService($this->conn))->store", self.service)
+        self.assertIn("file_unique_id", self.service)
+        self.assertIn("isset($message['document'])", self.webhook)
+        self.assertIn("isset($message['photo'])", self.webhook)
+
+    def test_hr_review_lists_attachment_metadata_without_private_paths(self):
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        approval = (ROOT / "admin/backend/services/TelegramMemberApprovalService.php").read_text(encoding="utf-8")
+        self.assertIn("field_key,mime_type,byte_size,status,created_at", api)
+        self.assertNotIn("SELECT id,field_key,stored_path,mime_type", api)
+        self.assertIn("'attachments'=>$attachments", api)
+        self.assertIn('id="reviewAttachments"', page)
+        self.assertIn("student_photo_path'=>$files['student_photo']", approval)
+        self.assertIn("SET status='attached'", approval)
+
+    def test_replaced_and_cancelled_attachments_are_deleted(self):
+        attachments = (ROOT / "admin/backend/services/TelegramAttachmentService.php").read_text(encoding="utf-8")
+        self.assertIn("SELECT stored_path", attachments)
+        self.assertIn("self::discard($oldPath)", attachments)
+        self.assertIn("public function cleanupSession", attachments)
+        self.assertIn("status='deleted',stored_path=NULL", attachments)
+        self.assertIn("telegram_quarantine/([a-f0-9]{32}", attachments)
+        self.assertIn("cleanupSession((int)$id)", self.service)
+
+    def test_expired_and_failed_attachment_cleanup_is_bounded_and_audited(self):
+        attachments = (ROOT / "admin/backend/services/TelegramAttachmentService.php").read_text(encoding="utf-8")
+        api = (ROOT / "admin/api_telegram_registration.php").read_text(encoding="utf-8")
+        self.assertIn("public function cleanupStale", attachments)
+        self.assertIn("max(1,min(200", attachments)
+        self.assertIn("s.status IN ('cancelled','expired','failed')", attachments)
+        self.assertIn("case 'attachment_cleanup'", api)
+        self.assertIn("attachment_cleanup','attachment'", api)
+        self.assertIn("cleanupSession((int)$id)", self.service)
+
+    def test_attachment_download_is_hr_only_and_path_safe(self):
+        endpoint = (ROOT / "admin/telegram_attachment.php").read_text(encoding="utf-8")
+        page = (ROOT / "admin/telegram_registration.php").read_text(encoding="utf-8")
+        attachments = (ROOT / "admin/backend/services/TelegramAttachmentService.php").read_text(encoding="utf-8")
+        self.assertIn("admin_role']??'')!=='hr_dept'", endpoint)
+        self.assertIn("FILTER_VALIDATE_INT", endpoint)
+        self.assertIn("status IN ('stored','attached')", endpoint)
+        self.assertIn("X-Content-Type-Options: nosniff", endpoint)
+        self.assertIn("Cache-Control: private, no-store", endpoint)
+        self.assertIn("public static function resolve", attachments)
+        self.assertIn('rel="noopener"', page)
 
     def test_submission_never_inserts_member(self):
         submit = self.service[self.service.index("private function submitReview"):]
@@ -301,7 +455,7 @@ class TelegramRegistrationFoundationTests(unittest.TestCase):
         for key in ["full_name_am", "dob_ec", "phone_number", "baptismal_name", "gender"]:
             self.assertIn(key, registration)
         self.assertIn("More plausible candidates exist than the safe display limit", registration)
-        self.assertIn("/skip — ዝለል", registration)
+        self.assertIn("ይህ ጥያቄ አማራጭ ነው", registration)
         self.assertIn("candidate_cap_reached", api)
         self.assertIn("results are never silently expanded", page)
 

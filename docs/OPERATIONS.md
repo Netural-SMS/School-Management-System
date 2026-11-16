@@ -38,6 +38,7 @@ The historical statement that there was no staging or application cron does not 
    - Smoke-check the staff login page (`/admin/index.php`) and the mobile configuration endpoint (`/api/v1/app/config`).
    - Check the error monitor.
    - Run `python3 scripts/check_live_urls.py --server production` (see [section 2.2](#22-folder-structure-safety-checks)).
+   - Run the PHP extension preflight on the target (see [section 2.3](#23-php-extension-preflight-l1)); a FAIL blocks the release.
 7. **Record** the deployed commit, the file list, the checksum result and any migrations in the [production deployment record](../CHANGELOG.md#production-deployment-record).
 
 ### 2.1 Server folders that Git does not create
@@ -81,6 +82,34 @@ python3 scripts/check_live_urls.py --server production
 - **Changes:** change an expected status only with a reason in the pull request.
 
 **Deployed version:** the [production deployment record](../CHANGELOG.md#production-deployment-record) is a dated record, not proof of the current runtime. Verify an authorized target against the recorded SHA/file checksums, schema and configuration. Repository equality, server-side Git metadata or one reachable page does not establish full deployment parity. Routine documentation work must not run the live-site commands above without separate authorization.
+
+### 2.3 PHP extension preflight (L1)
+
+Several features fail cleanly-but-dead when a PHP extension is missing on the target (ID cards without `gd`, XLSX export/import without `xml`/`zip`), which looks like an app bug instead of a host gap. Assert the runtime before release:
+
+```
+php tools/preflight_extensions.php
+```
+
+- Run it **on the deploy target** (cPanel Terminal, a one-shot cron PHP-CLI run, or ssh) — the deploying laptop's PHP proves nothing about the server. The script is read-only: it loads nothing and connects nowhere.
+- Exit `0` = all checks green; exit `1` = a gap is listed with what breaks. A FAIL blocks the release until the host provides the extension (cPanel "PHP Selector" / EasyApache, or the VPS package).
+- The required set (PHP ≥ 8.4; `mysqli`, `pdo_mysql`, `mbstring`, `curl`, `gd`, `xml`, `xmlwriter`, `dom`, `zip`, `bcmath`) mirrors the README prerequisites; the script prints the per-extension breakage.
+
+### 2.4 Non-Apache servers: replicate the `.htaccess` protections (L2)
+
+The upload protections live in `admin/uploads/.htaccess` and are **Apache-only** — nginx and other servers ignore `.htaccess` entirely. Any non-Apache deployment MUST replicate at least the private-file denials, or member documents become public URLs:
+
+```nginx
+# Mirror of admin/uploads/.htaccess — keep the two in sync.
+location ^~ /admin/uploads/members/docs/            { deny all; }
+location ^~ /admin/uploads/members/guardian_photos/ { deny all; }
+location ^~ /admin/uploads/cache/                   { deny all; }
+location ^~ /admin/uploads/backups/                 { deny all; }
+location ~* ^/admin/uploads/.*\.(sql|gz|tar|bak|dump|sqlite)$ { deny all; }
+location ~* ^/admin/uploads/.*\.ph(p[345]?|t|tml|ps|ar)?$     { deny all; }
+```
+
+Student photos stay public by design (the legacy URL contract for browser/mobile compatibility); private documents and guardian photos are streamed only by the authenticated `/admin/member_file.php` controller. After configuring, verify with authenticated-negative probes: the denied URLs must 403/404 anonymously while a student photo still loads.
 
 ## 3. Rollback
 
