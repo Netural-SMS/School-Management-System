@@ -96,7 +96,8 @@
         actionsTd.className = 'px-3 py-2 text-right whitespace-nowrap';
         var editBtn = document.createElement('button');
         editBtn.type = 'button';
-        editBtn.className = 'p-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition';
+        // P6: emerald = primary row action (icon-only dense variant for the 11-column table).
+        editBtn.className = 'p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition';
         editBtn.title = 'Edit member';
         editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square text-xs"></i>';
         editBtn.addEventListener('click', function () {
@@ -106,7 +107,8 @@
 
         var cardBtn = document.createElement('button');
         cardBtn.type = 'button';
-        cardBtn.className = 'p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition ml-1';
+        // P6: blue = view (opens the card in a new tab).
+        cardBtn.className = 'p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition ml-1';
         cardBtn.title = 'ID Card';
         cardBtn.innerHTML = '<i class="fa-solid fa-id-card text-xs"></i>';
         cardBtn.addEventListener('click', function () {

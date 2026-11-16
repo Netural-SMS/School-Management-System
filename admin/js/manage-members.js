@@ -66,7 +66,8 @@
 
         var editBtn = document.createElement('button');
         editBtn.type = 'button';
-        editBtn.className = 'px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-[11px] transition';
+        // P6: emerald = primary row action.
+        editBtn.className = 'px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-bold text-[11px] transition';
         editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square mr-1" aria-hidden="true"></i> Manage';
         editBtn.addEventListener('click', function () {
             if (typeof window.openManageSheet === 'function') window.openManageSheet(id);
