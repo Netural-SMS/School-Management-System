@@ -734,7 +734,7 @@ $fullName = trim($m['student_name'] . ' ' . $m['father_name'] . ' ' . $m['grandf
 
     <!-- Action Buttons -->
     <div class="mm-actions">
-        <button class="mm-btn mm-btn-green" onclick="window.open('/admin/print_member.php?id=<?= $m['id'] ?>', '_blank', 'width=900,height=700')">
+        <button class="mm-btn mm-btn-green" onclick="window.open('/admin/print_member.php?id=<?= (int)$m['id'] ?>', '_blank', 'width=900,height=700')">
             <i class="fas fa-file-pdf"></i> Export PDF
         </button>
         <button class="mm-btn mm-btn-gray" onclick="window.print()">
