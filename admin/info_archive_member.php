@@ -62,13 +62,16 @@ $archiveType = ($reason === 'failed_observation') ? 'failed_observation' : 'perm
 $archivedBy = (string)$_SESSION['admin_username'];
 
 // Archive the member and preserve a reviewable reason trail.
+// M7: keep the pre-archive status (migration 095) so restore can put a
+// warning/inactive member back where they were instead of always 'active'.
+$priorStatus = (string)($member['status'] ?? '');
 $sql = "UPDATE members
-        SET status='archived', archived_at=NOW(), archived_by=?, archive_reason=?,
+        SET status='archived', status_before_archive=?, archived_at=NOW(), archived_by=?, archive_reason=?,
             archive_notes=?, archive_type=?
         WHERE id=?";
 $stmt = $conn->prepare($sql);
 if ($stmt) {
-    $stmt->bind_param('ssssi', $archivedBy, $reason, $notes, $archiveType, $id);
+    $stmt->bind_param('sssssi', $priorStatus, $archivedBy, $reason, $notes, $archiveType, $id);
     if ($stmt->execute()) {
         $memberName = $member['student_name'] . ' ' . $member['father_name'];
         
