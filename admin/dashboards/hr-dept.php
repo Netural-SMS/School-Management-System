@@ -1299,18 +1299,18 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-xs">
                                 <thead class="bg-slate-50 border-b border-slate-100">
-                                <tr class="text-[11px] text-slate-500">
-                                    <th class="px-3 py-2 text-left">#</th>
-                                    <th class="px-3 py-2 text-left">Member</th>
-                                    <th class="px-3 py-2 text-left">Code</th>
-                                    <th class="px-3 py-2 text-left">Reg. Type</th>
-                                    <th class="px-3 py-2 text-left">Member Type</th>
-                                    <th class="px-3 py-2 text-left">Gender</th>
-                                    <th class="px-3 py-2 text-left">Section</th>
-                                    <th class="px-3 py-2 text-left">Status</th>
-                                    <th class="px-3 py-2 text-left">Phone</th>
-                                    <th class="px-3 py-2 text-left">Location</th>
-                                    <th class="px-3 py-2 text-left">Actions</th>
+                                <tr class="text-[11px] text-slate-500 uppercase tracking-wider">
+                                    <th class="px-3 py-2 text-left font-semibold">#</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Member</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Code</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Reg. Type</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Member Type</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Gender</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Section</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Status</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Phone</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Location</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Actions</th>
                                 </tr>
                                 </thead>
                                 <tbody id="membersTableBody" class="divide-y divide-slate-100"></tbody>
@@ -2227,11 +2227,11 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
                                 <tr>
-                                    <th class="px-4 py-3 font-semibold">Member</th>
-                                    <th class="px-4 py-3 font-semibold">Code</th>
-                                    <th class="px-4 py-3 font-semibold">Registered</th>
-                                    <th class="px-4 py-3 font-semibold">Months</th>
-                                    <th class="px-4 py-3 font-semibold">Status</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Member</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Code</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Registered</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Months</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Status</th>
                                     <th class="px-4 py-3 font-semibold text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -2326,9 +2326,9 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
                                 <tr>
-                                    <th class="px-4 py-3 font-semibold">Member</th>
-                                    <th class="px-4 py-3 font-semibold">Type</th>
-                                    <th class="px-4 py-3 font-semibold">Status</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Member</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Type</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Status</th>
                                     <th class="px-4 py-3 font-semibold text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -2433,13 +2433,13 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
 
         <div class="overflow-x-auto border rounded-lg">
             <table class="w-full text-left border-collapse">
-                <thead class="bg-slate-50 text-xs text-slate-500 uppercase">
+                <thead class="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
                     <tr>
-                        <th class="px-4 py-3 font-medium">Member Name</th>
-                        <th class="px-4 py-3 font-medium">Code</th>
-                        <th class="px-4 py-3 font-medium">Member Type</th>
-                        <th class="px-4 py-3 font-medium">Status</th>
-                        <th class="px-4 py-3 font-medium text-right">Action</th>
+                        <th class="px-4 py-3 text-left font-semibold">Member Name</th>
+                        <th class="px-4 py-3 text-left font-semibold">Code</th>
+                        <th class="px-4 py-3 text-left font-semibold">Member Type</th>
+                        <th class="px-4 py-3 text-left font-semibold">Status</th>
+                        <th class="px-4 py-3 font-semibold text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody id="idCardMembersBody" class="divide-y divide-slate-100 text-sm text-slate-700">

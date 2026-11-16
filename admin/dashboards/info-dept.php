@@ -1000,9 +1000,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
                                 <tr>
-                                    <th class="px-4 py-3 font-semibold">Member</th>
-                                    <th class="px-4 py-3 font-semibold">Type</th>
-                                    <th class="px-4 py-3 font-semibold">Status</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Member</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Type</th>
+                                    <th class="px-4 py-3 text-left font-semibold">Status</th>
                                     <th class="px-4 py-3 font-semibold text-right">Actions</th>
                                 </tr>
                             </thead>
