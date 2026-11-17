@@ -1,6 +1,7 @@
 # FKSS Offline Photo Capture — Production Status (updated 2026-11-14)
 
-> NOT MVP — production-grade. Acceptance: WebP q92 @ 1200×1500 / JPEG fallback, 2 MB cap;
+> NOT MVP — production-grade. Capture now uses an in-app camera, Flutter's native crop renderer,
+> and native JPEG compression at device-tier resolutions under the existing 2 MB cap;
 > sync OFF by default (3-gate opt-in); multi-photographer conflict picker; ZIP airlock with
 > HMAC; SQLite outbox; idempotent upload; batch roster; progress/ETA; orphan reconciliation;
 > free-space guards; capability negotiation; least-privilege roles; on-brand maroon/gold UI.
@@ -11,7 +12,7 @@
 |---|---|---|---|
 | Design | ✅ | `80c8ead4` | `OFFLINE_PHOTO_SYNC_DESIGN.md` + `OFFLINE_PHOTO_ZIP_IMPORT_DESIGN.md` |
 | **P1 Foundation** | ✅ | `02d8a0df` | Schema v43 (4 tables), `PhotoOutboxService` CRUD/policy/counters; per-install UUID; sync OFF / Wi-Fi only defaults; image/uuid/archive deps |
-| **P2 Capture** | ✅ | `f9ae54b7` | `PhotoCaptureService` — EXIF bake, 4:5 crop, resize 1200×1500, WebP q92 primary / JPEG q92 fallback, 4-step QC loop, 2 MB hard cap; maroon+gold capture screen |
+| **P2 Capture** | ✅ | `f9ae54b7` | Original capture flow: EXIF bake, 4:5 crop, WebP/JPEG, 2 MB cap. Current implementation uses the Flutter `camera` plugin for an in-app guide, focus, exposure, flash, and zoom; Flutter renders the crop and a native compressor creates tier-aware JPEGs. The save/undo affordance closes within 2 seconds. |
 | **P3 Backend** | ✅ | `af0ec44a` | SQL 096 (4 tables); `PhotoUploadService::ingest` with Idempotency-Key, SHA-256, MIME, idempotency tripwire, conflict detection; `POST /api/v1/members/{id}/photo`; CORS `X-Photo-*` headers |
 | **P4 Sync Worker** | ✅ | `38505900` | `ApiService.uploadMemberPhoto`; `PhotoSyncWorker` FIFO drain, backoff, pause/resume/cancel, ETA, byte counters, event stream |
 | **P5 Sync Panel UI** | ✅ | `8a9b93f2` | Maroon+gold Sync Panel: 3-gate opt-in (toggle → Start → Wi-Fi unless cellular), MB-cost dialog, progress/ETA, event log |
@@ -21,7 +22,7 @@
 | **Z1 ZIP export** | ✅ | `9a0f1539` | `PhotoZipExportService` — store-only ZIP, canonical manifest.json (sorted keys), per-file SHA-256, HMAC-SHA256 manifest.sig (per-install key; server-paired upgrade in P7), share_plus share sheet; Sync Panel Export button now live; app v1.8.1+44 |
 | **Z2-Z5 Server import** | ✅ | `9c941216` | `api_photo_zip_import.php` — upload → extract → manifest parse → per-file validate → `PhotoUploadService::ingestFromFile` (reuses receipt/candidate/conflict pipeline); archive ZIP for audit; `photo_import.php` drag-and-drop admin page with recent-batches table |
 | **P7 hardening (partial)** | ✅ | `0878cc98` | Queue/exports moved to app-support dir (no iCloud backup); LRU eviction of delivered files >30 days; no-cloud-backup method channel reserved; `photo_importer` role added to admin user-management dropdown |
-| **P7 HMAC pairing + 8 s undo** | ✅ | `4b7d8809` | Per-device HMAC key paired on first photo upload and persisted client-side; ZIP export signs with paired key (falling back to per-install); ZIP importer verifies server_paired signatures and surfaces per-install warnings honestly; capture screen Retake flows through proper retake/replaced_by semantics; 8-second UNDO snackbar after Accept |
+| **P7 HMAC pairing + undo** | ✅ | `4b7d8809` | Per-device HMAC key paired on first photo upload and persisted client-side; ZIP export signs with paired key (falling back to per-install); ZIP importer verifies server_paired signatures and surfaces per-install warnings honestly; capture screen Retake flows through proper retake/replaced_by semantics. The save/undo affordance now lasts 2 seconds. |
 | **P7 Android foreground service** | ✅ | `89bc2736` | Started/updated/stopped via MethodChannel from PhotoSyncWorker; ongoing maroon notification with progress/count/ETA and Stop action; dataSync foreground-service type; survives screen-off uploads; auto-stops on drain-complete or swipe-kill |
 | **P7 iOS iCloud backup exclusion** | ✅ | `89bc2736` | AppDelegate sets `NSURLIsExcludedFromBackupKey` on queue/exports dirs via `app.fkss.photo/nocloud` MethodChannel; Android side already excluded by `android:allowBackup="false"` |
 | **P7 flaky-network soak tests** | ✅ | `89bc2736` | `test/photo_flaky_network_soak_test.dart` with deterministic FakeOutbox/FlakyApi/FakeSyncWorker: idempotent replays, exponential-backoff under 503, 60%-failure chaos drain, mid-drain restart double-delivery, orphan reconciliation, 2 MB cap |
@@ -32,11 +33,13 @@
 - `lib/services/local_schema_v43.dart` — DDL for 4 outbox tables
 - `lib/services/photo_outbox_models.dart` — enums/entry/counters/policy models
 - `lib/services/photo_outbox_service.dart` — SQLite CRUD + retake/claim/policy + orphan reconciliation + free-space guard + `memberIdsWithPhoto()` roster helper
-- `lib/services/photo_capture_service.dart` — camera + EXIF/crop/resize/WebP/JPEG QC loop
+- `lib/services/photo_capture_service.dart` — captured-image handoff and durable offline enqueue
+- `lib/services/photo_image_processor.dart` — EXIF-aware native crop rendering and native JPEG size/quality retry loop
 - `lib/services/photo_sync_worker.dart` — FIFO ChangeNotifier drain
 - `lib/services/photo_zip_export_service.dart` — Z1 signed ZIP packaging + share
 - `lib/services/api_service.dart` — `uploadMemberPhoto()` multipart
-- `lib/screens/members/member_photo_capture_screen.dart` — single capture
+- `lib/screens/members/photo_camera_screen.dart` — in-app camera preview, framing guide, focus, lighting, and zoom controls
+- `lib/screens/members/member_photo_capture_screen.dart` — single capture and review
 - `lib/screens/members/photo_batch_capture_screen.dart` — P6 roster walk
 - `lib/screens/members/photo_sync_panel.dart` — P5 control surface (Z1 button live)
 - `lib/screens/members/member_detail_screen.dart` — Take-photo + Batch buttons
@@ -62,9 +65,9 @@
 
 1. **POST_NOTIFICATIONS runtime prompt on Android 13+** — foreground-service notifications show without the permission on Android 12-; on Android 13+ users see a generic "app running" notification until they grant POST_NOTIFICATIONS. Prompt on first sync start if we get reports of missing notifications.
 2. **Notification-tap opens Sync Panel** — tapping the notification currently brings the task to foreground; deep-linking straight to the Sync Panel requires the same route plumbing used by the app's notifications system. Nice-to-have.
-3. **Local Flutter test/analyze pass** — run `flutter pub get && flutter analyze && flutter test test/photo_flaky_network_soak_test.dart` on a machine with the Flutter SDK (sandbox has no SDK).
+3. **Physical-device photo QA** — validate focus/exposure/flash controls, framing, capture latency, and print quality on a low-end Android phone and an iPhone.
 
 ## Test status
 
 - **PHP well-formedness (security suite):** 8 passed / 384 subtests (green after every commit).
-- **Dart/Flutter:** SDK not present in sandbox — run `flutter pub get && flutter analyze && flutter test` locally / CI. Soak tests in `test/photo_flaky_network_soak_test.dart` cover idempotency, backoff, chaos drain, restart double-delivery, orphan reconciliation, and the 2 MB cap.
+- **Dart/Flutter:** Targeted `flutter analyze` completed with existing info-level lints and no compile errors; `test/photo_outbox_p1_foundation_test.dart` passed (7 tests); Android debug APK built successfully. Physical-device QA remains outstanding. The soak test `test/photo_flaky_network_soak_test.dart` covers idempotency, backoff, chaos drain, restart double-delivery, orphan reconciliation, and the 2 MB cap.
