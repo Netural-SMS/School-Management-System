@@ -127,7 +127,7 @@ Rules:
 - `file` path is relative to zip root; **no parent directory traversal** (`../` rejected by importer).
 - `sha256` is lowercase hex of the file bytes; server verifies before processing.
 - `format` is `"webp"` or `"jpeg"`; server validates MIME matches.
-- `width`/`height` are the encoded dimensions (typically 1200×1500 portrait, 4:5).
+- `width`/`height` are the encoded dimensions (typically 1200×1600 portrait, 3:4 passport ratio).
 - `operator_admin_id` + `device_id` identify who captured the photo and on which device, used for multi-photographer conflict attribution.
 - Photos are named `{seq}_{memberCodeOrId}_{field}.webp` (or `.jpg` on JPEG fallback) for human readability if someone unzips.
 
@@ -143,7 +143,7 @@ A failed signature rejects the whole zip with a clear error. This prevents a mal
 ### 4.4 Compression settings
 
 - ZIP **store** (no compression) — WebP and JPEG are already compressed; deflating them wastes CPU on phone and PC for ~2% size gain.
-- Each file is encoded as **WebP quality 92 at 1200×1500 px (primary)**, or **JPEG quality 92 at 1200×1500 px (fallback)**, per the encode loop in the sync design. Target 1.0–2.0 MB per photo; hard cap 2 MB.
+- Each file is encoded as **WebP quality 92 at 1200×1600 px (primary)**, or **JPEG quality 92 at 1200×1600 px (fallback)**, per the encode loop in the sync design. Target 1.0–2.0 MB per photo; hard cap 2 MB.
 - Total ZIP size budget: **~600–800 MB for 400 photos** (at ~1.5 MB average) — fits easily on any USB transfer, SD card, or SHAREit (local hotspot, no data cost); too big for email, which is fine because USB is the expected delivery.
 - Split into volumes of 200 MB if zip exceeds 600 MB (ZIP64 multi-part `z01, z02, ... zip`) — optional v2. v1 keeps single-file; 800 MB is well under FAT32's 4 GB limit and under SHAREit's file size limits.
 
@@ -283,7 +283,7 @@ No double-commits. No confusion. The operator always sees a consistent state.
 
 **In the field (no internet):**
 1. Staff opens app → Members → Photo Capture Day. Sync is OFF by default; no data is used.
-2. Photographs 403 members one-by-one; each photo is encoded to WebP q=92 at 1200×1500 (~1.5 MB) and queued locally; counter shows "403 captured · 0 synced · sync OFF". Retakes discard the previous shot automatically.
+2. Photographs 403 members one-by-one; each photo is encoded to WebP q=92 at 1200×1600 (~1.5 MB) and queued locally; counter shows "403 captured · 0 synced · sync OFF". Retakes discard the previous shot automatically.
 3. At end of day, staff taps **Export ZIP**, chooses **Save to USB storage** (or Share → SHAREit → PC / AirDrop / Telegram Saved Messages).
 4. Phone generates `fkss_photos_2026-11-16_bole-bulbula_01.zip` (~600–700 MB) and signs it with device HMAC key.
 5. Staff connects phone to PC via USB (or transfers via local hotspot SHAREit, which costs zero data) and copies the zip to the PC's Downloads folder.
@@ -337,6 +337,6 @@ No new third-party services, no subscriptions, no native SDKs.
 
 | User request | Implementation |
 |---|---|
-| **High-quality images, 1–2 MB, WebP preferred, preserve quality for ID/report cards/diplomas** | Output 1200×1500 px (4:5 portrait, covers 300 DPI prints up to 4×5″ / yearbook 60×80 mm); WebP q=92 primary, JPEG q=92 fallback; quality-control encode loop guarantees 2 MB cap without dropping below q=88 or 1024×1280; WebP gives 30–40% size savings vs same-quality JPEG; server accepts both with GD decode-verify |
+| **High-quality images, 1–2 MB, WebP preferred, preserve quality for ID/report cards/diplomas** | Output 1200×1600 px (3:4 portrait, covers 300 DPI prints up to 4×5.3″ / yearbook 60×80 mm); WebP q=92 primary, JPEG q=92 fallback; quality-control encode loop guarantees 2 MB cap without dropping below q=88 or 1024×1365; WebP gives 30–40% size savings vs same-quality JPEG; server accepts both with GD decode-verify |
 | **Sync OFF by default; users block sync to protect mobile data; default workflow is ZIP handoff** | Master sync toggle default OFF; cellular sub-toggle default OFF; sync requires explicit Enable + Start Sync tap; "Export ZIP" button always visible and works fully offline; persistent "sync OFF" badge; no auto-sync on capture/app-open/Wi-Fi-join |
 | **Two photographers → admin picks winner; retake discards prior** | Server `member_photo_candidates` table stores every incoming photo; cross-photographer duplicates surface as ⚔️ conflicts in both ZIP review UI and online-sync Photo Review page with side-by-side comparison + "Set as current"; same-device retake (§3.6) marks prior capture as `discarded` before upload so no conflict is generated on server; same-photographer retakes across sessions auto-win by newer `taken_at`; losers are archived for audit, not deleted |

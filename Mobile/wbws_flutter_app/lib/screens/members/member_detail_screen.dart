@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/local_db.dart';
 import '../../services/photo_outbox_models.dart';
+import '../../utils/config.dart';
 import '../../utils/ethiopian_calendar.dart';
 import '../../utils/theme.dart';
 import '../../utils/transitions.dart';
@@ -46,9 +47,12 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     if (!ConnectivityService().hasLink) return;
     final res = await _api.getMemberAttendanceRisk(widget.memberId);
     if (!mounted) return;
-    if (res.success && res.data is Map && (res.data as Map)['available'] == true &&
+    if (res.success &&
+        res.data is Map &&
+        (res.data as Map)['available'] == true &&
         (res.data as Map)['risk'] is Map) {
-      setState(() => _risk = Map<String, dynamic>.from((res.data as Map)['risk'] as Map));
+      setState(() =>
+          _risk = Map<String, dynamic>.from((res.data as Map)['risk'] as Map));
     }
   }
 
@@ -71,7 +75,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
           Row(children: [
             const Expanded(
                 child: Text('Attendance risk & warnings',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
             TextButton(
               style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
               onPressed: () => Navigator.of(context).push(
@@ -177,6 +182,12 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
   Future<void> _openSingleCapture() async {
     if (_member == null) return;
+    final photoPath = _member!['photo_url'] as String?;
+    final photoUrl = photoPath == null
+        ? null
+        : (Uri.tryParse(photoPath)?.hasScheme == true
+            ? photoPath
+            : Uri.parse(AppConfig.apiBaseUrl).resolve(photoPath).toString());
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const MemberPhotoCaptureScreen(),
@@ -187,6 +198,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               '${_member!['student_name'] ?? ''} ${_member!['father_name'] ?? ''}'
                   .trim(),
           'field': PhotoField.student,
+          'photoUrl': photoUrl,
+          'authorizationToken': _api.token,
         }),
       ),
     );
@@ -199,7 +212,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     await Navigator.of(context).push(
       SmoothPageRoute(
         page: const PhotoBatchCaptureScreen(),
-        settings: RouteSettings(arguments: {'startFromMemberId': widget.memberId}),
+        settings:
+            RouteSettings(arguments: {'startFromMemberId': widget.memberId}),
       ),
     );
   }
@@ -232,7 +246,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       body: _loading
           ? const MemberDetailSkeleton()
           : _error != null
-              ? Center(child: Column(
+              ? Center(
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(_isOffline ? Icons.cloud_off : Icons.error_outline,
@@ -245,7 +260,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                             color:
                                 _isOffline ? AppTheme.warning : AppTheme.danger,
                             fontSize: 14)),
-                    TextButton(onPressed: _loadMember, child: const Text('Retry')),
+                    TextButton(
+                        onPressed: _loadMember, child: const Text('Retry')),
                   ],
                 ))
               : RefreshIndicator(
@@ -258,17 +274,24 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       if (_fromCache)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: AppTheme.warning.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.warning.withOpacity(0.25)),
+                            border: Border.all(
+                                color: AppTheme.warning.withOpacity(0.25)),
                           ),
                           child: Row(children: [
-                            Icon(Icons.cloud_off, size: 16, color: AppTheme.warning),
+                            Icon(Icons.cloud_off,
+                                size: 16, color: AppTheme.warning),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(_cachedBannerText,
-                                style: TextStyle(fontSize: 11, color: AppTheme.warning, fontWeight: FontWeight.w500))),
+                            Expanded(
+                                child: Text(_cachedBannerText,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.warning,
+                                        fontWeight: FontWeight.w500))),
                           ]),
                         ),
                       _buildHeader(),
@@ -279,7 +302,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         _field('Father Name', _member?['father_name']),
                         _field('Grandfather', _member?['grandfather_name']),
                         _field('Gender', _member?['gender']),
-                        _field('Date of Birth', _formatEcDate(_member?['date_of_birth'])),
+                        _field('Date of Birth',
+                            _formatEcDate(_member?['date_of_birth'])),
                         _field('Age Group', _member?['age_group']),
                         _field('Member Code', _member?['member_code']),
                         _field('Member Type', _member?['member_type']),
@@ -297,8 +321,12 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                         _field('Section', _member?['current_section']),
                         _field('Education Level', _member?['education_level']),
                         if (_member?['current_class'] != null) ...[
-                          _field('Class', _member?['current_class']?['class_name']),
-                          _field('Enrolled At', _formatEcDate(_member?['current_class']?['enrolled_at'])),
+                          _field('Class',
+                              _member?['current_class']?['class_name']),
+                          _field(
+                              'Enrolled At',
+                              _formatEcDate(
+                                  _member?['current_class']?['enrolled_at'])),
                         ],
                       ]),
                       const SizedBox(height: 12),
@@ -319,8 +347,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
   Widget _buildHeader() {
     final status = _member?['status'] ?? 'active';
-    final statusColor = status == 'active' ? AppTheme.success
-        : status == 'warning' ? AppTheme.warning : AppTheme.danger;
+    final statusColor = status == 'active'
+        ? AppTheme.success
+        : status == 'warning'
+            ? AppTheme.warning
+            : AppTheme.danger;
 
     return Card(
       child: Padding(
@@ -332,7 +363,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               backgroundColor: AppTheme.primary.withOpacity(0.15),
               child: Text(
                 (_member?['student_name'] ?? '?')[0].toUpperCase(),
-                style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 28),
+                style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 28),
               ),
             ),
             const SizedBox(height: 12),
@@ -343,29 +377,41 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             ),
             if (_member?['full_name_am'] != null) ...[
               const SizedBox(height: 4),
-              Text(_member!['full_name_am'], style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+              Text(_member!['full_name_am'],
+                  style:
+                      TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
             ],
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w600, fontSize: 12)),
+                  child: Text(status,
+                      style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
                 ),
                 if (_member?['member_code'] != null) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.info.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(_member!['member_code'], style: TextStyle(color: AppTheme.info, fontWeight: FontWeight.w600, fontSize: 12)),
+                    child: Text(_member!['member_code'],
+                        style: TextStyle(
+                            color: AppTheme.info,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12)),
                   ),
                 ],
               ],
@@ -387,7 +433,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
             ...children,
           ],
@@ -407,7 +455,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   }
 
   Widget _field(String label, dynamic value) {
-    if (value == null || value.toString().trim().isEmpty) return const SizedBox.shrink();
+    if (value == null || value.toString().trim().isEmpty)
+      return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -415,10 +464,13 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+            child: Text(label,
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
           ),
           Expanded(
-            child: Text(value.toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(value.toString(),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           ),
         ],
       ),

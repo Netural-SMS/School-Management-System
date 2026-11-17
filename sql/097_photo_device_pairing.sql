@@ -15,12 +15,13 @@
 -- stolen device UUID cannot be re-used by a different account.
 
 CREATE TABLE IF NOT EXISTS photo_device_identities (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  operator_admin_id INTEGER NOT NULL,
+  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  operator_admin_id INT UNSIGNED NOT NULL,
   device_id         VARCHAR(64) NOT NULL,
   hmac_key_hex      CHAR(64) NOT NULL,                 -- 32 random bytes, hex-encoded
   first_seen_at     DATETIME NOT NULL,
   last_seen_at      DATETIME NOT NULL,
+  PRIMARY KEY (id),
   UNIQUE KEY uq_photo_device (operator_admin_id, device_id),
   KEY idx_photo_device_device (device_id),
   CONSTRAINT fk_photo_device_admin

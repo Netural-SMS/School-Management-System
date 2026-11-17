@@ -7,6 +7,7 @@ import '../../services/photo_capture_service.dart';
 import '../../services/photo_outbox_models.dart';
 import '../../services/photo_outbox_service.dart';
 import 'member_detail_screen.dart';
+import 'photo_camera_screen.dart';
 
 /// FKSS maroon+gold brand palette for photo workflows.
 class _PhotoBrand {
@@ -44,6 +45,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
   String? _error;
   int _cursor = 0; // index into _roster of the member currently "up"
   bool _capturing = false;
+  bool _processing = false;
   PhotoOutboxEntry? _reviewEntry; // preview for current member after capture
 
   int? get _startFromId => (ModalRoute.of(context)?.settings.arguments
@@ -73,8 +75,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
         if (page.length < pageSize) break;
         offset += pageSize;
       }
-      final withPhoto =
-          await PhotoOutboxService.instance.memberIdsWithPhoto();
+      final withPhoto = await PhotoOutboxService.instance.memberIdsWithPhoto();
       final roster = all.map((m) {
         final id = (m['id'] as num?)?.toInt() ?? 0;
         return _RosterRow(
@@ -123,21 +124,35 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
     if (_capturing) return;
     setState(() {
       _capturing = true;
+      _processing = false;
       _error = null;
       _reviewEntry = null;
     });
     try {
-      final entry = await PhotoCaptureService.instance.captureAndEnqueue(
+      final capture = await Navigator.of(context).push<CapturedPhoto>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => PhotoCameraScreen(
+            memberName: '${_current.firstName} ${_current.fatherName}'.trim(),
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (capture == null) {
+        setState(() {
+          _capturing = false;
+          _processing = false;
+        });
+        return;
+      }
+      setState(() => _processing = true);
+      final entry = await PhotoCaptureService.instance.processAndEnqueue(
+        capture: capture,
         memberId: _current.memberId,
         memberCode: _current.code,
         field: PhotoField.student,
       );
       if (!mounted) return;
-      if (entry == null) {
-        // User cancelled camera.
-        setState(() => _capturing = false);
-        return;
-      }
       // Mark roster row as captured; clear the review preview and
       // auto-advance to next missing member after a brief pause so the
       // operator sees the success flash.
@@ -145,6 +160,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
         _reviewEntry = entry;
         _roster[_cursor] = _current.withPhoto(true);
         _capturing = false;
+        _processing = false;
       });
       await Future.delayed(const Duration(milliseconds: 650));
       if (!mounted) return;
@@ -154,6 +170,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
       if (!mounted) return;
       setState(() {
         _capturing = false;
+        _processing = false;
         _error = '$e';
       });
     }
@@ -247,8 +264,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
                         ElevatedButton(
-                            onPressed: _load,
-                            child: const Text('Retry')),
+                            onPressed: _load, child: const Text('Retry')),
                       ],
                     ),
                   ),
@@ -291,8 +307,8 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
                     letterSpacing: .06)),
             const Spacer(),
             Text('$_done / $total done',
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             const SizedBox(width: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -314,8 +330,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
               value: pct,
               minHeight: 6,
               backgroundColor: _PhotoBrand.maroon.withOpacity(.08),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(_PhotoBrand.gold),
+              valueColor: const AlwaysStoppedAnimation<Color>(_PhotoBrand.gold),
             ),
           ),
         ],
@@ -325,10 +340,9 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
 
   Widget _currentMemberCard() {
     final row = _current;
-    final fullName =
-        '${row.firstName} ${row.fatherName}'.trim().isEmpty
-            ? '(no name)'
-            : '${row.firstName} ${row.fatherName}';
+    final fullName = '${row.firstName} ${row.fatherName}'.trim().isEmpty
+        ? '(no name)'
+        : '${row.firstName} ${row.fatherName}';
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -350,7 +364,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
             child: Column(children: [
               // Preview / portrait frame
               AspectRatio(
-                aspectRatio: 4 / 5,
+                aspectRatio: 3 / 4,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black,
@@ -462,7 +476,8 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _PhotoBrand.maroon,
-                      side: BorderSide(color: _PhotoBrand.maroon.withOpacity(.3)),
+                      side:
+                          BorderSide(color: _PhotoBrand.maroon.withOpacity(.3)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -492,7 +507,11 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.camera_alt),
                     label: Text(
-                        _capturing ? 'Opening camera…' : (row.hasPhoto ? 'Retake' : 'Take photo'),
+                        _capturing
+                            ? (_processing
+                                ? 'Preparing photo…'
+                                : 'Opening camera…')
+                            : (row.hasPhoto ? 'Retake' : 'Take photo'),
                         style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 14)),
                   ),

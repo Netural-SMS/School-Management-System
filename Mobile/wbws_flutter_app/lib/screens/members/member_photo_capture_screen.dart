@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../services/photo_capture_service.dart';
 import '../../services/photo_outbox_models.dart';
 import '../../services/photo_outbox_service.dart';
+import 'photo_camera_screen.dart';
 
 /// FKSS brand colors used by photo-capture UI (matches admin dashboard).
 /// Mobile theme.dart is app-wide blue; photo screens use the school
@@ -18,16 +19,15 @@ class _AppThemePhoto {
 // Shorthand alias for the capture-screen widgets below.
 typedef AppTheme = _AppThemePhoto;
 
-/// Single-member photo capture screen (P2 MVP — batch roster comes in P5/P6).
+/// Single-member photo capture and review screen.
 ///
-/// Shows a large instruction card with the member's name/code, opens the
-/// camera via PhotoCaptureService on tap, shows the encoded photo for
-/// review with ✓ Accept / ↺ Retake, and either returns the enqueued entry
-/// or stays open for a retake.
+/// Shows the existing photo (when available), opens an in-app camera with a
+/// framing guide, then reviews the queued image with Accept / Retake actions.
 ///
 /// Route args:
 ///   arguments = {'memberId': int, 'memberCode': String?, 'memberName': String,
-///                'field': PhotoField?, 'retakeOfClientOpId': String?}
+///                'field': PhotoField?, 'retakeOfClientOpId': String?,
+///                'photoUrl': String?, 'authorizationToken': String?}
 class MemberPhotoCaptureScreen extends StatefulWidget {
   const MemberPhotoCaptureScreen({super.key});
 
@@ -38,69 +38,115 @@ class MemberPhotoCaptureScreen extends StatefulWidget {
 
 class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
   bool _capturing = false;
+  bool _processing = false;
   PhotoOutboxEntry? _reviewEntry;
   String? _error;
   // The client_op_id of the just-accepted photo (undo window open).
   String? _lastAcceptedOpId;
   Timer? _autoPopTimer;
+  bool _loadedPreviousPhoto = false;
+  String? _previousPhotoPath;
+  String? _previousPhotoError;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadedPreviousPhoto) {
+      _loadedPreviousPhoto = true;
+      unawaited(_loadPreviousPhoto());
+    }
+  }
 
   @override
   void dispose() {
     _autoPopTimer?.cancel();
-    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     super.dispose();
   }
 
-  int get _memberId =>
-      (ModalRoute.of(context)?.settings.arguments
-          as Map<String, dynamic>?)?['memberId']
-      as int;
+  int get _memberId => (ModalRoute.of(context)?.settings.arguments
+      as Map<String, dynamic>?)?['memberId'] as int;
   String? get _memberCode => (ModalRoute.of(context)?.settings.arguments
       as Map<String, dynamic>?)?['memberCode'] as String?;
   String get _memberName =>
       ((ModalRoute.of(context)?.settings.arguments
           as Map<String, dynamic>?)?['memberName'] as String?) ??
       'Member';
-  PhotoField get _field => ((ModalRoute.of(context)?.settings.arguments
-      as Map<String, dynamic>?)?['field'] as PhotoField?) ??
+  PhotoField get _field =>
+      ((ModalRoute.of(context)?.settings.arguments
+          as Map<String, dynamic>?)?['field'] as PhotoField?) ??
       PhotoField.student;
   String? get _retakeOf => (ModalRoute.of(context)?.settings.arguments
       as Map<String, dynamic>?)?['retakeOfClientOpId'] as String?;
+  String? get _photoUrl => (ModalRoute.of(context)?.settings.arguments
+      as Map<String, dynamic>?)?['photoUrl'] as String?;
+  String? get _authorizationToken => (ModalRoute.of(context)?.settings.arguments
+      as Map<String, dynamic>?)?['authorizationToken'] as String?;
+
+  Future<void> _loadPreviousPhoto() async {
+    try {
+      final previous = await PhotoOutboxService.instance.latestForMember(
+        _memberId,
+        field: _field,
+      );
+      if (previous == null || !await File(previous.localPath).exists()) return;
+      if (mounted) setState(() => _previousPhotoPath = previous.localPath);
+    } catch (e) {
+      if (mounted) {
+        setState(
+            () => _previousPhotoError = 'Could not load the saved photo: $e');
+      }
+    }
+  }
 
   Future<void> _takePhoto({String? retakeOfClientOpId}) async {
     if (_capturing) return;
     setState(() {
       _capturing = true;
+      _processing = false;
       _error = null;
     });
     try {
-      final entry = await PhotoCaptureService.instance.captureAndEnqueue(
+      final capture = await Navigator.of(context).push<CapturedPhoto>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => PhotoCameraScreen(memberName: _memberName),
+        ),
+      );
+      if (!mounted) return;
+      if (capture == null) {
+        setState(() {
+          _capturing = false;
+          _processing = false;
+        });
+        return;
+      }
+      setState(() => _processing = true);
+      final entry = await PhotoCaptureService.instance.processAndEnqueue(
+        capture: capture,
         memberId: _memberId,
         memberCode: _memberCode,
         field: _field,
         retakeOfClientOpId: retakeOfClientOpId ?? _retakeOf,
       );
       if (!mounted) return;
-      if (entry == null) {
-        // User cancelled the camera.
-        setState(() => _capturing = false);
-        return;
-      }
       setState(() {
         _reviewEntry = entry;
         _capturing = false;
+        _processing = false;
       });
     } on PhotoCaptureException catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.message;
         _capturing = false;
+        _processing = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = 'Unexpected error: $e';
         _capturing = false;
+        _processing = false;
       });
     }
   }
@@ -126,18 +172,16 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
       _lastAcceptedOpId = entry.clientOpId;
       _reviewEntry = null;
     });
-    // Show a snackbar for ~8 seconds with Undo. After it closes we pop
-    // back (returning the entry). If Undo is tapped, we hide the
-    // snackbar, cancel the timer, call undoRetake, and re-open the
-    // camera as a retake of the op we just un-did.
+    // Keep the undo affordance brief so it cannot block the member screen.
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
         const Icon(Icons.check_circle, color: AppTheme.gold, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text('Photo saved · ${entry.humanSize}',
-            style: const TextStyle(fontSize: 13))),
+        Expanded(
+            child: Text('Photo saved · ${entry.humanSize}',
+                style: const TextStyle(fontSize: 13))),
       ]),
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 2),
       backgroundColor: AppTheme.maroon,
       action: SnackBarAction(
         label: 'UNDO',
@@ -145,7 +189,7 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
         onPressed: () => _undoLastAccepted(entry.clientOpId),
       ),
     ));
-    _autoPopTimer = Timer(const Duration(seconds: 8), () {
+    _autoPopTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
       if (_lastAcceptedOpId == entry.clientOpId) {
         _lastAcceptedOpId = null;
@@ -201,13 +245,13 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
       return _ErrorPanel(message: _error!, onRetry: _takePhoto);
     }
     if (_capturing) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Opening camera…'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(_processing ? 'Preparing photo…' : 'Opening camera…'),
           ],
         ),
       );
@@ -216,7 +260,12 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
     if (entry != null) {
       return _ReviewPanel(entry: entry);
     }
-    return const _IdlePanel();
+    return _IdlePanel(
+      photoUrl: _photoUrl,
+      authorizationToken: _authorizationToken,
+      localPhotoPath: _previousPhotoPath,
+      previousPhotoError: _previousPhotoError,
+    );
   }
 
   Widget _buildActions() {
@@ -251,7 +300,9 @@ class _MemberPhotoCaptureScreenState extends State<MemberPhotoCaptureScreen> {
     return FilledButton.icon(
       onPressed: _capturing ? null : _takePhoto,
       icon: const Icon(Icons.camera_alt),
-      label: Text(_capturing ? 'Opening…' : '📷 Take Photo'),
+      label: Text(_capturing
+          ? (_processing ? 'Preparing…' : 'Opening…')
+          : '📷 Take Photo'),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
         backgroundColor: AppTheme.maroon,
@@ -294,8 +345,8 @@ class _MemberCard extends StatelessWidget {
                         fontSize: 18, fontWeight: FontWeight.w700)),
                 if (code != null)
                   Text(code!,
-                      style: TextStyle(
-                          color: Colors.grey.shade700, fontSize: 13)),
+                      style:
+                          TextStyle(color: Colors.grey.shade700, fontSize: 13)),
               ],
             ),
           ),
@@ -306,7 +357,17 @@ class _MemberCard extends StatelessWidget {
 }
 
 class _IdlePanel extends StatelessWidget {
-  const _IdlePanel();
+  final String? photoUrl;
+  final String? authorizationToken;
+  final String? localPhotoPath;
+  final String? previousPhotoError;
+
+  const _IdlePanel({
+    required this.photoUrl,
+    required this.authorizationToken,
+    required this.localPhotoPath,
+    required this.previousPhotoError,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -314,14 +375,25 @@ class _IdlePanel extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.person_pin_circle_outlined,
-              size: 96, color: Colors.grey.shade400),
+          _ExistingPhotoBox(
+            photoUrl: photoUrl,
+            authorizationToken: authorizationToken,
+            localPhotoPath: localPhotoPath,
+          ),
           const SizedBox(height: 16),
-          const Text('Frame the subject head-to-shoulders',
+          const Text('Take a clear member portrait',
               style: TextStyle(fontSize: 16)),
           const SizedBox(height: 8),
-          Text('Face centered · even lighting · no hat',
+          Text('Center the face · use even light · avoid shadows',
               style: TextStyle(color: Colors.grey.shade600)),
+          if (previousPhotoError != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              previousPhotoError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(12),
@@ -346,6 +418,83 @@ class _IdlePanel extends StatelessWidget {
   }
 }
 
+class _ExistingPhotoBox extends StatelessWidget {
+  final String? photoUrl;
+  final String? authorizationToken;
+  final String? localPhotoPath;
+
+  const _ExistingPhotoBox({
+    required this.photoUrl,
+    required this.authorizationToken,
+    required this.localPhotoPath,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final headers = authorizationToken == null
+        ? null
+        : {'Authorization': 'Bearer $authorizationToken'};
+    final hasPhoto =
+        localPhotoPath != null || (photoUrl != null && photoUrl!.isNotEmpty);
+    final Widget image;
+    if (localPhotoPath != null) {
+      image = Image.file(
+        File(localPhotoPath!),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _emptyPhoto(),
+      );
+    } else if (photoUrl != null && photoUrl!.isNotEmpty) {
+      image = Image.network(
+        photoUrl!,
+        headers: headers,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _emptyPhoto(),
+      );
+    } else {
+      image = _emptyPhoto();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 184,
+        height: 230,
+        color: Colors.black12,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            if (!hasPhoto)
+              const Center(
+                child: Icon(Icons.person_pin_circle_outlined,
+                    size: 72, color: Colors.black26),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                color: Colors.black54,
+                child: Text(
+                  hasPhoto ? 'Current photo' : 'No photo yet',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyPhoto() => const Center(
+        child: Icon(Icons.person_pin_circle_outlined,
+            size: 72, color: Colors.black26),
+      );
+}
+
 class _ReviewPanel extends StatelessWidget {
   final PhotoOutboxEntry entry;
   const _ReviewPanel({required this.entry});
@@ -355,17 +504,22 @@ class _ReviewPanel extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              color: Colors.black,
-              alignment: Alignment.center,
-              child: Image.file(
-                File(entry.localPath),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Text('Could not preview.',
-                      style: TextStyle(color: Colors.white)),
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: 3 / 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  color: Colors.black,
+                  alignment: Alignment.center,
+                  child: Image.file(
+                    File(entry.localPath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Text('Could not preview.',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
                 ),
               ),
             ),

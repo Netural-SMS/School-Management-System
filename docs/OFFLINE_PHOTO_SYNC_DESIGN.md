@@ -16,7 +16,8 @@ Auditing `Mobile/wbws_flutter_app/`:
 | Durable outbox pattern for attendance packets | ✅ | `pending_attendance`, `pending_grades` use `client_op_id` idempotency keys, retry/backoff, `retry_wait` state |
 | `Idempotency-Key` header support in ApiService | ✅ | `X-Idempotency-Replayed` detection already wired (`api_service.dart:774-786`) |
 | HTTP resume-capable **download** manager | ✅ | `MezmurDownloadManager` uses HTTP `Range: bytes=N-`, `.part` files, sha256 integrity, concurrency cap (2), retry policy (4 attempts) — proven pattern we should mirror for uploads |
-| `image_picker: ^1.1.2` | ✅ | Already used for profile & mezmur covers (gallery only today) |
+| `camera: ^0.12.2` | ✅ | Flutter-maintained in-app preview; uses the endorsed CameraX implementation on Android |
+| `image_picker: ^1.1.2` | ✅ | Still used for profile & mezmur cover gallery selection |
 | `connectivity_plus` network awareness | ✅ | Online/offline gating exists |
 | `flutter_secure_storage` for auth tokens | ✅ | JWT already persisted securely |
 | `path_provider` for app-private storage | ✅ | Used by hymn downloads |
@@ -48,14 +49,14 @@ Patterns surveyed:
 | **Open Food Facts / CommCare (ODK Collect)** | App-side compression + resizing to ~300–600 KB JPEG, SQLite queue of (compressed file path, metadata), FIFO worker, multipart POST with retry/backoff, idempotency key | Simple, no server protocol changes; works at photo sizes needed for ID cards | Whole-file retry means a failed 500 KB photo restarts; acceptable for <1 MB files; NOT acceptable for raw 5–10 MB photos |
 | **Firebase Storage / Supabase Storage** | Built-in resumable + retry SDKs | Battle-tested | Locks us into a third-party service; user specifically has unstable internet to **our server**, not GCS; we are self-hosted |
 | **WorkManager (Android) / BGTaskScheduler (iOS)** | Background execution guarantees for upload workers | Can finish uploads when app is backgrounded/killed | iOS BGTask is opportunistic (OS decides when to run) — unreliable; Android Doze/app standby restrictions are increasing; adds complexity |
-| **CameraX / AVFoundation vs image_picker** | image_picker v1+ uses the native camera intents; sufficient for ID photos. No need for CameraX custom UI unless we want overlay guides (recommended for ID framing) | Fast to ship | No framing overlay, no tap-to-focus control |
+| **Flutter `camera` plugin (CameraX / AVFoundation)** | In-app preview with focus, zoom, flash, exposure, and a framing overlay; use the Flutter-maintained federated plugin and CameraX implementation on Android | Direct camera controls and an on-device guide; avoids an external camera-app handoff | App owns camera lifecycle, permissions, and device-specific control errors |
 
 **Recommendation for FKSS:**
 
 A **hybrid approach** tuned to high-quality ID-card photo sizes (see §3 below for updated spec):
 
-1. **Quality-first client-side encoding**: capture at the camera's native high resolution, correct EXIF orientation, then resize/encode to **WebP quality 92** (lossy visually-indistinguishable) with a JPEG quality 92 fallback — targeting **1–2 MB per photo** at **1200×1500 px** (4:5 portrait). This preserves enough detail for ID cards (300 DPI up to ~4×5″), report cards, and other printed materials, while using WebP's superior compression to keep file sizes ~30% smaller than an equivalent-quality JPEG. Max hard cap 2 MB.
-2. **Whole-file multipart upload with idempotency** (not chunked/TUS) — a 1.5 MB file uploads in ~3 seconds on 3G (~500 KB/s) and ~15–20 seconds on EDGE (~80 KB/s), which is acceptable with idempotent retry.
+1. **Quality-first client-side encoding**: capture at a device-tier-appropriate camera resolution, apply orientation, center-crop to 3:4 (passport ratio) with Flutter's native renderer, then use native JPEG compression. JPEG is selected for broad print-shop and screen compatibility. Output targets are 960×1280 on low-memory devices, 1200×1600 on mid-tier devices, and 1536×2048 on high-tier devices, with measured downscaling/quality steps under the existing 2 MB cap. JPEG is lossy; this is a deliberate size/compatibility tradeoff, not a promise of mathematically lossless compression.
+2. **Whole-file multipart upload with idempotency** (not chunked/TUS) — the client caps images at 2 MB; whole-file retry remains bounded and protected by the existing idempotency key.
 3. **SQLite outbox** exactly mirroring the existing `pending_attendance` pattern: `photo_outbox(client_op_id, member_id, field, local_file_path, sha256, byte_size, state, attempts, next_attempt_at, last_error, server_path, created_at)`.
 4. **Durable worker** (Foreground Service on Android when the user taps "Start syncing", ordinary foreground on iOS) — FIFO with concurrency=2, exponential backoff (15s/30s/60s/2m/5m/15m/1h, capped at 24h), idempotency keys, network class gating (fail fast on "none").
 5. **Captured photos stored in app-internal storage** (NOT temporary cache; NOT user gallery) — survives reboot, cleared only on confirmed server success or explicit user discard.
@@ -63,9 +64,9 @@ A **hybrid approach** tuned to high-quality ID-card photo sizes (see §3 below f
 7. **Batch capture UI** — a roster of members with thumbnail + status (pending/capturing/captured/uploaded/failed), swipe/tap to photograph each, auto-advance, overlay framing guide, retake per member, one big "Sync all" button.
 
 This is **far simpler and more reliable** than bringing in TUS or chunked upload, because:
-- Photos are compressed to ≤ 250 KB each before queueing.
-- 400 photos × 250 KB = **100 MB** total payload (about 5–10 minutes on real 3G, ~20–30 minutes on EDGE worst case).
-- Re-sending a 200 KB file from scratch after a 90% failure is annoying but not catastrophic. Compare that to raw 5–10 MB photos where a single dropout costs 30 seconds+.
+- Each photo is encoded under the existing **2 MB hard cap** before queueing.
+- 400 photos × 2 MB is a worst-case **800 MB** payload; actual JPEG sizes depend on image detail and device tier.
+- Re-sending an image under the 2 MB cap from scratch after a network failure is bounded and remains compatible with the existing idempotent retry path.
 - We reuse 100% of the existing outbox/idempotency/retry patterns the app already uses for attendance — one less new concept for maintenance.
 
 We add a **manual "retry failed" button** and a visible progress screen (photos done / total / MB uploaded / MB remaining / estimated time) so the field operator always knows exactly what state they're in.
@@ -78,11 +79,11 @@ We add a **manual "retry failed" button** and a visible progress screen (photos 
 
 ## 3. The Photography Rules — Quality First, Size Second
 
-These photos are used for **printed ID cards, report cards, diplomas, yearbooks, and on-screen profile displays**. Quality is non-negotiable; we compress the *format*, never the quality.
+These photos are used for **printed ID cards, report cards, diplomas, yearbooks, and on-screen profile displays**. Preserve print-ready resolution while keeping compression quality and file size measurable.
 
-### 3.1 Why WebP + 1200×1500 px (not 800×1000 JPEG)
+### 3.1 Why high-quality JPEG with tier-aware print resolutions
 
-| Use case | Required resolution (300 DPI) | Our output (1200×1500) covers? |
+| Use case | Required resolution (300 DPI) | Mid-tier output (1200×1600) covers? |
 |---|---|---|
 | Standard ID card (25×35 mm) | 295×413 px | ✅ 4× headroom |
 | Large staff/student ID badge (40×50 mm) | 472×591 px | ✅ 2.5× headroom |
@@ -91,33 +92,31 @@ These photos are used for **printed ID cards, report cards, diplomas, yearbooks,
 | A5 / A4 yearbook photo (60×80 mm) | 709×945 px | ✅ 1.7× headroom |
 | On-screen admin / mobile profile (≤200×250 px) | 200×250 px | ✅ 6× headroom |
 
-1200×1500 at **WebP quality 92** produces files in the **1.0–2.0 MB** range on real face photos (typical ~1.4 MB). That is 30–40% smaller than a visually-identical JPEG q=92 at the same dimensions (~1.8–2.4 MB), while preserving fine detail (hair texture, eye sharpness, skin tone graduation) critical for print.
-
-If a device or backend cannot encode/decode WebP (rare on modern Flutter/PHP but possible on very old GD builds), we **fall back to JPEG quality 92** at the same 1200×1500 px. JPEG q=92 is visually lossless for face photography; files land at ~1.6–2.2 MB, still within our 2 MB cap on well-lit portraits.
+The `image` package's current `encodeWebP` API is lossless-only and does not accept a quality value. It therefore cannot implement the earlier documented lossy-WebP q=92 target and may produce larger files. The capture pipeline uses native JPEG compression at quality 90/88, checks the actual encoded size, and reduces dimensions only as needed. JPEG is supported by common print workflows as well as screens. Since JPEG is lossy, the quality/size cap remains an explicit tradeoff rather than “no quality loss.”
 
 **We do NOT go above 2 MB** per file:
 - 400 members × 2 MB = 800 MB total payload → ~25 min on typical ET 3G (~500 KB/s) → acceptable.
 - Anything larger than 2 MB hurts sync reliability on bad networks for no visible print benefit at our use cases.
-- Hard cap enforced on client (encode-then-measure; if >2 MB, downscale one notch to 1080×1350 and re-encode at q=92; if still >2 MB, drop to q=90; never go below q=88 or below 1024×1280) and server (reject >2 MB with `413 file_too_large`).
+- Hard cap enforced on client (encode-then-measure; lower quality from q=90 to q=88, then downscale in 3:4-proportioned steps to 800×1066) and server (reject >2 MB with `413 file_too_large`).
 
 ### 3.2 Camera capture parameters
 
 | Parameter | Value | Reason |
 |---|---|---|
-| Capture resolution | **1920×1080 or 2592×1944 (highest 4:3/3:4 the device offers without lag)** | Downstream encode resizes up to 1200×1500; oversampling on capture reduces aliasing and produces a sharper final image |
-| Output resolution after resize | **1200×1500 px portrait (4:5)** with face-centered crop | Covers all print use cases above; gives headroom for framing error |
-| Primary format | **WebP**, quality **92** (lossy, visually indistinguishable from lossless for portraits) | 30–40% smaller than JPEG q=92 at same quality |
-| Fallback format | **JPEG**, quality **92**, 4:2:0 chroma subsampling (only on skin-tone-safe matrices) | If WebP encoding is unavailable on device or server GD/Imagick lacks WebP support |
-| Color space | sRGB (forced), preserve skin-tone fidelity | Consistent print/display color |
-| EXIF | Strip GPS (privacy); **preserve orientation tag AND apply pixel rotation before encoding** | Avoids sideways photos (#1 bug in Flutter) |
-| Quality-control encode loop | Encode at 1200×1500/q92 → measure bytes; if >2 MB → re-encode at 1080×1350/q92; if still >2 MB → q=90; hard floor q=88 / 1024×1280 | Guarantees 2 MB cap without sacrificing visible quality |
-| File naming | `photo_{member_id}_{field}_{yyyymmdd_HHMMSS}_{client_op_id}.webp` (or `.jpg` on fallback) | Deterministic for debug; extension reflects actual format |
+| Capture resolution | Device tier selects `high`, `veryHigh`, or `max`; the camera implementation selects the closest supported camera mode | Keep preview/capture work proportionate to device memory and capability |
+| Output resolution after resize | **960×1280 / 1200×1600 / 1536×2048 px portrait (3:4)** for low/mid/high tiers, reduced if the 2 MB cap requires it | Passport-ratio output maintains print-ready detail on low-tier phones while allowing larger high-tier outputs |
+| Primary format | **JPEG**, quality **90**, with a quality-88 and measured downscale fallback | Broad compatibility with common print software and screens |
+| Face/skin processing | No face retouching or smoothing; use camera exposure compensation, flash, and focus controls | Improve lighting while preserving identity-photo fidelity |
+| Color space | Platform-managed color conversion; no forced profile or face retouching | Consistent print/display color while preserving the captured appearance |
+| EXIF | Apply orientation to pixels and strip source metadata during re-encoding | Avoids sideways photos and prevents source GPS/EXIF metadata from being retained |
+| Quality-control encode loop | Encode at the device-tier target/q90 → measure bytes; retry q88, then downscale in 3:4-proportioned steps to 800×1066 if necessary | Enforces the 2 MB cap and returns an explicit error if even the minimum is too large |
+| File naming | `photo_{member_id}_{field}_{client_op_id}.jpg` for camera captures | Deterministic for debug; extension reflects actual format |
 | Storage location | `getApplicationDocumentsDirectory()/photo_queue/` (iOS: NSDocumentDirectory with `NSURLIsExcludedFromBackupKey`=YES so queued photos don't fill iCloud; Android: `filesDir` not cacheDir) | Survives reboot; NOT auto-cleared by OS |
 | Max disk budget | **4 GB** hard cap (≈ 2000 photos at 2 MB each) — LRU evict only fully-synced photos older than 30 days | Defensive against filling device; 4 GB is safe for any modern phone |
 
 ### 3.3 Photo requirements (what to show as overlay guide on camera screen)
 
-- Face centered, eyes ~⅓ from top (standard passport/ID rule)
+- Face centered, eyes near the guide line (standard passport/ID framing)
 - Even lighting, no harsh shadows on face
 - No sunglasses, no hats (except religious head covering)
 - Plain light-colored wall background if possible (visual guide only, not enforced)
@@ -169,7 +168,7 @@ For 300–400 members photographed offline over several hours/days, these are th
 | F4 | **Server returns 500 / timeout mid-upload** | Whole-file retry on exponential backoff; idempotency key prevents duplicate files on server if the success response was lost but the file was stored |
 | F5 | **Server receives the photo but the response is lost (network drops between send and response)** | Idempotent retry: server returns `200 {status:'success', path:'...', replayed:true}` on second attempt |
 | F6 | **Two field staff (or one staff + ZIP import) photograph the same member** | Server keeps ALL incoming photos in a `member_photo_candidates` table (keyed by member_id + client_op_id) and flags a conflict; web admin review screen lists each candidate side-by-side with photographer name, device, taken_at, sha256, file size; admin picks the winner (or rejects all). The winning photo becomes `student_photo_path`; losers are retained in a `photo_archive` folder for audit. Same-device retakes (§3.6) never produce a conflict because the earlier shot is `discarded` before upload. |
-| F7 | **Corrupted / zero-byte file / non-image bytes** | SHA-256 computed on capture; zero/short files rejected at enqueue time; client-side decode-verify (re-encode the file back through the `image` package to ensure it is a valid WebP/JPEG before enqueue); post-upload server verifies magic bytes + GD/Imagick `imagecreatefromwebp/jpeg` succeeds and returns 400 if not |
+| F7 | **Corrupted / zero-byte file / non-image bytes** | Empty files rejected before processing; Flutter's image codec decodes the captured image and the native compressor produces a fresh JPEG before enqueue; post-upload server verifies magic bytes + GD/Imagick `imagecreatefromwebp/jpeg` succeeds and returns 400 if not |
 | F8 | **Photo is sideways (EXIF orientation)** | Client reads EXIF, rotates pixel data before saving queue file; all queued photos are orientation-corrected before upload |
 | F9 | **Out of disk space on phone** | Pre-capture check: if free space < 200 MB, block capture with a clear message; LRU-evict already-synced photos older than 30 days automatically |
 | F10 | **Photos sent over metered / expensive connection by mistake, exhausting a user's data plan** | **Sync is OFF by default at install.** User must (1) flip a master "Enable photo sync" toggle in Settings AND (2) tap an explicit "Start Sync" button on the Sync Panel AND (3) either be on Wi-Fi OR flip a secondary "Allow sync over cellular" toggle with a MB-cost warning. No auto-sync on any network by default. A persistent banner "⚠ Sync is OFF — photos are saved locally only" is shown on the roster until sync is enabled or a ZIP is exported. |
@@ -382,17 +381,17 @@ lib/screens/members/
 
 ## 8. Performance Sizing (realistic for Ethiopia)
 
-Target file size = ~1.5 MB (WebP q=92 at 1200×1500, typical face photo). 400 photos ≈ 600–800 MB total.
+Target file size is bounded by the 2 MB cap; actual JPEG sizes vary with scene detail and device tier. 400 photos are capped at 800 MB total.
 
 | Connection | Effective upload speed | 1.5 MB photo | 400 photos total |
 |---|---|---|---|
-| Wi-Fi (5 Mbps up) | ~500 KB/s | 3 s | ~25 minutes |
-| 4G LTE (typical ET) | 200–500 KB/s | 3–8 s | 25–60 minutes |
-| 3G (typical ET) | 50–100 KB/s | 15–30 s | 100–200 minutes |
-| EDGE (2G worst case) | 10–20 KB/s | 75–150 s | 8–17 hours |
+| Wi-Fi (5 Mbps up) | ~500 KB/s | up to 4 s | up to ~27 minutes |
+| 4G LTE (typical ET) | 200–500 KB/s | up to 10 s | up to ~67 minutes |
+| 3G (typical ET) | 50–100 KB/s | up to 40 s | up to ~267 minutes |
+| EDGE (2G worst case) | 10–20 KB/s | up to 200 s | up to ~22 hours |
 | Offline | 0 KB/s | ∞ | queued until connectivity (use ZIP export) |
 
-This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 2G the sync time is impractical (multiple hours per batch), so staff plug the phone into a PC and transfer via USB. On 3G+Wi-Fi, sync is perfectly usable at ~20–60 minutes for a full batch. The quality-first 1.5 MB target is chosen because:
+This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 2G the sync time is impractical (multiple hours per batch), so staff plug the phone into a PC and transfer via USB. On 3G+Wi-Fi, sync is usable when the photo-day batch is complete. The 2 MB cap is chosen because:
 - It preserves enough detail for all print use cases (§3.1).
 - Wi-Fi/4G sync remains fast enough.
 - ZIP export over USB takes seconds regardless of network quality — the safety valve.
@@ -404,12 +403,12 @@ This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 
 
 | Rejected approach | Reason |
 |---|---|
-| TUS / resumable chunked upload | Overkill at 200 KB/file; adds server complexity; not worth the maintenance cost. Revisit only if we later add multi-page document scans (> 5 MB). |
+| TUS / resumable chunked upload | Overkill at the current per-file cap; adds server complexity; not worth the maintenance cost. Revisit only if we later add multi-page document scans (> 5 MB). |
 | Android WorkManager / iOS BGTaskScheduler background uploads | iOS BGTask is not guaranteed; Android WorkManager is being restricted in newer Android versions. Better UX: foreground sync with persistent notification when the user explicitly starts it; staff can keep the phone on a charger with the app open. Same pattern as the existing mezmur download manager. |
 | Firebase / third-party BaaS | Would bypass your server; you already have the hardened API layer; adds data residency concern for a church. |
-| Full raw-resolution camera (12 MP+ uncompressed) | Even at WebP, 12 MP face photos are ~4–6 MB each and exceed our 2 MB cap after encode; 400 photos would be 1.5–2.5 GB, hurting sync and ZIP transfer with zero print benefit at 300 DPI in our use cases. 1200×1500 is the sweet spot. |
+| Full raw-resolution camera (12 MP+ uncompressed) | 12 MP images require significant memory and processing; tier-aware decode and resize keeps the saved image under the 2 MB cap and avoids UI-thread blocking. |
 | Auto-sync the second each photo is captured | User explicitly forbade this — must not burn mobile data silently. Sync is user-initiated; default off. |
-| PNG (lossless) | 5–10× larger than WebP q=92 for no visible benefit on continuous-tone face photos. WebP lossless is an option v2 if we ever need 100% fidelity for legal documents; not needed now. |
+| PNG (lossless) | Much larger than JPEG for continuous-tone portraits; use only for formats that require lossless transparency, not member ID photos. |
 | Face detection / auto-crop on device | Nice-to-have v2; increases complexity and introduces mis-crop risk. v1 uses a framing overlay and lets the human frame it. |
 | End-to-end encryption of photos | Photos are PII but are TLS-encrypted in transit and stored behind authenticated access on your server. E2EE would block admin/HR workflows (need to view photos in dashboard). |
 
@@ -420,7 +419,7 @@ This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 
 | Phase | Work | Effort (engineer-days) | Risk |
 |---|---|---|---|
 | **P1 — Foundation** | Schema v35 migration with updated `photo_outbox` table (format, width/height, operator, device_id, replaced_by, conflict columns); per-install device_id generation; PhotoOutboxService (SQLite CRUD, idempotency keys, retry policy, retake/replaced_by semantics, discard+undo) modeled on comm_outbox; unit tests for queue state machine | 3 | Low |
-| **P2 — Capture** | image_picker camera integration; EXIF orientation correction via `image` package; **WebP q=92 primary / JPEG q=92 fallback** encode with the quality-control loop (encode → measure → downscale if >2 MB → floor q=88/1024×1280); face-centered crop to 4:5; pinch-to-zoom review screen; retake semantics (mark previous discarded, undo toast); framing overlay; enqueue to outbox | 5 | Medium — camera UX + WebP encode tuning |
+| **P2 — Capture** | In-app `camera` preview with a passport-grade 3:4 framing guide (green frame, eye/shoulder level marks); tap-to-focus, flash/exposure/zoom controls; EXIF correction and 3:4 crop with Flutter's native renderer; native quality-controlled JPEG compression, tier-aware output dimensions, and a measured 2 MB cap; review/retake and offline enqueue | 5 | Medium — native camera lifecycle and image processing |
 | **P3 — Backend** | `/api/v1/members/{id}/photo` endpoint with Idempotency-Key, sha256 verification, WebP/JPEG MIME validation, 2 MB cap; GD/Imagick WebP capability probe; **photo_upload_receipts + member_photo_candidates tables**; multi-photographer conflict detection (store as candidate, do not auto-overwrite; same-operator retake auto-wins); reuse MemberFileService for storage; add permission/routing; new admin Photo Review page (grid of candidates per member with "Set as current" action) | 5 | Medium — candidate review UI |
 | **P4 — Sync worker** | PhotoSyncWorker (FIFO, concurrency=2, exponential backoff, connectivity gating, **sync-disabled-by-default gate**, cellular-vs-wifi policy gate, idempotent multipart with new headers (X-Photo-Format/Device-Id/Operator-Id), handle 200+conflict:true response, foreground notification on Android); ApiService.multipartUpload with idempotency key; JPEG fallback on 501 webp_not_supported | 4 | Medium |
 | **P5 — UI** | Batch roster screen with per-member status dots (⚪/🟡/🟢/⚠️/🔴); **photo_sync_panel redesigned** with master sync-ON/OFF toggle, cellular toggle, Start Sync button, always-available Export ZIP button, progress/ETA, pause/cancel; photo_queue_screen for failures/retry/conflict_pending; persistent Members-tab badge; settings screen for sync prefs | 5 | Medium — default-off policy UI clarity |
@@ -433,7 +432,7 @@ This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 
 - Verify PHP GD/Imagick has WebP support on the production server (`imagewebp` exists); if not, install or enable (one apt command) — otherwise server falls back to JPEG and client must too.
 - Apple Developer account + Mac (for iOS build, not needed to start Android-first).
 - 1–2 test Android phones from the field (real low-end hardware).
-- Sample photos from a real photo day to calibrate WebP quality (q=92 is a starting point; visually compare to q=90/q=95 on actual prints).
+- Sample photos from a real photo day to validate print quality across device tiers and q=90/q=88 JPEG output.
 
 ### MVP slice that delivers 80% of value in ~15 days
 Ship P1+P2+P4+minimal P5 (no batch roster yet — single-member capture, ZIP export always available, sync toggle default-off, manual Start Sync, no candidate review yet — server auto-wins by newest taken_at; admin can swap photos manually via the existing member edit page). ZIP import (see ZIP_IMPORT_DESIGN) comes next; multi-photographer review UI rounds out v1.
@@ -444,15 +443,14 @@ Ship P1+P2+P4+minimal P5 (no batch roster yet — single-member capture, ZIP exp
 
 | Package | Purpose | Size / risk |
 |---|---|---|
-| `image: ^4.5.0` (verify availability; likely transitive) | EXIF-correct resize, pixel-perfect rotation, **WebP + JPEG encoding**, decode-verify sanity check | Very low; pure Dart; WebP encode/decode is built in |
+| `camera: ^0.12.2` | In-app camera preview, capture, focus, exposure, flash, and zoom controls | Flutter-maintained plugin; native camera implementations |
+| `flutter_image_compress: ^2.5.1` | Native JPEG encoding with quality/size control | Native Android/iOS compressor; avoids the slow pure-Dart JPEG encoder |
+| `image: ^4.5.3` | Queued-image thumbnail decoding | Pure Dart helper, not used to encode camera captures |
 | `crypto: ^3.0.3` (already in pubspec) | SHA-256 + HMAC-SHA256 of queued files (HMAC also used for ZIP signing) | Already present |
 | `uuid: ^4.0.0` (likely already transitive) | client_op_id + per-install device_id UUID generation | Trivial |
 | `archive: ^3.4.0` (new for ZIP export) | ZIP packaging for export (store, no compression) | Pure Dart; low risk |
 
-No need for `flutter_exif_rotation` — the `image` package handles EXIF read/rotate/strip in pure Dart, which is more reliable across iOS/Android.
-No heavy native SDKs. No Firebase. No TUS. No WorkManager.
-
-No heavy native SDKs needed. No Firebase. No TUS. No WorkManager.
+No face-beautification SDK, Firebase, TUS, or WorkManager.
 
 ---
 
