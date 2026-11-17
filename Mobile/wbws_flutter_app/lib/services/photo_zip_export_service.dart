@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import 'local_db.dart';
 import 'photo_outbox_models.dart';
 import 'photo_outbox_service.dart';
+import '../utils/config.dart';
 
 /// Z1 — ZIP airlock export.
 ///
@@ -126,7 +127,7 @@ class PhotoZipExportService {
       'bundle_id': bundleId,
       'exported_at': startedAt.toIso8601String(),
       'device_id': deviceId,
-      'app_version': '1.8.4',
+      'app_version': AppConfig.appVersion,
       'zip_version': _zipVersion,
       'photo_count': files.length,
       'total_bytes': totalBytes,
