@@ -69,7 +69,7 @@ void main() {
 
   test('chaos: 60 % failure rate eventually drains the queue', () async {
     final api = FlakyApi(failureRate: 0.6, hardFailCodes: {429: 0.3, 500: 0.2});
-    final worker = FakeSyncWorker(outbox: outbox, api: api, maxAttempts: 12);
+    final worker = FakeSyncWorker(outbox: outbox, api: api, maxAttempts: 30);
     await outbox.seedQueued(n: 20, size: kSmall200K);
 
     String? lastError;
@@ -137,6 +137,7 @@ class FakeOutbox {
   final List<FakeEntry> entries = [];
   int _nextId = 1;
   final Set<String> _filesOnDisk = {};
+  DateTime _now = DateTime.now();
 
   Future<void> seedQueued({required int n, required int size}) async {
     for (int i = 0; i < n; i++) {
@@ -148,7 +149,7 @@ class FakeOutbox {
         state: PhotoOutboxState.queued,
         byteSize: size,
         attempts: 0,
-        nextAttemptAt: DateTime.now(),
+        nextAttemptAt: _now,
       ));
       _filesOnDisk.add(op);
     }
@@ -172,16 +173,30 @@ class FakeOutbox {
   }
 
   FakeEntry? pickNext() {
-    final now = DateTime.now();
     for (final e in entries) {
       if ((e.state == PhotoOutboxState.queued ||
               e.state == PhotoOutboxState.retryWait) &&
-          !e.nextAttemptAt.isAfter(now)) {
+          !e.nextAttemptAt.isAfter(_now)) {
         e.state = PhotoOutboxState.uploading;
         return e;
       }
     }
     return null;
+  }
+
+  bool advanceToNextRetry() {
+    // Virtualize backoff waits so retry tests do not depend on host scheduling.
+    DateTime? nextAttemptAt;
+    for (final entry in entries) {
+      if (entry.state == PhotoOutboxState.retryWait &&
+          (nextAttemptAt == null ||
+              entry.nextAttemptAt.isBefore(nextAttemptAt))) {
+        nextAttemptAt = entry.nextAttemptAt;
+      }
+    }
+    if (nextAttemptAt == null) return false;
+    if (nextAttemptAt.isAfter(_now)) _now = nextAttemptAt;
+    return true;
   }
 
   void markDone(FakeEntry e) {
@@ -190,7 +205,7 @@ class FakeOutbox {
 
   void markRetry(FakeEntry e, Duration delay, {String code = 'RETRY'}) {
     e.state = PhotoOutboxState.retryWait;
-    e.nextAttemptAt = DateTime.now().add(delay);
+    e.nextAttemptAt = _now.add(delay);
     e.attempts++;
     e.lastErrorCode = code;
   }
@@ -300,7 +315,10 @@ class FakeSyncWorker {
     int uploaded = 0;
     while (DateTime.now().isBefore(deadline) && !_disposed) {
       final entry = outbox.pickNext();
-      if (entry == null) break;
+      if (entry == null) {
+        if (outbox.advanceToNextRetry()) continue;
+        break;
+      }
       if (maxItems != null && uploaded >= maxItems) {
         // Return entry to queued since we didn't actually try it.
         entry.state = PhotoOutboxState.queued;

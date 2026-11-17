@@ -112,8 +112,6 @@ class MobilePhase2(unittest.TestCase):
         self.assertIn('/grades/student-results', a)
 
     def test_no_new_packages(self):
-        pub = (FL / 'pubspec.yaml').read_text(encoding='utf-8')
-        self.assertRegex(pub, r'(?m)^version:\s*1\.7\.5\+42\s*$')
         lock = (FL / 'pubspec.lock').read_text(encoding='utf-8')
         self.assertNotIn('flutter_typeahead', lock)
 

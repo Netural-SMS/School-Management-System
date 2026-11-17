@@ -31,13 +31,15 @@ The [Finance/Materials column reference](database/LEDGER_COLUMNS.md), source-rev
 | Runtime DDL | `MezmurSchemaReconciler::apply`, called from `admin/api_mezmur.php`, can create or alter Mezmur tables at request time | Production can drift from `sql/` |
 | `tests/e2e/provision_env.sh` | Encodes the apply order that produces a working test database | The best available **executable** description of the schema; test-only |
 
-At `7e28157` (2026-10-28) plus migrations 079 (ACM P0), 080 (Telegram registration), 081 (ACM S1 office model + telegram phase2 interview), 082 (ACM S3 activation ceremony + telegram corrections), 083 (telegram approval), 084 (ACM S4 device registry), 085 (Telegram transfer registration), 086 (ACM S5 refresh binding), 087 (Telegram registration attachments), 088 (ACM S6 recovery events), 089 (ACM S7 suspension history), 090 (ACM S8 deactivation events), 091 (ACM S10 staff enrollment requests + telegram v2 state machine) and 092 (ACM G2 guardian link verification, data-only UPDATE, zero DDL), the **93 numbered migration files** (`001`–`092`, with gaps — `081`, `082` and `091` exist twice: ACM + telegram) contain **131 distinct `CREATE TABLE` target names**, excluding block/line comments and including archive/quarantine definitions. This is a lexical source inventory, not the number of active business tables or proof that every conditional statement ran. Legacy PHP/snapshot definitions are outside this count. The former count of 103 incorrectly treated the word `only` in migration 026's comment as a table.
+At `7e28157` (2026-10-28) plus migrations 079–097, including member-tier compatibility, Telegram candidate-decision repair, member-status archival, mobile photo uploads, and photo-device pairing, the **98 numbered migration files** (`001`–`097`, with gaps — `081`, `082` and `091` each have an ACM and a Telegram file) contain **136 distinct `CREATE TABLE` target names**, excluding block/line comments and including archive/quarantine definitions. This is a lexical source inventory, not the number of active business tables or proof that every conditional statement ran. Legacy PHP/snapshot definitions are outside this count. The former count of 103 incorrectly treated the word `only` in migration 026's comment as a table.
+
+The duplicate prefixes `081`, `082` and `091` are historical filename collisions. Migrations are applied manually and there is no migration ledger, so renaming them could obscure whether a file has already been applied. CI tolerates only these exact existing pairs; new or altered collisions fail.
 
 ## 3. Migration rules in force
 
 - **Shared hosting:** use plain SQL that is safe for MariaDB. Migrations must be additive and idempotent where possible (`IF NOT EXISTS`, information_schema guards). There is no server-side tooling.
 - **CI checks (`backend-checks.yml`):**
-  - *No duplicate migration numbers*;
+  - *No new duplicate migration numbers* (only the exact historical pairs documented above are tolerated);
   - *Migrations are not silently destructive*: it flags lines that start with `TRUNCATE` or `DELETE FROM`.
 - **Preflight queries:** `sql/preflight/` holds read-only checks that are run before some migrations: `auth_outbox_*`, `failure_intelligence_preflight`, `uniqueness_preflight`, `mobile_fleet_telemetry_*`, `guardian_profiling_pack`.
 - **Pre-056 schema in CI:** `tests/security/test_schema_conformance.py` runs tracking endpoints against a deliberately pre-`056` schema (database `ssms_pre056_e2e`). Queries that name columns production may lack therefore fail in CI.
