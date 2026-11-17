@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:fkss_app/services/local_db.dart';
-import 'package:fkss_app/services/local_schema_v43.dart';
 
 void main() {
   test('actual LocalDb v37 open upgrades additively without inventing old year',
@@ -47,7 +46,7 @@ void main() {
     Database? upgraded;
     try {
       upgraded = await LocalDb().database;
-      expect(await upgraded.getVersion(), localDatabaseSchemaVersionV43);
+      expect(await upgraded.getVersion(), 43);
       final after = await upgraded.query('pending_attendance');
       expect(after.single['original_academic_year_id'], isNull);
       expect(

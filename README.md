@@ -1,9 +1,3 @@
-> # ⚠️ YOU ARE ON THE `dev` BRANCH — FKSS **BETA** (test server)
-> This branch = `main` + one commit that points the **phone app** at
-> `https://felegekidusan.arkeonethiopia.com/api/v1` (package `com.arkeonethiopia.fkss.beta`, name "FKSS Beta").
-> **Never merge this branch into `main`. Never push it to `Felege-Kidusan/felegekidusan`.**
-> Keep it current with `git merge main` (one‑way). Details: `BRANCHING.md` · build: `Mobile/HOW_TO_BUILD_BETA.md`.
-
 # FKSS — Sunday School Management System
 
 FKSS is the management system of the Felege Kidusan Sunday School. It replaces spreadsheets and paper records for member registration, education (classes, assessments, report cards, timetable, attendance), the Mezmur (hymn) ministry, communications and reporting. Staff use a PHP web application; teachers and department staff also use an Android app built with Flutter that works offline and synchronises with the server.

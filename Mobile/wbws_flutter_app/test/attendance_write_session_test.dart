@@ -6,7 +6,6 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:fkss_app/services/local_db.dart';
-import 'package:fkss_app/services/local_schema_v43.dart';
 import 'package:fkss_app/services/legacy_outbox_models.dart';
 import 'package:fkss_app/services/session_models.dart';
 
@@ -178,7 +177,7 @@ void main() {
       expect(operation.clientOpId, packet['client_op_id']);
       expect(
         (await raw.rawQuery('PRAGMA user_version')).single.values.single,
-        localDatabaseSchemaVersionV43,
+        43,
       );
     },
   );

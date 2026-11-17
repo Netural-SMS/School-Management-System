@@ -8,7 +8,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:fkss_app/services/hymn_outbox_models.dart';
 import 'package:fkss_app/services/legacy_outbox_models.dart';
 import 'package:fkss_app/services/local_db.dart';
-import 'package:fkss_app/services/local_schema_v43.dart';
 import 'package:fkss_app/services/session_models.dart';
 import 'package:fkss_app/services/sync_attempt_models.dart';
 import 'package:fkss_app/services/sync_execution.dart';
@@ -173,7 +172,7 @@ void main() {
     expect(columnNames, contains('execution_source'));
 
     final userVersion = await rawDb.rawQuery('PRAGMA user_version');
-    expect(userVersion.single.values.single, localDatabaseSchemaVersionV43);
+    expect(userVersion.single.values.single, 43);
 
     final attendanceRef = await db.saveAttendanceLocal(
       42,

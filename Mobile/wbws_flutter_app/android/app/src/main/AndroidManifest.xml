@@ -22,7 +22,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
-        android:label="FKSS Beta"
+        android:label="FKSS"
         android:name=".FkssApplication"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="false"
@@ -121,16 +121,6 @@
                 <action android:name="com.arkeonethiopia.fkss.action.BACKGROUND_SYNC" />
             </intent-filter>
         </receiver>
-
-        <!--
-            Adaptive photo-capture framing: bundle the ML Kit face and
-            pose models into the APK at build time so the framing guide
-            works fully offline (no Google Play model download at first
-            use, which requires connectivity the field does not have).
-        -->
-        <meta-data
-            android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="face,pose" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

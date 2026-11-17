@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:fkss_app/services/local_db.dart';
-import 'package:fkss_app/services/local_schema_v43.dart';
 
 void main() {
   late Directory dir;
@@ -22,9 +21,8 @@ void main() {
     final db = LocalDb();
     final raw = await db.database;
     final ver = await raw.rawQuery('PRAGMA user_version');
-    expect(ver.single.values.single, localDatabaseSchemaVersionV43);
-    final info =
-        await raw.rawQuery("PRAGMA table_info('attendance_sync_receipt')");
+    expect(ver.single.values.single, 43);
+    final info = await raw.rawQuery("PRAGMA table_info('attendance_sync_receipt')");
     final cols = info.map((r) => r['name'] as String).toSet();
     expect(cols, contains('client_op_id'));
     expect(cols, contains('receipt_json'));
@@ -42,8 +40,7 @@ void main() {
       'server_request_id': 'req-1',
       'created_at': DateTime.now().toUtc().toIso8601String(),
     });
-    final rows = await raw.query('attendance_sync_receipt',
-        where: 'client_op_id = ?', whereArgs: ['op-1']);
+    final rows = await raw.query('attendance_sync_receipt', where: 'client_op_id = ?', whereArgs: ['op-1']);
     expect(rows.length, 1);
     expect(rows.first['http_status'], 201);
     await raw.delete('attendance_sync_receipt');
