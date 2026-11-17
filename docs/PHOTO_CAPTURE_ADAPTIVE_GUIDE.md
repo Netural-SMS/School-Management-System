@@ -21,12 +21,60 @@ quarantined:
 | `Mobile/wbws_flutter_app/lib/services/photo_framing_geometry.dart` | Pure Dart coordinate transforms: detection-image space → preview space → 3:4 frame-normalized space; front-camera mirroring at draw time only. No Flutter/plugin imports — fully unit-tested. |
 | `Mobile/wbws_flutter_app/lib/services/photo_framing_engine.dart` | Pure feedback engine: per-check states (pass/warn/neutral), single-instruction priority, message switch delay, ready stability window. `allowCapture` is structurally always true (FR-09). |
 | `Mobile/wbws_flutter_app/lib/services/photo_framing_detector.dart` | ML Kit wiring: face landmarks + head Euler Z, pose shoulders + per-landmark likelihood, latest-frame-only processing, instance reuse, explicit dispose. |
-| `Mobile/wbws_flutter_app/lib/screens/members/photo_camera_screen.dart` | Screen: header (logo, Offline Ready, settings), instruction panel, preview + `_AdaptiveGuidePainter` (static frame + adaptive dynamic layer), three status chips, sliders, gallery/shutter/switch controls. |
+| `Mobile/wbws_flutter_app/lib/screens/members/photo_camera_screen.dart` | Screen (approved FKSS capture reference): crest header with on-device "Offline Ready" pill and settings gear, single-instruction card, full-bleed true-aspect preview with the 3:4 crop frame as a centered window (`_AdaptiveGuidePainter` static frame + adaptive landmark layer, dimmed surround), three status cards, passport-size card, full-width gallery/shutter/switch bar with Photo/Video tabs. Exposure, zoom, flash, haptics and "Close camera" live in the settings sheet. |
 | `Mobile/wbws_flutter_app/lib/services/photo_gallery_import.dart` | Gallery path (spec §4.5): picks an image, bakes EXIF orientation via `FlutterImageCompress` (`autoCorrectionAngle: true`), returns a camera-equivalent `CapturedPhoto`; the picked file is never modified. |
 
 Tests: `test/photo_framing_geometry_test.dart`,
 `test/photo_framing_engine_test.dart` (round trips, mirroring, priority
 order, smoothing, ready window, neutral-not-pass, confidence gate).
+
+## Screen layout (spec §4)
+
+The screen follows the approved FKSS capture reference and is built from
+four regions:
+
+- **Header** — gold-ring crest, `FKSS` / `Photo Capture`, the
+  "Offline Ready" pill and a settings gear. The pill has three states and
+  is driven by detector readiness only: green `Offline Ready` (detectors
+  running, no last error), amber `Detection limited` (running with an
+  error), neutral `Starting…`.
+- **Instruction card** — exactly one instruction from the feedback
+  engine, with a short static subtitle explaining the goal ("Keep the
+  eyes on the guide line and shoulders visible"). When the engine reports
+  ready the card turns green with "Perfect! Ready to capture". The member
+  name is a small trailing label so the operator can confirm the subject.
+- **Preview** — the dominant element, full-bleed per the approved
+  reference: the whole upright camera image is drawn at its TRUE aspect
+  (the box handed to `CameraPreview` is exactly the camera aspect, so the
+  texture can never stretch — FR-02), and the centered 3:4 crop frame is
+  a window inside it with a dimmed surround showing what is NOT saved.
+  The frame edge on screen IS the saved-file edge (FR-03): the processor
+  crops exactly `PreviewLayout.frameInImage`, the same window the guides
+  draw in and the feedback engine evaluates. The adaptive layer draws a
+  head outline from the detected face box, a cyan segment through the
+  real eye landmarks and a shoulder curve from both pose landmarks.
+  With no reliable landmarks only the static guide is drawn (FR-18). A
+  "Perfect!" badge appears at the frame's top-right corner only when the
+  verdict is ready.
+- **Status rail + passport card** — three cards (Face Centered / Eyes On
+  Line / Shoulders Visible) with an icon, label and state dot, so the
+  state never depends on colour alone (spec §13); the right card states
+  the output is `3:4 (Passport Size)`.
+- **Bottom bar** — Gallery import, the large shutter and camera switch,
+  with Photo (active) and Video tabs. Video is intentionally inactive: it
+  shows a notice that video capture is not used for member photos
+  (spec §4.5).
+
+Exposure, zoom, flash, the ready haptic and "Close camera" moved into the
+settings sheet so the main screen stays uncluttered and the shutter is
+reachable one-handed. Tap-to-focus maps the tap to fractions of the full
+upright image (`tapToFocusPoint`, unit-tested) before being handed to the
+plugin, so it stays correct even where the image overflows the area.
+
+If the detector errors or stops producing results for 2 s, the verdict
+drops to neutral checks with "Adjust the lighting or framing" — a stale
+green can never survive a stalled detector, and capture stays enabled
+(FR-09, FR-18).
 
 ## Coordinate transformation (spec §9.4)
 
@@ -35,13 +83,17 @@ Spaces (defined in the geometry module's header comment):
 1. **Detection space** — the upright camera image ML Kit ran on (raw
    sensor frame rotated by the camera's `sensorOrientation`). ML Kit is
    handed `InputImageRotation` derived from that sensor orientation.
-2. **Preview space** — pixels of the on-screen `CameraPreview` widget
-   (the widget is `AspectRatio(controller.value.aspectRatio)`, i.e. the
-   capture aspect, so the preview shows the full detection image).
+2. **Preview space** — pixels of the upright camera image as displayed by
+   `CameraPreview` (the widget's portrait aspect is `1 / value.aspectRatio`
+   because the plugin reports the landscape `previewSize`, so the preview
+   shows the full detection image). The screen draws the whole image at
+   this true aspect (`previewLayout`, unit-tested).
 3. **Frame space** — normalized 0..1 coordinates inside the exact 3:4
-   crop that `PhotoImageProcessor` keeps (`frameRectInPreview` is the
-   same centered 3:4 rectangle math, so what the operator sees is what
-   gets saved, FR-03).
+   crop that `PhotoImageProcessor` keeps. The screen, the feedback
+   engine and the processor share one window — `PreviewLayout.frame`
+   on screen, `frameInImage` in the file — so what the operator sees is
+   what gets saved, FR-03. (`frameRectInPreview`, the maximal centered
+   crop, now serves only as the pre-first-layout fallback.)
 
 `detectionPointToFrame` takes the **full preview size** explicitly: the
 detection→preview scale is uniform over the whole preview and must not
@@ -128,8 +180,8 @@ still shows neutral, so uncertainty is never displayed as success.
 | FR | Status |
 |---|---|
 | FR-01 exact 3:4 | DONE (Stage A; `PhotoImageProcessor.targetAspect` = 3/4) |
-| FR-02 no stretch/distort | DONE (Stage A; native 3:4 center crop) |
-| FR-03 preview matches crop | DONE (shared `frameRectInPreview` math; unit-tested) |
+| FR-02 no stretch/distort | DONE (redesign: preview box always carries the true camera aspect — the old `FittedBox`+`SizedBox` clamped the texture into 3:4 and stretched it; unit-tested invariant) |
+| FR-03 preview matches crop | DONE (full-bleed preview + gutter-inset 3:4 window; screen, engine and processor share `PreviewLayout.frameInImage`; unit-tested) |
 | FR-04 head not cropped | Guided (top-margin checks warn; operator decides) |
 | FR-05 shoulders inside safe frame | Guided (pose landmarks when reliable) |
 | FR-06 eye guide from landmarks | DONE (ML Kit eye landmarks + eye line) |
