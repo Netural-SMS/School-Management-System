@@ -296,14 +296,35 @@ class _PhotoCameraScreenState extends State<PhotoCameraScreen>
           fit: StackFit.expand,
           children: [
             if (ready)
-              LayoutBuilder(
-                builder: (context, constraints) => GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (details) => _focusAt(
-                    details,
-                    Size(constraints.maxWidth, constraints.maxHeight),
+              Center(
+                child: AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final previewSize = Size(
+                        constraints.maxWidth,
+                        constraints.maxHeight,
+                      );
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) => _focusAt(details, previewSize),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CameraPreview(controller),
+                            // The guide is painted in preview
+                            // coordinates so the framed region is the
+                            // exact region that survives the 3:4
+                            // center crop in PhotoImageProcessor.
+                            const IgnorePointer(
+                              child:
+                                  CustomPaint(painter: _PassportGuidePainter()),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  child: Center(child: CameraPreview(controller)),
                 ),
               )
             else
@@ -318,11 +339,6 @@ class _PhotoCameraScreenState extends State<PhotoCameraScreen>
                       ),
               ),
             if (ready) ...[
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(painter: _PortraitGuidePainter()),
-                ),
-              ),
               Positioned(
                 left: 16,
                 right: 16,
@@ -334,7 +350,8 @@ class _PhotoCameraScreenState extends State<PhotoCameraScreen>
                 right: 24,
                 top: 76,
                 child: Text(
-                  'Center the face in the guide · even light · plain background',
+                  'Eyes on the upper line · shoulders on the lower line '
+                  '· even light · plain background',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
@@ -536,44 +553,194 @@ class _CameraSlider extends StatelessWidget {
       );
 }
 
-class _PortraitGuidePainter extends CustomPainter {
-  const _PortraitGuidePainter();
+/// Passport framing overlay for the 3:4 ID-photo canvas.
+///
+/// Draws a green-bordered 3:4 frame — the largest 3:4 rectangle centered
+/// in the camera preview, which is exactly the region
+/// [PhotoImageProcessor] keeps after its 3:4 center crop — plus
+/// composition marks (head room, eye level, shoulder level) tuned for a
+/// 3x4 passport portrait. The area outside the frame is dimmed so the
+/// operator can see what will and will not be in the final photo.
+class _PassportGuidePainter extends CustomPainter {
+  const _PassportGuidePainter();
+
+  /// Final output canvas aspect (width / height) — matches
+  /// [PhotoImageProcessor.targetAspect].
+  static const double _aspect = 3 / 4;
+
+  static const Color _green = Color(0xFF22C55E);
+
+  /// Composition marks as fractions of the frame height. For a 3x4
+  /// passport portrait the top of the head sits near 12%, the eyes near
+  /// 42% and the shoulders around 70% of the frame.
+  static const double _headTopFrac = 0.12;
+  static const double _eyeFrac = 0.42;
+  static const double _shoulderFrac = 0.70;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final guideWidth = math.min(size.width * 0.72, size.height * 0.62);
-    final guideHeight = guideWidth * 1.24;
-    final guide = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * 0.49),
-      width: guideWidth,
-      height: guideHeight,
+    final frameWidth = math.min(size.width, size.height * _aspect);
+    final frameHeight = frameWidth / _aspect;
+    final frame = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: frameWidth,
+      height: frameHeight,
     );
-    final shade = Paint()..color = Colors.black.withValues(alpha: 0.28);
-    final overlay = Path()
+
+    _drawScrim(canvas, size, frame);
+    _drawFrame(canvas, frame);
+    _drawMarks(canvas, frame);
+  }
+
+  void _drawScrim(Canvas canvas, Size size, Rect frame) {
+    final scrim = Paint()..color = Colors.black.withValues(alpha: 0.50);
+    final path = Path()
       ..fillType = PathFillType.evenOdd
       ..addRect(Offset.zero & size)
-      ..addOval(guide);
-    canvas.drawPath(overlay, shade);
+      ..addRect(frame);
+    canvas.drawPath(path, scrim);
+  }
 
-    final border = Paint()
-      ..color = Colors.white.withValues(alpha: 0.92)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2;
-    canvas.drawOval(guide, border);
-    final eyeGuide = Paint()
-      ..color = const Color(0xFFF0C000).withValues(alpha: 0.85)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    final eyeY = guide.top + guide.height * 0.38;
-    canvas.drawLine(
-      Offset(guide.left + 12, eyeY),
-      Offset(guide.right - 12, eyeY),
-      eyeGuide,
+  void _drawFrame(Canvas canvas, Rect frame) {
+    // Soft green glow under a crisp rectangular border — the border is
+    // sharp because the final canvas is a sharp rectangle.
+    canvas.drawRect(
+      frame.inflate(3),
+      Paint()
+        ..color = _green.withValues(alpha: 0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 9
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
+    canvas.drawRect(
+      frame,
+      Paint()
+        ..color = _green.withValues(alpha: 0.95)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // Viewfinder-style corner brackets, slightly brighter than the
+    // border for a modern, instrument-like feel.
+    final bracket = Paint()
+      ..color = Colors.white.withValues(alpha: 0.95)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.5
+      ..strokeCap = StrokeCap.round;
+    final len = math.min(frame.width, frame.height) * 0.09;
+    _drawBracket(canvas, frame.topLeft, 1, 1, len, bracket);
+    _drawBracket(canvas, frame.topRight, -1, 1, len, bracket);
+    _drawBracket(canvas, frame.bottomLeft, 1, -1, len, bracket);
+    _drawBracket(canvas, frame.bottomRight, -1, -1, len, bracket);
+  }
+
+  void _drawBracket(
+      Canvas canvas, Offset corner, int sx, int sy, double len, Paint paint) {
+    canvas.drawLine(corner, corner + Offset(sx * len, 0), paint);
+    canvas.drawLine(corner, corner + Offset(0, sy * len), paint);
+  }
+
+  void _drawMarks(Canvas canvas, Rect frame) {
+    final labelStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.95),
+      fontSize: (frame.height * 0.026).clamp(9.0, 12.0),
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.5,
+      shadows: const [Shadow(blurRadius: 4, color: Colors.black)],
+    );
+
+    // Vertical centerline — subtle, for checking face centering.
+    _dashedLine(
+      canvas,
+      Offset(frame.center.dx, frame.top + frame.height * 0.06),
+      Offset(frame.center.dx, frame.bottom - frame.height * 0.06),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.30)
+        ..strokeWidth = 1,
+    );
+
+    // Head-room tick: where the top of the head should reach.
+    final headY = frame.top + frame.height * _headTopFrac;
+    canvas.drawLine(
+      Offset(frame.center.dx - frame.width * 0.14, headY),
+      Offset(frame.center.dx + frame.width * 0.14, headY),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.65)
+        ..strokeWidth = 1.5,
+    );
+    _label(canvas, 'HEAD TOP', Offset(frame.center.dx, headY), labelStyle,
+        center: true);
+
+    // Eye-level line — the primary alignment target.
+    final eyeY = frame.top + frame.height * _eyeFrac;
+    _dashedLine(
+      canvas,
+      Offset(frame.left, eyeY),
+      Offset(frame.right, eyeY),
+      Paint()
+        ..color = _green
+        ..strokeWidth = 2,
+    );
+    _label(canvas, 'EYE LEVEL', Offset(frame.right - 10, eyeY), labelStyle,
+        alignRight: true);
+
+    // Shoulder-level line.
+    final shoulderY = frame.top + frame.height * _shoulderFrac;
+    _dashedLine(
+      canvas,
+      Offset(frame.left, shoulderY),
+      Offset(frame.right, shoulderY),
+      Paint()
+        ..color = _green.withValues(alpha: 0.55)
+        ..strokeWidth = 1.5,
+    );
+    _label(canvas, 'SHOULDERS', Offset(frame.right - 10, shoulderY),
+        labelStyle, alignRight: true, above: false);
+  }
+
+  void _dashedLine(Canvas canvas, Offset a, Offset b, Paint paint,
+      {double dash = 10, double gap = 7}) {
+    final dx = b.dx - a.dx;
+    final dy = b.dy - a.dy;
+    final total = math.sqrt(dx * dx + dy * dy);
+    if (total <= 0) return;
+    final ux = dx / total;
+    final uy = dy / total;
+    var travelled = 0.0;
+    while (travelled < total) {
+      final end = math.min(travelled + dash, total);
+      canvas.drawLine(
+        a + Offset(ux * travelled, uy * travelled),
+        a + Offset(ux * end, uy * end),
+        paint,
+      );
+      travelled = end + gap;
+    }
+  }
+
+  void _label(
+    Canvas canvas,
+    String text,
+    Offset anchor,
+    TextStyle style, {
+    bool alignRight = false,
+    bool center = false,
+    bool above = true,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    var dx = anchor.dx;
+    if (center) dx -= tp.width / 2;
+    if (alignRight) dx -= tp.width;
+    var dy = anchor.dy;
+    if (above) dy -= tp.height + 4;
+    tp.paint(canvas, Offset(dx, dy));
   }
 
   @override
-  bool shouldRepaint(covariant _PortraitGuidePainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PassportGuidePainter oldDelegate) => false;
 }
 
 class _CameraError extends StatelessWidget {

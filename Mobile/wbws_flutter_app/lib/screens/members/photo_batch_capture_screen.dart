@@ -364,7 +364,7 @@ class _PhotoBatchCaptureScreenState extends State<PhotoBatchCaptureScreen> {
             child: Column(children: [
               // Preview / portrait frame
               AspectRatio(
-                aspectRatio: 4 / 5,
+                aspectRatio: 3 / 4,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black,

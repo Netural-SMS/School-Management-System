@@ -55,7 +55,7 @@ Patterns surveyed:
 
 A **hybrid approach** tuned to high-quality ID-card photo sizes (see §3 below for updated spec):
 
-1. **Quality-first client-side encoding**: capture at a device-tier-appropriate camera resolution, apply orientation, center-crop to 4:5 with Flutter's native renderer, then use native JPEG compression. JPEG is selected for broad print-shop and screen compatibility. Output targets are 960×1200 on low-memory devices, 1200×1500 on mid-tier devices, and 1600×2000 on high-tier devices, with measured downscaling/quality steps under the existing 2 MB cap. JPEG is lossy; this is a deliberate size/compatibility tradeoff, not a promise of mathematically lossless compression.
+1. **Quality-first client-side encoding**: capture at a device-tier-appropriate camera resolution, apply orientation, center-crop to 3:4 (passport ratio) with Flutter's native renderer, then use native JPEG compression. JPEG is selected for broad print-shop and screen compatibility. Output targets are 960×1280 on low-memory devices, 1200×1600 on mid-tier devices, and 1536×2048 on high-tier devices, with measured downscaling/quality steps under the existing 2 MB cap. JPEG is lossy; this is a deliberate size/compatibility tradeoff, not a promise of mathematically lossless compression.
 2. **Whole-file multipart upload with idempotency** (not chunked/TUS) — the client caps images at 2 MB; whole-file retry remains bounded and protected by the existing idempotency key.
 3. **SQLite outbox** exactly mirroring the existing `pending_attendance` pattern: `photo_outbox(client_op_id, member_id, field, local_file_path, sha256, byte_size, state, attempts, next_attempt_at, last_error, server_path, created_at)`.
 4. **Durable worker** (Foreground Service on Android when the user taps "Start syncing", ordinary foreground on iOS) — FIFO with concurrency=2, exponential backoff (15s/30s/60s/2m/5m/15m/1h, capped at 24h), idempotency keys, network class gating (fail fast on "none").
@@ -83,7 +83,7 @@ These photos are used for **printed ID cards, report cards, diplomas, yearbooks,
 
 ### 3.1 Why high-quality JPEG with tier-aware print resolutions
 
-| Use case | Required resolution (300 DPI) | Mid-tier output (1200×1500) covers? |
+| Use case | Required resolution (300 DPI) | Mid-tier output (1200×1600) covers? |
 |---|---|---|
 | Standard ID card (25×35 mm) | 295×413 px | ✅ 4× headroom |
 | Large staff/student ID badge (40×50 mm) | 472×591 px | ✅ 2.5× headroom |
@@ -97,19 +97,19 @@ The `image` package's current `encodeWebP` API is lossless-only and does not acc
 **We do NOT go above 2 MB** per file:
 - 400 members × 2 MB = 800 MB total payload → ~25 min on typical ET 3G (~500 KB/s) → acceptable.
 - Anything larger than 2 MB hurts sync reliability on bad networks for no visible print benefit at our use cases.
-- Hard cap enforced on client (encode-then-measure; lower quality from q=90 to q=88, then downscale in 4:5 steps to 800×1000) and server (reject >2 MB with `413 file_too_large`).
+- Hard cap enforced on client (encode-then-measure; lower quality from q=90 to q=88, then downscale in 3:4-proportioned steps to 800×1066) and server (reject >2 MB with `413 file_too_large`).
 
 ### 3.2 Camera capture parameters
 
 | Parameter | Value | Reason |
 |---|---|---|
 | Capture resolution | Device tier selects `high`, `veryHigh`, or `max`; the camera implementation selects the closest supported camera mode | Keep preview/capture work proportionate to device memory and capability |
-| Output resolution after resize | **960×1200 / 1200×1500 / 1600×2000 px portrait (4:5)** for low/mid/high tiers, reduced if the 2 MB cap requires it | Maintains print-ready detail on low-tier phones while allowing larger high-tier outputs |
+| Output resolution after resize | **960×1280 / 1200×1600 / 1536×2048 px portrait (3:4)** for low/mid/high tiers, reduced if the 2 MB cap requires it | Passport-ratio output maintains print-ready detail on low-tier phones while allowing larger high-tier outputs |
 | Primary format | **JPEG**, quality **90**, with a quality-88 and measured downscale fallback | Broad compatibility with common print software and screens |
 | Face/skin processing | No face retouching or smoothing; use camera exposure compensation, flash, and focus controls | Improve lighting while preserving identity-photo fidelity |
 | Color space | Platform-managed color conversion; no forced profile or face retouching | Consistent print/display color while preserving the captured appearance |
 | EXIF | Apply orientation to pixels and strip source metadata during re-encoding | Avoids sideways photos and prevents source GPS/EXIF metadata from being retained |
-| Quality-control encode loop | Encode at the device-tier target/q90 → measure bytes; retry q88, then downscale in 4:5 steps to 800×1000 if necessary | Enforces the 2 MB cap and returns an explicit error if even the minimum is too large |
+| Quality-control encode loop | Encode at the device-tier target/q90 → measure bytes; retry q88, then downscale in 3:4-proportioned steps to 800×1066 if necessary | Enforces the 2 MB cap and returns an explicit error if even the minimum is too large |
 | File naming | `photo_{member_id}_{field}_{client_op_id}.jpg` for camera captures | Deterministic for debug; extension reflects actual format |
 | Storage location | `getApplicationDocumentsDirectory()/photo_queue/` (iOS: NSDocumentDirectory with `NSURLIsExcludedFromBackupKey`=YES so queued photos don't fill iCloud; Android: `filesDir` not cacheDir) | Survives reboot; NOT auto-cleared by OS |
 | Max disk budget | **4 GB** hard cap (≈ 2000 photos at 2 MB each) — LRU evict only fully-synced photos older than 30 days | Defensive against filling device; 4 GB is safe for any modern phone |
@@ -419,7 +419,7 @@ This is why **ZIP export is the primary workflow** for rural/EDGE scenarios: on 
 | Phase | Work | Effort (engineer-days) | Risk |
 |---|---|---|---|
 | **P1 — Foundation** | Schema v35 migration with updated `photo_outbox` table (format, width/height, operator, device_id, replaced_by, conflict columns); per-install device_id generation; PhotoOutboxService (SQLite CRUD, idempotency keys, retry policy, retake/replaced_by semantics, discard+undo) modeled on comm_outbox; unit tests for queue state machine | 3 | Low |
-| **P2 — Capture** | In-app `camera` preview; tap-to-focus, flash/exposure/zoom controls; EXIF correction and 4:5 crop with Flutter's native renderer; native quality-controlled JPEG compression, tier-aware output dimensions, and a measured 2 MB cap; review/retake and offline enqueue | 5 | Medium — native camera lifecycle and image processing |
+| **P2 — Capture** | In-app `camera` preview with a passport-grade 3:4 framing guide (green frame, eye/shoulder level marks); tap-to-focus, flash/exposure/zoom controls; EXIF correction and 3:4 crop with Flutter's native renderer; native quality-controlled JPEG compression, tier-aware output dimensions, and a measured 2 MB cap; review/retake and offline enqueue | 5 | Medium — native camera lifecycle and image processing |
 | **P3 — Backend** | `/api/v1/members/{id}/photo` endpoint with Idempotency-Key, sha256 verification, WebP/JPEG MIME validation, 2 MB cap; GD/Imagick WebP capability probe; **photo_upload_receipts + member_photo_candidates tables**; multi-photographer conflict detection (store as candidate, do not auto-overwrite; same-operator retake auto-wins); reuse MemberFileService for storage; add permission/routing; new admin Photo Review page (grid of candidates per member with "Set as current" action) | 5 | Medium — candidate review UI |
 | **P4 — Sync worker** | PhotoSyncWorker (FIFO, concurrency=2, exponential backoff, connectivity gating, **sync-disabled-by-default gate**, cellular-vs-wifi policy gate, idempotent multipart with new headers (X-Photo-Format/Device-Id/Operator-Id), handle 200+conflict:true response, foreground notification on Android); ApiService.multipartUpload with idempotency key; JPEG fallback on 501 webp_not_supported | 4 | Medium |
 | **P5 — UI** | Batch roster screen with per-member status dots (⚪/🟡/🟢/⚠️/🔴); **photo_sync_panel redesigned** with master sync-ON/OFF toggle, cellular toggle, Start Sync button, always-available Export ZIP button, progress/ETA, pause/cancel; photo_queue_screen for failures/retry/conflict_pending; persistent Members-tab badge; settings screen for sync prefs | 5 | Medium — default-off policy UI clarity |

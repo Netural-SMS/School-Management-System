@@ -79,7 +79,7 @@ body {
   padding: 2px 8px; border-radius: 10px; font-weight: 700; margin-right: 6px;
   font-size: 11px; }
 .thumb { background: #000; border-radius: 8px; overflow: hidden;
-  aspect-ratio: 4/5; display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center;
   position: relative; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb .ph { color: rgba(255,255,255,.5); font-size: 12px; }

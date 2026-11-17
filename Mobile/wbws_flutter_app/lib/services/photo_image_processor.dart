@@ -13,9 +13,9 @@ class PhotoOutputSize {
   const PhotoOutputSize(this.width, this.height);
 
   static PhotoOutputSize forTier(DeviceTier tier) => switch (tier) {
-        DeviceTier.low => const PhotoOutputSize(960, 1200),
-        DeviceTier.mid => const PhotoOutputSize(1200, 1500),
-        DeviceTier.high => const PhotoOutputSize(1600, 2000),
+        DeviceTier.low => const PhotoOutputSize(960, 1280),
+        DeviceTier.mid => const PhotoOutputSize(1200, 1600),
+        DeviceTier.high => const PhotoOutputSize(1536, 2048),
       };
 }
 
@@ -36,7 +36,7 @@ class PhotoImageProcessor {
   static final PhotoImageProcessor instance = PhotoImageProcessor._();
 
   static const int hardCapBytes = 2 * 1024 * 1024;
-  static const double targetAspect = 4 / 5;
+  static const double targetAspect = 3 / 4;
 
   Future<ProcessedPhoto> encode(
     String sourcePath,

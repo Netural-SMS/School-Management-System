@@ -506,7 +506,7 @@ class _ReviewPanel extends StatelessWidget {
         Expanded(
           child: Center(
             child: AspectRatio(
-              aspectRatio: 4 / 5,
+              aspectRatio: 3 / 4,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
