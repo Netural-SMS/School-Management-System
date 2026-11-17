@@ -9,7 +9,7 @@ void main() {
   late Directory dir;
   setUpAll(() async {
     sqfliteFfiInit();
-    dir = await Directory.systemTemp.createTemp('receipt-v40-');
+    dir = await Directory.systemTemp.createTemp('receipt-v43-');
     await databaseFactoryFfi.setDatabasesPath(dir.path);
     sqflite.databaseFactory = databaseFactoryFfi;
   });
@@ -18,7 +18,7 @@ void main() {
     await dir.delete(recursive: true);
   });
 
-  test('v41 creates attendance_sync_receipt with correct schema', () async {
+  test('v43 retains attendance_sync_receipt with correct schema', () async {
     final db = LocalDb();
     final raw = await db.database;
     final ver = await raw.rawQuery('PRAGMA user_version');
