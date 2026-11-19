@@ -5,6 +5,18 @@ script runs the full test suite (including the version-sync pin) so
 the version below must always match `pubspec.yaml` +
 `AppConfig.appVersion`.
 
+## 1.8.5 (build 48) — Offline photo capture, adaptive framing & sync
+
+- **Adaptive portrait capture:** offline on-device ML Kit face and pose
+  landmarks drive the 3:4 passport capture guide (head alignment, eyes level,
+  shoulders visible), with full-bleed camera preview and gallery import.
+- **Offline photo outbox & ZIP airlock:** captured member photos queue
+  durably in SQLite (schema v43), upload with HMAC device pairing and
+  exponential backoff, or export as a signed ZIP bundle saved to
+  `Downloads/FKSS` for air-gapped review in `photo_dept`.
+- **UI & build updates:** updated camera/image dependencies, Android
+  foreground sync service, and iOS background/iCloud exclusion handling.
+
 ## 1.7.5 (build 42) — Take every section of the same day
 
 - Submitting one section no longer freezes the section picker: a teacher can

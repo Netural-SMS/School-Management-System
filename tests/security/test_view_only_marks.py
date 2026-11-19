@@ -117,7 +117,7 @@ class MobilePhase2(unittest.TestCase):
 
     def test_release_notes_describe_1_7_3(self):
         n = (FL / 'RELEASE_NOTES.md').read_text(encoding='utf-8')
-        self.assertTrue(n.split('## ')[1].startswith('1.7.5 (build 42)'))
+        self.assertTrue(n.split('## ')[1].startswith('1.8.5 (build 48)'))
         for s in ('Live limit', 'Did not take', 'View only', 'Result card'):
             self.assertIn(s, n)
 

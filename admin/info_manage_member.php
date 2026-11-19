@@ -444,6 +444,7 @@ $fullName = trim($m['student_name'] . ' ' . $m['father_name'] . ' ' . $m['grandf
 
 
 <style>
+:root{--z-content:1;--z-sticky:100;--z-header:200;--z-nav:900;--z-dock:950;--z-fab:1000;--z-toast:1100;--z-overlay:1200;--z-impersonate:1300;--z-tooltip:1400}
 /* ============================================================
    FKSS Member Profile — on-brand maroon + gold
    Uses the design-system CSS variables (themes/fkss/theme.css):
