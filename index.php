@@ -24,11 +24,12 @@ if (file_exists($_cmsConfigPath)) {
         $cms['social']   = $_safeFetch("SELECT * FROM cms_social_links WHERE is_active=1 ORDER BY sort_order, id");
     }
 }
+$schoolLogoUrl = function_exists('ssms_school_logo_url') ? ssms_school_logo_url() : SCHOOL_LOGO_PATH;
 ?>
 <!DOCTYPE html>
 <html lang="am">
 <head>
-<link rel="icon" href="<?= SCHOOL_LOGO_PATH ?>">
+<link rel="icon" href="<?= htmlspecialchars($schoolLogoUrl, ENT_QUOTES, 'UTF-8') ?>">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= SCHOOL_NAME_AMHARIC . ' - ' . SCHOOL_TRANSLATION_EN . ' ' . SCHOOL_TYPE; ?></title>
@@ -64,7 +65,7 @@ if (file_exists($_cmsConfigPath)) {
             border-radius: 50%;
             background: #fff;
             border: 2px solid var(--fkss-gold);
-            background-image: url('<?= SCHOOL_LOGO_PATH ?>');
+            background-image: url('<?= htmlspecialchars($schoolLogoUrl, ENT_QUOTES, 'UTF-8') ?>');
             background-size: 80%;
             background-position: center;
             background-repeat: no-repeat;
