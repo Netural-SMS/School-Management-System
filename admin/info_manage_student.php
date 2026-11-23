@@ -951,18 +951,13 @@ $mmRoles = [
                     <?php endif; ?>
                     <span><i class="fas fa-<?= $genderIcon ?>"></i> <?= $genderLabel ?></span>
                     <?php if ($dobDisplay): ?><span><i class="fas fa-cake-candles"></i> <?= e($dobDisplay) ?><?php if (!empty($m['age'])) echo ' · '.(int)$m['age'].' ዓመት'; ?></span><?php endif; ?>
-                    <?php
-                        $secLabel = trim((string)( ?? '')) ?: trim((string)( ?? ''));
-                        if ($secLabel !== ''): ?>
-                        <span><i class="fas fa-layer-group"></i> <?= e($secLabel) ?></span>
-                    <?php endif; ?>
                     <?php if ($phonePrimary !== ''): ?><span><i class="fas fa-phone"></i> <a href="tel:<?= e($phonePrimary) ?>"><?= e($phonePrimary) ?></a></span><?php endif; ?>
                 </div>
                 <div class="mm-pills">
                     <?php $st = (string)($m['status'] ?? 'active'); ?>
                     <span class="mm-pill dot status-<?= e($st) ?>"><?= e(ucfirst($st)) ?></span>
                     <span class="mm-pill maroon"><?= e($regTypeMap[$m['registration_type'] ?? 'waiting'] ?? ucfirst((string)($m['registration_type'] ?? 'waiting'))) ?> registration</span>
-                    <span class="mm-pill"><?= e($memTypeMap[ ?? 'regular'] ?? ucfirst((string)( ?? 'regular'))) ?></span>
+                    <span class="mm-pill"><?= e(ucfirst((string)($m['registration_type'] ?? 'waiting'))) ?></span>
                     <span class="mm-pill gold"><?= e(ucfirst((string)($m['membership_tier'] ?? 'temporary'))) ?> tier</span>
                 </div>
 
