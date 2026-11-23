@@ -3185,21 +3185,14 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
     }
 
     function updateRegistrationConditionalSections() {
-        const  = (document.getElementById('memberTypeFieldFull') || {}).value || 'regular';
         const tier = (document.getElementById('membershipTierField') || {}).value || 'permanent';
-        const isHonorary = ( === 'honorary');
         const isTemporary = (tier === 'temporary');
-        // Positions section: only for regular/special_regular AND permanent tier
+        // Positions section: only for permanent tier
         const posSec = document.getElementById('positionPickerSection');
         if (posSec) {
-            if (isHonorary || isTemporary) posSec.classList.add('hidden');
+            if (isTemporary) posSec.classList.add('hidden');
             else posSec.classList.remove('hidden');
         }
-        // Class assignment: hidden for honorary (already permanent-only gated for tier)
-        document.querySelectorAll('[data-conditional="class"]').forEach(el => {
-            if (isHonorary) el.classList.add('hidden');
-            else if (!isTemporary) el.classList.remove('hidden');
-        });
     }
 
     function previewImage(input, imgId, placeholderId) {

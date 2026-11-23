@@ -2587,16 +2587,12 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
         }
     }
 
-    function 
+    function selectStudentType(type, btn) {
         if (hidden) hidden.value = type;
 
         const roleSection = document.getElementById('roleFlagsSection');
         if (roleSection) {
-            if (type === 'special_regular') {
-                roleSection.classList.remove('hidden');
-            } else {
-                roleSection.classList.add('hidden');
-            }
+            roleSection.classList.add('hidden');
         }
 
         document.querySelectorAll('.student-type-btn').forEach(b => {

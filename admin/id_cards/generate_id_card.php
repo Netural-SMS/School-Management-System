@@ -105,7 +105,6 @@ try {
         && $student['status'] === 'active'
         && (
             in_array($student['registration_type'], ['direct', 'transfer'], true)
-            || $student['student_type'] === 'honorary'
             || ($student['membership_tier'] ?? '') === 'permanent'
         );
     if (!$eligible) {
@@ -119,7 +118,7 @@ try {
             if ($segments !== null && $segments !== []) {
                 $memberCode = IdentityCodeService::allocateStaff($conn, $segments);
             } else {
-                $letter = StudentCategory::letterFor((string)($student['age_group'] ?? ''));
+                $letter = StudentCategory::letterFor((string)( ?? ''));
                 if ($letter !== null) {
                     $memberCode = IdentityCodeService::allocateStudent($conn, $letter);
                 }

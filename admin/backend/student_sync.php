@@ -26,7 +26,7 @@ function syncMemberType(mysqli $conn, int $studentId, array $overrides = []): ar
     $stmt->close();
 
     if (!$student) return ['changed' => false, 'old_type' => '', 'new_type' => ''];
-    $type = $student['student_type'] ?? 'regular';
+    $type =  ?? 'regular';
     return ['changed' => false, 'old_type' => $type, 'new_type' => $type];
 }
 
@@ -108,11 +108,8 @@ function getMemberRoleSummary(array $student): array {
     
     return [
         'roles' => $roles,
-        'is_special' => ($student['student_type'] ?? '') === 'special_regular',
-        'type_label' => match($student['student_type'] ?? 'regular') {
-            'special_regular' => 'Special Regular',
-            'honorary' => 'Honorary',
-            default => 'Regular'
+        'is_special' => false,
+        'type_label' => 'Regular'
         }
     ];
 }

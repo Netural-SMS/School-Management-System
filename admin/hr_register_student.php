@@ -189,7 +189,6 @@ function field($n, $d = '') {
 // ╚══════════════════════════════════════════════════════════╝
 
 $registration_type = $registrationPolicy['registration_type'];
-$student_type       = $registrationPolicy['student_type'];
 $status            = $registrationPolicy['status'];
 
 // --- Single Full Name input (required). Split into parts for DB compatibility. ---
@@ -261,7 +260,7 @@ if ($age_group === null) {
     // (e.g. quick-add section pick). M4: a posted value that is not a known
     // code used to be silently stored as NULL (success-yet-no-group); reject
     // it instead so the caller fixes the value.
-    $postedGroupRaw = trim((string)field('age_group'));
+    $postedGroupRaw = trim((string));
     $postedGroup = \App\Services\StudentCategory::normalizeGroup($postedGroupRaw);
     if ($postedGroupRaw !== '' && $postedGroup === null) {
         // Pre-try guard: jsonExit directly like the other guards above
@@ -286,7 +285,7 @@ if ($age_group === null) {
 // can keep the stored values instead of wiping them with nulls. Partial
 // dates (e.g. year-only) never overwrite a stored full birth date.
 $dobFullSubmitted = ($dob_day > 0 && $dob_month > 0 && $dob_year > 0 && $date_of_birth !== null);
-$postedGroupExplicit = \App\Services\StudentCategory::normalizeGroup(field('age_group'));
+$postedGroupExplicit = \App\Services\StudentCategory::normalizeGroup();
 
 // Address & Education
 $education_level     = field('education_level');

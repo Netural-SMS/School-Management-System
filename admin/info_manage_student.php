@@ -128,8 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
-    $student_type       = field('student_type', $cur['student_type'] ?? 'regular');
-    // Student status (students.status) is a manual HR / Information decision
+        // Student status (students.status) is a manual HR / Information decision
     // (Attendance alerting requirements §4): only those roles may change it,
     // only between active and inactive, and archived students are left alone.
     // Every other role keeps the stored value regardless of what was posted.
@@ -174,8 +173,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     // Respect explicitly provided values; never auto-override
-    $age_group       = field('age_group', $cur['age_group'] ?? null) ?: null;
-    $current_section = field('current_section', $cur['current_section'] ?? null) ?: null;
     
     $education_level  = field('education_level', $cur['education_level'] ?? '');
     $spiritual_education = field('spiritual_education', $cur['spiritual_education'] ?? '');
@@ -240,10 +237,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // update (PositionSyncService), keeping every old consumer in sync.
         $motherSet = $motherColExists ? 'mother_name=?, ' : '';
         $sql = "UPDATE students SET
-            registration_type=?, student_type=?, status=?,
+            registration_type=?, status=?,
             student_name=?, baptismal_name=?, father_name=?, $motherSet grandfather_name=?,
             full_name_am=?, gender=?,
-            dob_ec_day=?, dob_ec_month=?, dob_ec_year=?, date_of_birth=COALESCE(?, date_of_birth), age=?, age_group=?, current_section=?,
+            dob_ec_day=?, dob_ec_month=?, dob_ec_year=?, date_of_birth=COALESCE(?, date_of_birth), age=?,
             education_level=?, spiritual_education=?, work_profession=?,
             city=?, sub_city=?, woreda=?, mender=?, block_number=?, house_number=?,
             phone_number=?, phone_primary=?, alt_phone_number=?,
@@ -258,14 +255,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $ageVal = $age !== null ? $age : 0;
         $bindValues = [
-            $registration_type, $student_type, $status,
+            $registration_type, $status,
             $student_name, $baptismal_name, $father_name,
         ];
         if ($motherColExists) $bindValues[] = $mother_name;
         $bindValues = array_merge($bindValues, [
             $grandfather_name,
             $full_name_am, $gender,
-            $dob_day, $dob_month, $dob_year, $dob_gregorian, $ageVal, $age_group, $current_section,
+            $dob_day, $dob_month, $dob_year, $dob_gregorian, $ageVal,
             $education_level, $spiritual_education, $work_profession,
             $city, $sub_city, $woreda, $mender, $block_number, $house_number,
             $phone_number, $phone_number, $alt_phone_number,

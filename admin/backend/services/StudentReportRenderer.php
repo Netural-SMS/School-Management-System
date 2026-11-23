@@ -66,7 +66,7 @@ final class StudentReportRenderer
                 self::spreadsheetSafe($student['grandfather_name']),
                 self::spreadsheetSafe($student['baptismal_name']),
                 self::spreadsheetSafe($student['gender']),
-                self::spreadsheetSafe($student['age_group']),
+                self::spreadsheetSafe(),
                 self::spreadsheetSafe($student['phone_number']),
                 self::spreadsheetSafe($student['alt_phone_number']),
                 self::spreadsheetSafe($student['guardian_name']),
@@ -79,7 +79,7 @@ final class StudentReportRenderer
                 self::spreadsheetSafe($student['education_level']),
                 self::spreadsheetSafe($student['registration_type']),
                 self::spreadsheetSafe(
-                    $memberTypeLabels[(string)$student['student_type']] ?? $student['student_type']
+                    $memberTypeLabels[(string)] ?? 
                 ),
                 self::spreadsheetSafe($student['status']),
             ]);
@@ -213,11 +213,11 @@ final class StudentReportRenderer
     private static function tableRow(array $student, int $number, bool $statusStyle): string
     {
         $name = trim($student['student_name'] . ' ' . $student['father_name'] . ' ' . $student['grandfather_name']);
-        $ageLetter = StudentCategory::letterFor($student['age_group'] ?? null);
-        $ageSection = StudentCategory::sectionAm($student['age_group'] ?? null);
+        $ageLetter = StudentCategory::letterFor( ?? null);
+        $ageSection = StudentCategory::sectionAm( ?? null);
         $age = $ageSection !== null && $ageLetter !== null
             ? $ageSection . ' (' . $ageLetter . ')'
-            : (string)($student['age_group'] ?? '');
+            : (string)( ?? '');
         $gender = $student['gender'] === 'male' ? 'M' : ($student['gender'] === 'female' ? 'F' : '');
         $status = self::h($student['status']);
         if ($statusStyle) {

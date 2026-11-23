@@ -24,8 +24,7 @@ $stats = ['total'=>0,'active'=>0,'warning'=>0,'inactive'=>0,'pending'=>0,'transf
 if(isset($conn)){
     $r=$conn->query("SELECT COUNT(*) t,SUM(status='active') a,SUM(status='warning') w,SUM(status='inactive') i,SUM(registration_type='waiting') p,SUM(registration_type='transfer') tr,SUM(registration_type='direct') d,SUM(gender='male') m,SUM(gender='female') f FROM students WHERE status!='archived'");
     if($r&&$row=$r->fetch_assoc()){$stats['total']=(int)($row['t']??0);$stats['active']=(int)($row['a']??0);$stats['warning']=(int)($row['w']??0);$stats['inactive']=(int)($row['i']??0);$stats['pending']=(int)($row['p']??0);$stats['transfer']=(int)($row['tr']??0);$stats['direct']=(int)($row['d']??0);$stats['male']=(int)($row['m']??0);$stats['female']=(int)($row['f']??0);}
-    $r=$conn->query("SELECT COUNT(DISTINCT current_section) c FROM students WHERE status!='archived' AND current_section IS NOT NULL AND current_section!=''");
-    if($r&&$row=$r->fetch_assoc())$stats['sections']=(int)($row['c']??0);
+    $stats['sections']=0;
     $r=$conn->query("SELECT SUM(is_teacher=1) t FROM students WHERE status!='archived'");
     if($r&&$row=$r->fetch_assoc())$stats['teachers']=(int)($row['t']??0);
     $r=$conn->query("SELECT COUNT(*) c FROM users WHERE is_active=1");
@@ -42,7 +41,7 @@ $weeklyAtt=[];
 if(isset($conn)){try{for($i=6;$i>=0;$i--){$d=date('Y-m-d',strtotime("-$i days"));$r=$conn->query("SELECT SUM(status='present') p,SUM(status='absent') a,SUM(status='late') l,COUNT(*) t FROM attendance WHERE attendance_date='$d'");$row=$r?$r->fetch_assoc():null;$weeklyAtt[]=['date'=>$d,'day'=>date('D',strtotime($d)),'present'=>(int)($row['p']??0),'absent'=>(int)($row['a']??0),'late'=>(int)($row['l']??0),'total'=>(int)($row['t']??0)];}}catch(Exception $e){}}
 
 // ── Section distribution ──
-$sectionDist=[];if(isset($conn)){$r=$conn->query("SELECT COALESCE(current_section,'Unassigned') s,COUNT(*) c FROM students WHERE status!='archived' GROUP BY current_section ORDER BY c DESC");if($r)while($row=$r->fetch_assoc())$sectionDist[]=$row;}
+$sectionDist=[];
 
 // ── Users list ──
 $usersList=[];if(isset($conn)){$r=$conn->query("SELECT id,username,full_name,role,is_active,created_at,last_login FROM users ORDER BY id DESC");if($r)while($row=$r->fetch_assoc()){$row['status']=$row['is_active']?'active':'inactive';$usersList[]=$row;}}
@@ -393,12 +392,10 @@ renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'li
 <div><label class="flbl">Gender</label><select id="fGender" class="inp" style="width:100%" onchange="applyFilters()"><option value="">All</option><option value="male">Male</option><option value="female">Female</option></select></div>
 <div><label class="flbl">Section</label><select id="fSection" class="inp" style="width:100%" onchange="applyFilters()"><option value="">All</option></select></div>
 <div><label class="flbl">Reg Type</label><select id="fRegType" class="inp" style="width:100%" onchange="applyFilters()"><option value="">All</option><option value="waiting">Waiting</option><option value="transfer">Transfer</option><option value="direct">Direct</option></select></div>
-<div><label class="flbl">Student Type</label><select id="fMemberType" class="inp" style="width:100%" onchange="applyFilters()"><option value="">All</option><option value="regular">Regular</option><option value="special_regular">Special Regular</option><option value="honorary">Honorary</option></select></div>
-<div><label class="flbl">Age Group</label><select id="fAgeGroup" class="inp" style="width:100%" onchange="applyFilters()"><option value="">All</option><?php foreach (\App\Services\StudentCategory::sections() as $saCode => $saSec): ?><option value="<?= $saCode ?>"><?= e($saSec['am']) ?> (<?= e($saSec['letter']) ?>)</option><?php endforeach; ?></select></div>
 <div><label class="flbl">City</label><input autocomplete="off" type="text" id="fCity" class="inp" style="width:100%" placeholder="City..." oninput="applyFilters()"></div>
 </div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.3rem"><div id="resultCount" style="font-size:.72rem;color:var(--dim)">Loading...</div><div style="display:flex;align-items:center;gap:.4rem"><label style="font-size:.6rem;color:var(--dim)">Per page:</label><select id="perPage" class="inp bs" onchange="saveMemberPerPage();applyFilters()" style="width:auto" aria-label="Rows per page"><option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="200">200</option></select></div></div>
-<div class="tw"><table id="mTbl"><thead><tr><th data-col="student_code" onclick="sortBy('student_code')">Code</th><th data-col="student_name" onclick="sortBy('student_name')">Name</th><th data-col="father_name" onclick="sortBy('father_name')">Father</th><th data-col="gender" onclick="sortBy('gender')">Gen</th><th data-col="age_group" onclick="sortBy('age_group')">Age</th><th data-col="current_section" onclick="sortBy('current_section')">Section</th><th data-col="status" onclick="sortBy('status')">Status</th><th data-col="registration_type" onclick="sortBy('registration_type')">Reg</th><th data-col="phone_number" onclick="sortBy('phone_number')">Phone</th><th data-col="city" onclick="sortBy('city')">City</th><th data-col="created_at" onclick="sortBy('created_at')">Date</th><th>⋯</th></tr></thead><tbody id="mBody"></tbody></table></div>
+<div class="tw"><table id="mTbl"><thead><tr><th data-col="student_code" onclick="sortBy('student_code')">Code</th><th data-col="student_name" onclick="sortBy('student_name')">Name</th><th data-col="father_name" onclick="sortBy('father_name')">Father</th><th data-col="gender" onclick="sortBy('gender')">Gen</th><th data-col="status" onclick="sortBy('status')">Status</th><th data-col="registration_type" onclick="sortBy('registration_type')">Reg</th><th data-col="phone_number" onclick="sortBy('phone_number')">Phone</th><th data-col="city" onclick="sortBy('city')">City</th><th data-col="created_at" onclick="sortBy('created_at')">Date</th><th>⋯</th></tr></thead><tbody id="mBody"></tbody></table></div>
 <div id="pag" style="display:flex;justify-content:center;gap:.35rem;margin-top:.75rem;flex-wrap:wrap"></div>
 </div>
 
@@ -679,7 +676,7 @@ async function loadMembers(page=1,append=false){
     const rc=document.getElementById('resultCount');
     const pp=memberPerPage();
     const params=new URLSearchParams({page:String(page),limit:String(pp),sort:sortCol,direction:sortDir});
-    const filters={fSearch:'q',fStatus:'status',fGender:'gender',fSection:'current_section',fRegType:'registration_type',fMemberType:'student_type',fAgeGroup:'age_group',fCity:'city'};
+    const filters={fSearch:'q',fStatus:'status',fGender:'gender',fRegType:'registration_type',fCity:'city'};
     Object.entries(filters).forEach(([id,key])=>{const value=document.getElementById(id)?.value.trim()||'';if(value)params.set(key,value);});
     if(!memberOptionsLoaded)params.set('include_options','1');
     if(page>1)params.set('include_total','0');

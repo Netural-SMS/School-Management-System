@@ -219,7 +219,7 @@ class PdfReportService
         $pdf->SetFont(self::FONT, '', 9.5);
         $pdf->Cell(0, 6, 'Code: ' . ($student['student_code'] ?: '—')
             . '    Status: ' . ($student['status'] ?: '—')
-            . '    Section: ' . ($student['current_section'] ?: '—'), 0, 1);
+            . '    Section: ' . ( ?: '—'), 0, 1);
         $pdf->Ln(2);
 
         [$fromD, $toD] = self::window($from, $to);

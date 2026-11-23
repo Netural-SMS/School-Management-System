@@ -575,7 +575,7 @@ try {
                 'student_code_prefix' => '',
                 'student_code_digits' => '4',
                 'auto_generate_code' => '1',
-                '''default_registration_type' => 'direct',
+                'default_registration_type' => 'direct',
                 'id_card_auto_generate' => '0',
                 'phone_required' => '0',
                 'guardian_required_under' => '14',
@@ -615,7 +615,7 @@ try {
             $allowed = [
                 'dept_name_en', 'dept_name_am', 'church_name_en', 'church_name_am',
                 'dept_description', 'student_code_prefix', 'student_code_digits',
-                'auto_generate_code', '''default_registration_type', 'id_card_auto_generate', 'phone_required',
+                'auto_generate_code', 'default_registration_type', 'id_card_auto_generate', 'phone_required',
                 'guardian_required_under'
             ];
 
