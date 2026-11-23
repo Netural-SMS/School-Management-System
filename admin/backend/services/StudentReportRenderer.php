@@ -213,11 +213,7 @@ final class StudentReportRenderer
     private static function tableRow(array $student, int $number, bool $statusStyle): string
     {
         $name = trim($student['student_name'] . ' ' . $student['father_name'] . ' ' . $student['grandfather_name']);
-        $ageLetter = StudentCategory::letterFor( ?? null);
-        $ageSection = StudentCategory::sectionAm( ?? null);
-        $age = $ageSection !== null && $ageLetter !== null
-            ? $ageSection . ' (' . $ageLetter . ')'
-            : (string)( ?? '');
+        $age = '';
         $gender = $student['gender'] === 'male' ? 'M' : ($student['gender'] === 'female' ? 'F' : '');
         $status = self::h($student['status']);
         if ($statusStyle) {

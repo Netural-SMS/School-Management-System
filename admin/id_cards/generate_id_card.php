@@ -118,14 +118,12 @@ try {
             if ($segments !== null && $segments !== []) {
                 $memberCode = IdentityCodeService::allocateStaff($conn, $segments);
             } else {
-                $letter = StudentCategory::letterFor((string)( ?? ''));
-                if ($letter !== null) {
-                    $memberCode = IdentityCodeService::allocateStudent($conn, $letter);
-                }
+                // Age group/section removed for Endrias Film College —
+                // student identity codes are allocated via staff segments only.
             }
         }
         if ($memberCode === '') {
-            throw new DomainException('This student does not have an identity code yet. Assign an age group or position first.');
+            throw new DomainException('This student does not have an identity code yet. Assign a position first.');
         }
         $statement = $pdo->prepare('UPDATE students SET student_code = ? WHERE id = ?');
         $statement->execute([$memberCode, (int)$studentId]);

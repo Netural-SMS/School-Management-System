@@ -157,7 +157,7 @@ final class PositionSyncService
                 $insert->close();
             }
 
-            $newCode = self::computeCode($conn, $studentId, (string)( ?? ''));
+            $newCode = self::computeCode($conn, $studentId, '');
 
             $update = $conn->prepare('UPDATE students SET student_code = ? WHERE id = ?');
             $update->bind_param('si', $newCode, $studentId);

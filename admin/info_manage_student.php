@@ -1304,7 +1304,7 @@ $mmRoles = [
                         <div class="mm-card-body">
                             <div class="mm-chips">
                                 <span class="mm-chip maroon"><?= e($regTypeMap[$m['registration_type'] ?? 'waiting'] ?? ucfirst((string)($m['registration_type'] ?? 'waiting'))) ?></span>
-                                <span class="mm-chip"><?= e($memTypeMap[ ?? 'regular'] ?? ucfirst((string)( ?? 'regular'))) ?></span>
+                                <span class="mm-chip">Regular</span>
                                 <span class="mm-chip blue"><?= e($secLabel !== '' ? $secLabel : 'Unassigned') ?></span>
                                 <span class="mm-chip gold"><?= e(ucfirst((string)($m['membership_tier'] ?? 'temporary'))) ?> tier</span>
                             </div>
@@ -1401,21 +1401,8 @@ $mmRoles = [
                                         </div>
                                     </div>
                                 </div>
-                                <div class="mm-row">
-                                    <div class="mm-form-group">
-                                        <label class="mm-label">Current Section <span class="hint">Class / age group assignment</span></label>
-                                        <input type="text" name="current_section" value="<?= e( ?? '') ?>" class="mm-input" placeholder="e.g. Grade 5, Youth…" autocomplete="off">
-                                    </div>
-                                    <div class="mm-form-group">
-                                        <label class="mm-label">Age Group <span class="hint">(if different from section)</span></label>
-                                        <select name="age_group" class="mm-input">
-                                            <option value="">— Same as section —</option>
-                                            <?php foreach (\App\Services\StudentCategory::sections() as $hrCode => $hrSec): ?>
-                                            <option value="<?= e($hrCode) ?>" <?= sel( ?? '', $hrCode) ?>><?= e($hrSec['am']) ?> (<?= e($hrSec['ages']) ?>)</option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                </div>
+<!-- Section/Age Group removed for Endrias Film College -->
+
                             </div>
                         </div>
 

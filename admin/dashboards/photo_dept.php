@@ -667,12 +667,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <thead><tr><th>#</th><th>Name</th><th>Code</th><th>Section</th><th>Gender</th></tr></thead>
                     <tbody>
                     <?php foreach ($missing as $i => $m):
-                        switch ( ?? '') {
-                            case '7_13':    $ageLabel = 'Children (A)'; break;
-                            case '14_17':   $ageLabel = 'Youth (B)'; break;
-                            case '18_plus': $ageLabel = 'Adults (C)'; break;
-                            default:        $ageLabel = '—';
-                        }
+                        $ageLabel = '—';
                     ?>
                         <tr>
                             <td class="text-slate-400 text-xs"><?= $i+1 ?></td>

@@ -446,9 +446,7 @@ class TestStudentSeed
         if ($row['age'] !== null && $row['age'] !== '') {
             $data['age'] = (int)$row['age'];
         }
-        if (!empty()) {
-            $data['age_group'] = ;
-        }
+        // age_group column removed for Endrias Film College
         $out = [];
         foreach ($data as $k => $v) {
             if (in_array($k, $cols, true)) {

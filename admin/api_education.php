@@ -972,26 +972,7 @@ switch ($action) {
         $nameEn = trim($_POST['class_name_en'] ?? '');
         $code = trim($_POST['class_code'] ?? '');
         $level = (int)($_POST['level_order'] ?? 0);
-        $section = trim($_POST['section'] ?? '');
-        $ageGroup = trim((string)($_POST['age_group'] ?? ''));
-        // P71 — single source of truth (App\Services\StudentCategory):
-        // section IS the age group's name. The UI posts one Section/Age
-        // select (the age_group code); the section name is always DERIVED
-        // server-side so the stored pair can never disagree. A legacy
-        // client that posts only a section name still resolves through
-        // the canonical map; unknown values are rejected, never guessed.
-        if ($ageGroup !== '' && !in_array($ageGroup, StudentCategory::groups(), true)) {
-            echo json_encode(['status' => 'error', 'message' => 'Unknown section / age group. Please pick one of the sections listed in the form.']);
-            exit;
-        }
-        if ($ageGroup === '') {
-            $ageGroup = StudentCategory::ageGroupForSectionAm($section) ?? '';
-        }
-        $section = $ageGroup !== '' ? (StudentCategory::sectionAm($ageGroup) ?? '') : '';
-        // ENUM columns reject empty strings — convert to NULL
-        if ($ageGroup === '' || $ageGroup === null) {
-            $ageGroup = null;
-        }
+        // Section/Age Group removed for Endrias Film College
         $desc = trim($_POST['description'] ?? '');
         $isActive = (int)($_POST['is_active'] ?? 1);
         if (!$name || !$code) {
@@ -999,11 +980,11 @@ switch ($action) {
             exit;
         }
         if ($id > 0) {
-            $stmt = $conn->prepare("UPDATE classes SET class_name=?,class_name_en=?,class_code=?,level_order=?,section=?,age_group=?,description=?,is_active=? WHERE id=?");
-            $stmt->bind_param("sssisssii", $name, $nameEn, $code, $level, $section, $ageGroup, $desc, $isActive, $id);
+            $stmt = $conn->prepare("UPDATE classes SET class_name=?,class_name_en=?,class_code=?,level_order=?,description=?,is_active=? WHERE id=?");
+            $stmt->bind_param("ssssii", $name, $nameEn, $code, $level, $desc, $isActive, $id);
         } else {
-            $stmt = $conn->prepare("INSERT INTO classes (class_name,class_name_en,class_code,level_order,section, description,is_active) VALUES (?,?,?,?,?,?,?,?)");
-            $stmt->bind_param("sssisssi", $name, $nameEn, $code, $level, $section, $ageGroup, $desc, $isActive);
+            $stmt = $conn->prepare("INSERT INTO classes (class_name,class_name_en,class_code,level_order,description,is_active) VALUES (?,?,?,?,?,?,?)");
+            $stmt->bind_param("ssssii", $name, $nameEn, $code, $level, $desc, $isActive);
         }
         if ($stmt->execute()) {
             echo json_encode(['status' => 'success', 'message' => 'Class saved', 'id' => $id ?: $conn->insert_id]);
@@ -1991,7 +1972,6 @@ switch ($action) {
         $unassigned = isset($_GET['unassigned']) && $_GET['unassigned'] === '1';
         $gender = trim((string)($_GET['gender'] ?? ''));
         $ageGroup = trim((string)($_GET['age_group'] ?? ''));
-        $ = trim((string)($_GET['student_type'] ?? ''));
         $status = trim((string)($_GET['status'] ?? 'active'));
         $teacherId = (int)($_GET['teacher_id'] ?? 0);
         $sort = trim((string)($_GET['sort'] ?? 'name'));

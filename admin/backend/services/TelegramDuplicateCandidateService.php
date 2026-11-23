@@ -94,7 +94,7 @@ final class TelegramDuplicateCandidateService
             if ($score < 25) continue;
             // department info
             $eduStatus = (string)($row['education_level'] ?? '');
-            $secStatus = (string)( ?? '');
+            $secStatus = '';
             unset($row['phone_suffix9']);
             $dob = '';
             if (!empty($row['dob_ec_year'])) $dob = sprintf('%02d/%02d/%04d',(int)$row['dob_ec_day'],(int)$row['dob_ec_month'],(int)$row['dob_ec_year']);

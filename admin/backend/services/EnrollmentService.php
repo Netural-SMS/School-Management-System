@@ -759,7 +759,6 @@ class EnrollmentService
 
         $search = trim((string)($opts['search'] ?? ''));
         $gender = trim((string)($opts['gender'] ?? ''));
-        $ = trim((string)($opts['student_type'] ?? ''));
         $sort = trim((string)($opts['sort'] ?? 'name'));
         $includeNull = array_key_exists('include_null_year', $opts)
             ? (bool)$opts['include_null_year']
