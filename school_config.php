@@ -352,4 +352,4 @@ define('LEAK_DETECT_KEYWORDS', serialize([
     'felegekidusan',
     'arkeonet',
     'arkeonethiopia',
-]));\n
+]));

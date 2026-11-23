@@ -37,7 +37,7 @@ if (PHP_SAPI !== 'cli') {
 // Secrets file lives ABOVE public_html so it's never web-accessible.
 // NOTE: school_config.php isn't loaded yet, so we list candidate env filenames here.
 // Checks each name in each location — works for any school deployment.
-$_envFileNames = ['.fkss_env.php', '.wbws_env.php'];
+$_envFileNames = ['.fkss_env.php', '.wbws_env.php', '.endriasfilmcollage.arkeonethiopia.com_env.php'];
 $_envBaseDirs = [
     dirname(__DIR__),       // /home/user/ (production)
     dirname(__DIR__, 2),    // two levels up (some hosting layouts)
