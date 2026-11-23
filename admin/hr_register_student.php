@@ -251,20 +251,6 @@ if ($_ethDateLoaded) {
         error_log('Registration: date calc error: ' . $e->getMessage());
     }
 }
-// Age group/section removed for Endrias Film College
-    }
-    if ($postedGroup !== null) {
-        $age_group = $postedGroup;
-        $current_section = \App\Services\StudentCategory::sectionAm($postedGroup);
-    } else {
-        $postedSection = \App\Services\StudentCategory::normalizeSectionAm($registrationPolicy['current_section']);
-        if ($postedSection !== null) {
-            $current_section = $postedSection;
-            $age_group = \App\Services\StudentCategory::ageGroupForSectionAm($postedSection);
-        }
-    }
-}
-
 // Promotion safety (H1): remember whether the caller supplied a complete
 // usable birth date or an explicit canonical group, so the upgrade branch
 // can keep the stored values instead of wiping them with nulls. Partial

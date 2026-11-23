@@ -110,6 +110,5 @@ function getMemberRoleSummary(array $student): array {
         'roles' => $roles,
         'is_special' => false,
         'type_label' => 'Regular'
-        }
     ];
 }

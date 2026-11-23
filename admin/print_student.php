@@ -573,7 +573,7 @@ $fullAddress = !empty($addressParts) ? implode('፣ ', $addressParts) : '—';
                 </div>
                 <div class="info-box">
                     <div class="info-label">ክፍል / Section</div>
-                    <div class="info-value"><?= esc(, '—') ?></div>
+                    <div class="info-value">—</div>
                 </div>
                 <div class="info-box">
                     <div class="info-label">የትምህርት ደረጃ</div>
