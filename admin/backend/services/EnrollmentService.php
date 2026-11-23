@@ -809,7 +809,6 @@ class EnrollmentService
             $types .= 's';
         }
         // student_type filter removed for Endrias Film College
-        }
 
         $order = 'm.student_name';
         if ($sort === 'code') {

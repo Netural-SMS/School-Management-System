@@ -1137,15 +1137,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                                     <button type="button"
                                             class="student-type-btn w-full text-left px-3 py-2 rounded-xl border border-emerald-300 bg-white text-[11px] sm:text-xs"
                                             data-student-type="regular"
-                                            onclick="
-                                foreach ($flags as $name => $label): ?>
-                                    <label class="inline-flex items-center gap-2">
-                                        <input type="checkbox" name="<?= $name ?>" class="rounded border-amber-300 text-amber-600">
-                                        <span><?= $label ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
+                                            onclick="selectStudentType('regular', this)">
 
                         <!-- Personal Info -->
                         <div class="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 mb-4">

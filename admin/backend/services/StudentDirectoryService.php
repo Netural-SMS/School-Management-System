@@ -194,7 +194,6 @@ final class StudentDirectoryService
         return [
             'q' => $text($input['q'] ?? '', 100),
             'registration_type' => $enum($input['registration_type'] ?? '', ['waiting', 'transfer', 'direct']),
-             ['regular', 'special_regular', 'honorary']),
             'status' => $enum($input['status'] ?? '', ['active', 'warning', 'inactive', 'archived']),
             'gender' => $enum($input['gender'] ?? '', ['male', 'female']),
              ['7_13', '14_17', '18_plus']),

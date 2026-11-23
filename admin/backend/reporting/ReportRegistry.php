@@ -247,11 +247,6 @@ final class ReportRegistry
                 'options' => ['active' => 'Active', 'warning' => 'Warning', 'inactive' => 'Inactive', 'archived' => 'Archived'],
                 'view' => self::R_ALL, 'export' => self::R_ALL,
             ],
-                            'label_en' => 'Student type', 'label_am' => 'የአባልነት ዓይነት', 'type' => 'enum',
-                'sql' => 'm',
-                'options' => ['regular' => 'Regular', 'special_regular' => 'Special regular', 'honorary' => 'Honorary'],
-                'view' => self::R_ALL, 'export' => self::R_ALL,
-            ],
             'membership_tier' => [
                 'label_en' => 'Membership tier', 'label_am' => 'የአባልነት ደረጃ', 'type' => 'enum',
                 'sql' => "COALESCE(m.membership_tier, 'permanent')",

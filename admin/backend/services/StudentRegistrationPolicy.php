@@ -87,7 +87,6 @@ final class StudentRegistrationPolicy
             'gender' => $gender,
             'membership_tier' => $tierEarly,
             'phone_number' => $phone,
-             100, 'Section'),
         ];
     }
 

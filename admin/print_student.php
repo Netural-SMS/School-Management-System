@@ -617,7 +617,7 @@ $fullAddress = !empty($addressParts) ? implode('፣ ', $addressParts) : '—';
                 </div>
                 <div class="status-item">
                     <div class="label">የአባልነት ዓይነት</div>
-                    <div class="value"><?= esc(\App\Services\StudentTypeService::labelAm($conn, (string))) ?></div>
+                    <div class="value"><?= esc('Regular') ?></div>
                 </div>
                 <div class="status-item highlight">
                     <div class="label">ሁኔታ / Status</div>
