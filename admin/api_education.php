@@ -1998,16 +1998,7 @@ switch ($action) {
             $p[] = $gender;
             $t .= 's';
         }
-        if ($ageGroup !== '' && in_array($ageGroup, StudentCategory::groups(), true)) {
-            $w[] = ' = ?';
-            $p[] = $ageGroup;
-            $t .= 's';
-        }
-        if ($ !== '' && in_array($, ['regular', 'special_regular', 'honorary'], true)) {
-            $w[] = 'm = ?';
-            $p[] = $;
-            $t .= 's';
-        }
+        // Section/Age Group and student_type removed for Endrias Film College
         if ($q !== '') {
             $w[] = '(m.student_name LIKE ? OR m.father_name LIKE ? OR m.grandfather_name LIKE ? OR m.student_code LIKE ? OR m.baptismal_name LIKE ? OR m.phone_number LIKE ?)';
             $st = '%' . $q . '%';

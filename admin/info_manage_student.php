@@ -1639,10 +1639,10 @@ $mmRoles = [
                                     </div>
                                     <div class="mm-form-group">
                                         <label class="mm-label">Student Type</label>
-                                        <select name="student_type" class="mm-input">
-                                            <option value="regular" <?= sel(??'','regular') ?>>Regular</option>
-                                            <option value="special_regular" <?= sel(??'','special_regular') ?>>Special Regular</option>
-                                            <option value="honorary" <?= sel(??'','honorary') ?>>Honorary</option>
+                                        <select name="student_type" class="mm-input" disabled>
+                                            <option value="regular">Regular</option>
+                                            <option value="special_regular">Special Regular</option>
+                                            <option value="honorary">Honorary</option>
                                         </select>
                                     </div>
                                 </div>

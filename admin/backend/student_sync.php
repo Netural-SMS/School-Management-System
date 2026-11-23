@@ -26,7 +26,7 @@ function syncMemberType(mysqli $conn, int $studentId, array $overrides = []): ar
     $stmt->close();
 
     if (!$student) return ['changed' => false, 'old_type' => '', 'new_type' => ''];
-    $type =  ?? 'regular';
+    $type = 'regular';
     return ['changed' => false, 'old_type' => $type, 'new_type' => $type];
 }
 

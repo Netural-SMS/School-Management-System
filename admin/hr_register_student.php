@@ -251,22 +251,7 @@ if ($_ethDateLoaded) {
         error_log('Registration: date calc error: ' . $e->getMessage());
     }
 }
-if ($age !== null) {
-    $age_group = \App\Services\StudentCategory::groupForAge($age);
-    $current_section = \App\Services\StudentCategory::sectionAm($age_group);
-}
-if ($age_group === null) {
-    // No usable birth date: respect an explicitly posted canonical value
-    // (e.g. quick-add section pick). M4: a posted value that is not a known
-    // code used to be silently stored as NULL (success-yet-no-group); reject
-    // it instead so the caller fixes the value.
-    $postedGroupRaw = trim((string));
-    $postedGroup = \App\Services\StudentCategory::normalizeGroup($postedGroupRaw);
-    if ($postedGroupRaw !== '' && $postedGroup === null) {
-        // Pre-try guard: jsonExit directly like the other guards above
-        // (the InvalidArgumentException→422 mapping try starts later).
-        jsonExit(['status' => 'error',
-            'message' => 'Unknown age group "' . $postedGroupRaw . '". Use one of: 7_13, 14_17, 18_plus.'], 422);
+// Age group/section removed for Endrias Film College
     }
     if ($postedGroup !== null) {
         $age_group = $postedGroup;

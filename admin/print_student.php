@@ -35,7 +35,6 @@ if (!$m) {
 
 // Ensure optional columns have safe defaults
 $m['spiritual_education'] = $m['spiritual_education'] ?? '';
- =  ?? '';
 
 // Helper for image paths
 function fixPath($path) {
