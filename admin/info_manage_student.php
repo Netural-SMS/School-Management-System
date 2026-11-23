@@ -1057,14 +1057,7 @@ $mmRoles = [
                                 </div>
                                 <div class="mm-info"><span class="mm-info-label">Age</span><span class="mm-info-value"><?= !empty($m['age']) ? (int)$m['age'].' years old' : '<span class="mm-info-value muted">—</span>' ?></span></div>
                                 <div class="mm-info"><span class="mm-info-label">Section / Age Group</span>
-                                    <span class="mm-info-value">
-                                        <?php if (!empty()) echo e();
-                                              elseif (!empty()) echo e();
-                                              else echo '<span class="mm-info-value muted">—</span>'; ?>
-                                        <?php if (!empty() && trim((string)) !== trim((string)( ?? ''))): ?>
-                                            <span class="sub">Age group: <?= e() ?></span>
-                                        <?php endif; ?>
-                                    </span>
+                                    <span class="mm-info-value muted">—</span>
                                 </div>
                             </div>
 
