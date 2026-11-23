@@ -1,4 +1,4 @@
-package com.arkeonethiopia.fkss
+package com.arkeonethiopia.efc
 
 import android.app.ActivityManager
 import android.content.Context
@@ -25,12 +25,12 @@ import java.io.IOException
 import java.lang.ref.WeakReference
 
 class MainActivity : AudioServiceFragmentActivity() {
-    private val channelName = "fkss.app/updater"
-    private val lockChannelName = "fkss.app/app_lock"
-    private val deviceChannelName = "fkss.app/device"
-    private val photoSyncChannelName = "fkss.app/photo_sync_service"
-    private val noCloudChannelName = "app.fkss.photo/nocloud"
-    private val photoExportChannelName = "fkss.app/photo_export"
+    private val channelName = "efc.app/updater"
+    private val lockChannelName = "efc.app/app_lock"
+    private val deviceChannelName = "efc.app/device"
+    private val photoSyncChannelName = "efc.app/photo_sync_service"
+    private val noCloudChannelName = "app.efc.photo/nocloud"
+    private val photoExportChannelName = "efc.app/photo_export"
 
     /**
      * S3 A.8 — kept so the engine's background-sync channel can be unbound

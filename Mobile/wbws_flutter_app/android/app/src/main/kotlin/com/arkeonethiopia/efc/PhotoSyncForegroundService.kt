@@ -1,4 +1,4 @@
-package com.arkeonethiopia.fkss
+package com.arkeonethiopia.efc
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -164,7 +164,7 @@ class PhotoSyncActionReceiver : android.content.BroadcastReceiver() {
                 val engine = MainActivity.liveEngine?.get() ?: return
                 val channel = io.flutter.plugin.common.MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "fkss.app/photo_sync_service"
+                    "efc.app/photo_sync_service"
                 )
                 channel.invokeMethod("stopFromNotification", null)
             } catch (_: Throwable) {
@@ -178,6 +178,6 @@ class PhotoSyncActionReceiver : android.content.BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_STOP = "com.arkeonethiopia.fkss.action.STOP_PHOTO_SYNC"
+        const val ACTION_STOP = "com.arkeonethiopia.efc.action.STOP_PHOTO_SYNC"
     }
 }

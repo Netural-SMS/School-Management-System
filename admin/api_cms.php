@@ -1,7 +1,7 @@
 <?php
 /**
  * ============================================================
- * FKSS CMS API — content management backend
+ * Endrias Film College CMS API — content management backend
  * ============================================================
  * Handles all CRUD for: gallery, gallery categories, registration
  * submissions, social links, teachers, schedule, programs.

@@ -133,7 +133,7 @@ function brandResolveAssetFile(string $webPath, string $docRoot): ?string {
 
 /**
  * Find the first packaged (git-tracked) fallback asset on disk for a built-in key.
- * Theme-aware via BrandingAssetService::packagedCandidates() (supports FKSS, WBSS, etc.).
+ * Theme-aware via BrandingAssetService::packagedCandidates() (supports EFC, WBSS, etc.)..
  *
  * @return array{disk:string, web:string}|null
  */

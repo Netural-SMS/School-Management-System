@@ -1,4 +1,4 @@
-package com.arkeonethiopia.fkss
+package com.arkeonethiopia.efc
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -84,7 +84,7 @@ object BackgroundSyncProducer {
     private const val TAG = "FkssBackgroundSync"
 
     /** Must equal `BackgroundSyncChannel.name` in Dart. */
-    const val CHANNEL = "fkss.app/background_sync"
+    const val CHANNEL = "efc.app/background_sync"
 
     /** Dart -> native. */
     private const val METHOD_ENSURE_SCHEDULED = "ensureScheduled"
@@ -111,7 +111,7 @@ object BackgroundSyncProducer {
     private const val SOURCE_BACKGROUND = "background"
 
     /** Explicit action, so the PendingIntent can never match anything else. */
-    const val ACTION_WAKE = "com.arkeonethiopia.fkss.action.BACKGROUND_SYNC"
+    const val ACTION_WAKE = "com.arkeonethiopia.efc.action.BACKGROUND_SYNC"
 
     /**
      * ONE request code means ONE alarm slot. Combined with FLAG_UPDATE_CURRENT

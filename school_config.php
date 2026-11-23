@@ -18,7 +18,7 @@
 // │  SECTION 1: ACTIVE THEME                                    │
 // │  Points to /themes/[name]/ for CSS, logos, and assets       │
 // └─────────────────────────────────────────────────────────────┘
-define('ACTIVE_THEME', 'fkss');
+define('ACTIVE_THEME', 'endrias');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -27,45 +27,44 @@ define('ACTIVE_THEME', 'fkss');
 // └─────────────────────────────────────────────────────────────┘
 
 // Full system name (shown in page titles, API responses)
-define('SCHOOL_NAME', 'FKSS School Management System');
+define('SCHOOL_NAME', 'Endrias Film College PLC');
 
 // Short code (shown in headers, nav bars, mobile app)
-define('SCHOOL_NAME_SHORT', 'FKSS');
+define('SCHOOL_NAME_SHORT', 'EFC');
 
 // Full Amharic name (shown in landing page, reports, ID cards)
-define('SCHOOL_NAME_AMHARIC', 'ፈለገ ቅዱሳን ሰንበት ትምህርት ቤት');
+define('SCHOOL_NAME_AMHARIC', 'እንድርያስ የፊልም ኮሌጅ PLC');
 
 // Short Amharic name (shown in sidebar subtitles, compact labels)
-define('SCHOOL_NAME_SHORT_AM', 'ፈለገ ቅዱሳን');
+define('SCHOOL_NAME_SHORT_AM', 'እንድርያስ ኮሌጅ');
 
-// English translation of school name (Felege Kidusan = "Spring of Saints")
-define('SCHOOL_TRANSLATION_EN', 'Spring of Saints');
+// English translation of school name
+define('SCHOOL_TRANSLATION_EN', 'Endrias Film College');
 
 // Tagline — English and Amharic
-define('SCHOOL_TAGLINE', 'Sunday School Management System');
-define('SCHOOL_TAGLINE_AM', 'የሰንበት ትምህርት ቤት አስተዳደር');
+define('SCHOOL_TAGLINE', 'Film & Media College');
+define('SCHOOL_TAGLINE_AM', 'የፊልም እና ዲጂታል ሚዲያ ኮሌጅ');
 
 // What type of school is this? (used in labels, categories, AI prompts)
-define('SCHOOL_TYPE', 'Sunday School');
-define('SCHOOL_TYPE_AM', 'ሰንበት ት/ቤት');
+define('SCHOOL_TYPE', 'Film & Media College');
+define('SCHOOL_TYPE_AM', 'የፊልም እና ዲጂታል ኮሌጅ');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
-// │  SECTION 3: PARISH / CHURCH IDENTITY                        │
-// │  The parent church or organization this school belongs to   │
+// │  SECTION 3: PARENT ORGANIZATION IDENTITY                    │
+// │  The parent organization this college belongs to            │
 // └─────────────────────────────────────────────────────────────┘
 
-// Parish/church full name — Amharic and English
-define('PARISH_NAME_AM', 'የቦሌ ቡልቡላ ፍ/ሕ ቅድስት ድንግል ማርያም እና መ/መ/ ቅ/ዮሐንስ ቤ/ክ');
-define('PARISH_NAME_EN', 'Bole Bulbula St. Mary & St. John Holy Church');
+// Parent organization full name — Amharic and English
+define('PARISH_NAME_AM', 'እንድርያስ የፊልም ኮሌጅ PLC');
+define('PARISH_NAME_EN', 'Endrias Film College PLC');
 
-// Denomination — the broader religious organization
-define('DENOMINATION_AM', 'የኢትዮጵያ ኦርቶዶክስ ተዋሕዶ ቤተ ክርስቲያን');
-define('DENOMINATION_EN', 'Ethiopian Orthodox Tewahdo Church');
+// Organization type — the broader educational context
+define('DENOMINATION_AM', 'የኢትዮጵያ ትምህርት ቤት');
+define('DENOMINATION_EN', 'Ethiopian Education Institution');
 
-// Religious invocation (shown at top of ID cards)
-// Set to empty string '' if not needed
-define('RELIGIOUS_INVOCATION', 'በስመአብ ወወልድ ወመንፈስ ቅዱስ አሐዱ አምላክ');
+// Religious invocation (shown at top of ID cards) — empty for secular college
+define('RELIGIOUS_INVOCATION', '');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -73,23 +72,23 @@ define('RELIGIOUS_INVOCATION', 'በስመአብ ወወልድ ወመንፈስ ቅ
 // │  All text that appears on printed member ID cards           │
 // └─────────────────────────────────────────────────────────────┘
 
-// Card title line — Amharic (e.g. "ውሉደ ብርሃን ሰንበት ት/ቤት አባል መታወቂያ ካርድ")
+// Card title line — Amharic
 define('ID_CARD_TITLE_AM', SCHOOL_NAME_SHORT_AM . ' ' . SCHOOL_TYPE_AM . ' አባል መታወቂያ ካርድ');
 
-// Card title line — English (e.g. "Wulde Birhan Sunday School Member ID Card")
+// Card title line — English
 define('ID_CARD_TITLE_EN', SCHOOL_TRANSLATION_EN . ' ' . SCHOOL_TYPE . ' Member ID Card');
 
 // Card bottom line — short school name
 define('ID_CARD_FOOTER_AM', SCHOOL_NAME_SHORT_AM . ' ' . SCHOOL_TYPE_AM);
 
 // Signature labels
-define('ID_CARD_SIG_HEAD_AM', 'የ' . SCHOOL_TYPE_AM . 'ቱ ሃላፊ ስምና ፊርማ');
+define('ID_CARD_SIG_HEAD_AM', 'የ' . SCHOOL_TYPE_AM . ' ሃላፊ ስምና ፊርማ');
 define('ID_CARD_SIG_ADMIN_AM', 'የደብሩ አስተዳደር ስምና ፊርማ');
 
 // Card disclaimer (bottom of back side)
 define('ID_CARD_DISCLAIMER_AM', 'ማስታወሻ: ይህ መታወቂያ ካርድ እስከ የሚያበቃበት ቀን ብቻ ዋጋ አለው። ከጠፋ ለአስተዳደሩ ያሳውቁ።');
 
-// Shared church artwork used on the front and the back of every card
+// Shared college artwork used on the front and the back of every card
 define('ID_CARD_BACKGROUND', '/admin/id_cards/assets/backgrounds/id_card_bg.jpg');
 
 
@@ -99,7 +98,6 @@ define('ID_CARD_BACKGROUND', '/admin/id_cards/assets/backgrounds/id_card_bg.jpg'
 // └─────────────────────────────────────────────────────────────┘
 
 // Prefix for member codes — EMPTY for plain 5-digit numbers (e.g. 48271)
-// The registration backend generates random 5-digit codes; no prefix needed.
 define('MEMBER_CODE_PREFIX', '');
 
 // Full code format prefix with separator — empty (plain numbers)
@@ -112,13 +110,10 @@ define('MEMBER_CODE_FORMAT', '');
 // └─────────────────────────────────────────────────────────────┘
 
 // Primary domain (no trailing slash).
-// ENVIRONMENT-FIRST (production cutover 2026-10): config.php loads the
-// environment file (.fkss_env.php) BEFORE this file, so each deployment
-// owns its domain there — production defines SITE_DOMAIN in
-// /home/felegeki/.fkss_env.php. The fallback below only applies when the
-// environment did not provide one, so development keeps today's value.
+// ENVIRONMENT-FIRST: config.php loads the environment file (.fkss_env.php)
+// BEFORE this file, so each deployment owns its domain there.
 if (!defined('SITE_DOMAIN')) {
-    define('SITE_DOMAIN', 'felegekidusan.arkeonethiopia.com');
+    define('SITE_DOMAIN', 'endriasfilmcollege.com');
 }
 
 // Full site URL
@@ -142,7 +137,7 @@ if (!function_exists('get_cors_origins')) {
 }
 
 // Hosting username (used in cron command paths, env file location)
-define('HOSTING_USER', 'arkeonet');
+define('HOSTING_USER', 'endrias');
 
 // Path to .env file (secrets outside public_html)
 define('ENV_FILE_NAME', '.fkss_env.php');
@@ -154,8 +149,8 @@ define('ENV_FILE_NAME', '.fkss_env.php');
 // └─────────────────────────────────────────────────────────────┘
 
 define('ADMIN_PANEL_TITLE', SCHOOL_NAME_SHORT . ' Admin');
-define('ADMIN_LOGO_ICON', '✝');
-define('ADMIN_FOOTER_TEXT', SCHOOL_NAME_SHORT . ' Management System');
+define('ADMIN_LOGO_ICON', '🎬');
+define('ADMIN_FOOTER_TEXT', SCHOOL_NAME_SHORT . ' Film College Management System');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -171,8 +166,8 @@ define('DEPT_FINANCE_NAME', 'ገንዘብ ክፍል');
 define('DEPT_FINANCE_NAME_EN', 'Finance Department');
 define('DEPT_MATERIAL_NAME', 'ቁሳቁስ ክፍል');
 define('DEPT_MATERIAL_NAME_EN', 'Material Department');
-define('DEPT_GROUPS_NAME', 'የማህበራት አስተዳደር');
-define('DEPT_GROUPS_NAME_EN', 'Groups Management');
+define('DEPT_GROUPS_NAME', 'የፕሮጀክቶች አስተዳደር');
+define('DEPT_GROUPS_NAME_EN', 'Projects Management');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -180,16 +175,16 @@ define('DEPT_GROUPS_NAME_EN', 'Groups Management');
 // │  Primary, accent, and sidebar gradient colors               │
 // └─────────────────────────────────────────────────────────────┘
 
-// FKSS palette — gold + maroon, extracted from the official logo
-// Gold: #F0C000 / #E0B020 · Maroon: #600000 / #500000 / #702000
-define('THEME_PRIMARY', '#600000');        // Deep maroon — primary brand color
-define('THEME_PRIMARY_LIGHT', '#8B2030');  // Lighter maroon for hovers
-define('THEME_PRIMARY_DARK', '#400000');   // Darkest maroon
-define('THEME_ACCENT', '#F0C000');         // Gold — primary accent
-define('THEME_ACCENT_2', '#E0B020');       // Darker gold — secondary accent
-define('THEME_SIDEBAR_TOP', '#400000');    // Sidebar gradient: dark maroon →
-define('THEME_SIDEBAR_MID', '#600000');    //   mid maroon →
-define('THEME_SIDEBAR_BOTTOM', '#702000'); //   warm maroon-brown
+// Endrias Film College palette — extracted from official brand
+// Navy: #054677 · Orange: #FF9000 · Amber: #E69A35 · Ivory: #FAF7F2 · Midnight: #041829
+define('THEME_PRIMARY', '#054677');        // Deep navy — primary brand color
+define('THEME_PRIMARY_LIGHT', '#1E6B9E');  // Lighter navy for hovers
+define('THEME_PRIMARY_DARK', '#032B4A');   // Darkest navy
+define('THEME_ACCENT', '#FF9000');         // Orange — primary accent
+define('THEME_ACCENT_2', '#E69A35');       // Amber — secondary accent
+define('THEME_SIDEBAR_TOP', '#041829');    // Sidebar gradient: midnight →
+define('THEME_SIDEBAR_MID', '#054677');    //   navy →
+define('THEME_SIDEBAR_BOTTOM', '#032B4A'); //   deep navy
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -203,7 +198,7 @@ if (!defined('FEATURE_AI_CHATBOT')) define('FEATURE_AI_CHATBOT', true);
 if (!defined('FEATURE_GROUPS')) define('FEATURE_GROUPS', true);
 if (!defined('FEATURE_FINANCE')) define('FEATURE_FINANCE', true);
 if (!defined('FEATURE_MATERIAL')) define('FEATURE_MATERIAL', true);
-if (!defined('FEATURE_MEZMUR')) define('FEATURE_MEZMUR', true);
+if (!defined('FEATURE_MEZMUR')) define('FEATURE_MEZMUR', false);   // Not applicable to film college
 if (!defined('FEATURE_ID_CARDS')) define('FEATURE_ID_CARDS', true);
 if (!defined('FEATURE_ATTENDANCE')) define('FEATURE_ATTENDANCE', true);
 if (!defined('FEATURE_GRADES')) define('FEATURE_GRADES', true);
@@ -274,8 +269,8 @@ define('PWA_DESCRIPTION', SCHOOL_NAME_SHORT_AM . ' የ' . SCHOOL_TYPE_AM . ' ' .
 // └─────────────────────────────────────────────────────────────┘
 
 // Mission statement
-define('LANDING_MISSION_EN', 'To nurture young souls in the teachings of the ' . DENOMINATION_EN . ', fostering spiritual growth, moral values, and a deep connection with our faith and heritage.');
-define('LANDING_MISSION_AM', 'የኛ ተልእኮ ልጆችን በ' . DENOMINATION_AM . ' ትምህርቶች እያሳደግን መንፈሳዊ እድገትን፣ የሞራል እሴቶችን እና ከእምነታችን እና ከቅርሶቻችን ጋር ጥልቅ ግንኙነት መፍጠር ነው።');
+define('LANDING_MISSION_EN', 'To nurture creative talent in the art and craft of filmmaking, fostering technical excellence, storytelling mastery, and a deep connection with Ethiopian cinema heritage.');
+define('LANDING_MISSION_AM', 'የኛ ተልእኮ ልጆችን በፊልም ስራ እና ትምህርቶች ውስጥ የሚሰጥ ተግባራዊ ክህሎትን መፍጠር ነው፣ የተጠቃሚ መጠነቀም፣ የታሪክ ድረስና በኢትዮጵያ የሚያዘላለፈ የፊልም ጥልቅነት ጋር ባለቤት እውቂያ ለመፍጠር ነው።');
 
 // Copyright
 define('COPYRIGHT_YEAR', '2026');
@@ -296,7 +291,7 @@ define('MONITOR_PAGE_TITLE', SCHOOL_NAME_SHORT . ' Monitor');
 // │  Set DEVELOPER_SHOW_CREDIT to false to hide                 │
 // └─────────────────────────────────────────────────────────────┘
 
-define('DEVELOPER_NAME', 'Arkeon Agency');
+define('DEVELOPER_NAME', 'Arena Agent');
 define('DEVELOPER_SHOW_CREDIT', true);
 
 
@@ -305,7 +300,7 @@ define('DEVELOPER_SHOW_CREDIT', true);
 // │  Context given to AI chatbot about this school              │
 // └─────────────────────────────────────────────────────────────┘
 
-define('AI_SCHOOL_CONTEXT', 'This is an Ethiopian ' . SCHOOL_TYPE . ' (' . SCHOOL_TYPE_AM . ') belonging to ' . DENOMINATION_EN . '.');
+define('AI_SCHOOL_CONTEXT', 'This is an Ethiopian Film & Media College (' . SCHOOL_TYPE_AM . ') providing accredited TVET filmmaking training.');
 
 
 // ┌─────────────────────────────────────────────────────────────┐
@@ -324,8 +319,8 @@ define('API_MEMBER_PREFIX', MEMBER_CODE_PREFIX);
 
 define('GROUP_CAT_SS', SCHOOL_TYPE);
 define('GROUP_CAT_SS_AM', SCHOOL_TYPE_AM);
-define('GROUP_CAT_PARISH', 'Parish');
-define('GROUP_CAT_PARISH_AM', 'ደብር');
+define('GROUP_CAT_PARISH', 'Department');
+define('GROUP_CAT_PARISH_AM', 'ክፍል');
 define('GROUP_UNDER_SS_LABEL', 'Under ' . SCHOOL_TYPE);
 define('GROUP_UNDER_SS_LABEL_AM', 'በ' . SCHOOL_TYPE_AM . ' ስር');
 
@@ -353,4 +348,8 @@ define('LEAK_DETECT_KEYWORDS', serialize([
     'wbws.pro.et',
     'wbwsprvr',
     'Wolaita Bethel',
-]));
+    'Felege Kidusan',
+    'felegekidusan',
+    'arkeonet',
+    'arkeonethiopia',
+]));\n

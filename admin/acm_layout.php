@@ -2,7 +2,7 @@
 /**
  * ACM console chrome — the school_admin design system (dark + light).
  * Include-only fragment: pages must define('ACM_BOOT', true) first.
- * Theme choice shares school_admin's localStorage key (wbws-theme) so
+ * Theme choice shares school_admin's localStorage key (efc-theme) so
  * dark/light follows the visitor across both consoles.
  */
 if (!defined('ACM_BOOT')) {
@@ -23,7 +23,7 @@ function acm_head(string $title): void
         . ' integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous">'
         . '<link rel="stylesheet" href="/admin/css/acm.css?v=' . urlencode($assetVer) . '">'
         . '<link rel="stylesheet" href="/admin/css/mobile.css?v=' . urlencode($assetVer) . '">'
-        . '<script>(function(){try{var s=localStorage.getItem("wbws-theme");'
+        . '<script>(function(){try{var s=localStorage.getItem("efc-theme");'
         . 'if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-theme",s);}}catch(e){}})();</script>';
     if (!function_exists('_hRgb') && is_file(__DIR__ . '/theme.php')) {
         include __DIR__ . '/theme.php';
@@ -102,9 +102,9 @@ function acm_chrome_close(): void
         . 't.className="acm-toast show "+(ok===false?"err":"ok");clearTimeout(t._h);'
         . 't._h=setTimeout(function(){t.className="acm-toast";},3600);}'
         . 'function toggleTheme(){var h=document.documentElement,c=h.getAttribute("data-theme"),n=c==="dark"?"light":"dark";'
-        . 'h.setAttribute("data-theme",n);try{localStorage.setItem("wbws-theme",n);}catch(e){}'
+        . 'h.setAttribute("data-theme",n);try{localStorage.setItem("efc-theme",n);}catch(e){}'
         . 'document.getElementById("themeIcon").className=n==="dark"?"fa-solid fa-sun":"fa-solid fa-moon";}'
-        . '(function(){var s=null;try{s=localStorage.getItem("wbws-theme");}catch(e){}'
+        . '(function(){var s=null;try{s=localStorage.getItem("efc-theme");}catch(e){}'
         . 'if(s==="light"){document.getElementById("themeIcon").className="fa-solid fa-moon";}})();'
         . 'async function acmApi(action,params,method){method=method||"GET";'
         . 'var url="/admin/api_acm.php",opt={credentials:"same-origin",headers:{}};'
