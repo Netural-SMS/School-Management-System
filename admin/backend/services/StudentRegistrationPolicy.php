@@ -80,8 +80,7 @@ final class StudentRegistrationPolicy
             'allow_upgrade' => !$quickAdd && in_array($role, ['super_admin', 'hr_dept'], true),
             'full_name_am' => $fullName,
             'registration_type' => $registrationType,
-                            ? 'regular'
-                : self::enum($input['student_type'] ?? 'regular', self::MEMBER_TYPES, 'student type'),
+                'student_type' => 'regular',
             'status' => $quickAdd
                 ? 'active'
                 : self::enum($input['status'] ?? 'active', self::STATUSES, 'status'),

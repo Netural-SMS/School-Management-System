@@ -231,11 +231,6 @@ final class ReportRegistry
                 'options' => ['under_7' => 'Under 7', '7_13' => '7–13', '14_17' => '14–17', '18_25' => '18–25', '26_35' => '26–35', '36_plus' => '36+', 'unknown' => 'Unknown'],
                 'view' => self::R_ALL, 'export' => self::R_ALL, 'sort' => false,
             ],
-                            'label_en' => 'Section (age group)', 'label_am' => 'ክፍል', 'type' => 'enum',
-                'sql' => '',
-                'options' => ['7_13' => 'A · Children (7–13)', '14_17' => 'B · Intermediate (14–17)', '18_plus' => 'C · Youth (18+)'],
-                'view' => self::R_ALL, 'export' => self::R_ALL,
-            ],
             'date_of_birth' => [
                 'label_en' => 'Date of birth', 'label_am' => 'የትውልድ ቀን', 'type' => 'date',
                 'sql' => 'm.date_of_birth', 'view' => self::R_ALL, 'export' => self::R_ALL, 'group' => false,

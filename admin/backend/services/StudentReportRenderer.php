@@ -78,9 +78,7 @@ final class StudentReportRenderer
                 self::spreadsheetSafe($student['work_profession']),
                 self::spreadsheetSafe($student['education_level']),
                 self::spreadsheetSafe($student['registration_type']),
-                self::spreadsheetSafe(
-                    $memberTypeLabels[(string)] ?? 
-                ),
+                self::spreadsheetSafe('Regular'),
                 self::spreadsheetSafe($student['status']),
             ]);
             if (($number % 250) === 0) {

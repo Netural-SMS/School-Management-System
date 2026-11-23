@@ -173,21 +173,8 @@ final class StudentDirectoryService
     /** @return string[] */
     public function sections(): array
     {
-        $sections = [];
-        $statement = $this->connection->query(
-            "SELECT DISTINCT `current_section`
-             FROM `students`
-             WHERE `status` IN ('active', 'warning', 'inactive')
-               AND `current_section` IS NOT NULL
-               AND `current_section` <> ''
-             ORDER BY `current_section`
-             LIMIT 200"
-        );
-        while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
-            $sections[] = (string);
-        }
-        $statement->closeCursor();
-        return $sections;
+        // current_section column removed for Endrias Film College
+        return [];
     }
 
     /** @return array{q:string,registration_type:string,student_type:string,status:string,gender:string,age_group:string,current_section:string,city:string,education_level:string,archive_type:string,page:int,limit:int,cursor:int,sort:string,direction:string,include_total:bool,eligible_for_id_card:bool} */

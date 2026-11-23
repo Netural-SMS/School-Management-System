@@ -372,7 +372,7 @@ renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'li
 <?php if(count($recentMembers)>0):?>
 <div class="tw"><table><thead><tr><th>Code</th><th>Name</th><th>Father</th><th>Gender</th><th>Section</th><th>Status</th><th>Registered</th></tr></thead><tbody>
 <?php foreach($recentMembers as $m):?>
-<tr><td><span class="bg bg-info"><?=e($m['student_code']??'')?></span></td><td style="font-weight:600;color:var(--bright)"><?=e($m['student_name']??'')?></td><td><?=e($m['father_name']??'')?></td><td><?=$m['gender']==='male'?'<span style="color:var(--info)">♂</span>':'<span style="color:var(--pink)">♀</span>'?></td><td><?=e(??'—')?></td><td><span class="bg bg-<?=$m['status']==='active'?'ok':($m['status']==='warning'?'w':'bad')?>"><?=e($m['status'])?></span></td><td style="font-size:.65rem;color:var(--dim)"><?=date('M j',strtotime($m['created_at']))?></td></tr>
+<tr><td><span class="bg bg-info"><?=e($m['student_code']??'')?></span></td><td style="font-weight:600;color:var(--bright)"><?=e($m['student_name']??'')?></td><td><?=e($m['father_name']??'')?></td><td><?=$m['gender']==='male'?'<span style="color:var(--info)">♂</span>':'<span style="color:var(--pink)">♀</span>'?></td><td>—</td><td><span class="bg bg-<?=$m['status']==='active'?'ok':($m['status']==='warning'?'w':'bad')?>"><?=e($m['status'])?></span></td><td style="font-size:.65rem;color:var(--dim)"><?=date('M j',strtotime($m['created_at']))?></td></tr>
 <?php endforeach;?>
 </tbody></table></div>
 <?php else:?><p style="font-size:.75rem;color:var(--dim);text-align:center;padding:1rem">No recent registrations</p><?php endif;?>

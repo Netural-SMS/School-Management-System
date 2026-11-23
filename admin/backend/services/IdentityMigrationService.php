@@ -67,7 +67,7 @@ final class IdentityMigrationService
                     $letter = null;
                 } else {
                     $prefix = null;
-                    $letter = StudentCategory::letterFor((string));
+                    $letter = null;
                 }
 
                 if ($prefix === null && $letter === null) {

@@ -181,9 +181,9 @@ $recentMembers = array_map(function ($row) {
     $name = trim(($row['student_name'] ?? '') . ' ' . ($row['father_name'] ?? '') . ' ' . ($row['grandfather_name'] ?? ''));
     return [
         'name'   => $name ?: '—',
-        'type'   =>  ?? 'መደበኛ',
+        'type'   => 'Regular',
         'status' => ucfirst($row['status'] ?? 'Active'),
-        'section'=>  ?? '',
+        'section'=> '',
         'date'   => !empty($row['created_at']) ? ethio_date_format(new DateTime($row['created_at'], new DateTimeZone('Africa/Addis_Ababa')), 'M j, Y') : '',
     ];
 }, $recentMembers);

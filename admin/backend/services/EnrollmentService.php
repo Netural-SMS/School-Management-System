@@ -808,10 +808,7 @@ class EnrollmentService
             $params[] = $gender;
             $types .= 's';
         }
-        if ($ !== '' && in_array($, ['regular', 'special_regular', 'honorary'], true)) {
-            $sql .= " AND m = ?";
-            $params[] = $;
-            $types .= 's';
+        // student_type filter removed for Endrias Film College
         }
 
         $order = 'm.student_name';
