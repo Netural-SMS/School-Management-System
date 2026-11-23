@@ -196,8 +196,6 @@ final class StudentDirectoryService
             'registration_type' => $enum($input['registration_type'] ?? '', ['waiting', 'transfer', 'direct']),
             'status' => $enum($input['status'] ?? '', ['active', 'warning', 'inactive', 'archived']),
             'gender' => $enum($input['gender'] ?? '', ['male', 'female']),
-             ['7_13', '14_17', '18_plus']),
-             100),
             'city' => $text($input['city'] ?? '', 100),
             // M2: the old 8-value set matched nothing the forms store ('high'
             // vs 'high_school') — unknown codes were silently unfiltered.
