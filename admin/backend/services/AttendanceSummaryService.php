@@ -9,25 +9,25 @@
  *     rate = present / total,
  *   - api_attendance.php keyed rows on the RECORDED date's month and
  *     computed rate = (present + 0.5*late) / total.
- * Whichever endpoint saved last overwrote the same (member, year, month)
+ * Whichever endpoint saved last overwrote the same (student, year, month)
  * row with different semantics — silently corrupting attendance rates.
  *
  * DESIGN (industry-standard derived-cache pattern)
  * ------------------------------------------------
  * The `attendance` table is the only source of truth. Summary rows are a
- * DERIVED cache: every save recomputes the affected member+month FROM the
+ * DERIVED cache: every save recomputes the affected student+month FROM the
  * source rows (idempotent, self-healing, replay-safe) instead of applying
  * incremental deltas that can drift. One formula, one key, one writer:
  *
- *   key     = (member_id, academic_year_id, GC month, GC year) — derived
+ *   key     = (student_id, academic_year_id, GC month, GC year) — derived
  *             from the RECORDED attendance_date, never from "today".
- *             The key has no class, so aggregation is per-member across
+ *             The key has no class, so aggregation is per-student across
  *             classes (a transferred student's month stays whole).
  *   formula = (present + 0.5*late) / total — late counts half, matching
  *             the read-side summary UIs.
  *
- * Scale: recomputation touches only the member's own rows through the
- * uq_att_member_class_date (member_id, class_id, attendance_date) prefix
+ * Scale: recomputation touches only the student's own rows through the
+ * uq_att_student_class_date (student_id, class_id, attendance_date) prefix
  * index — O(days recorded) regardless of roster size.
  */
 
@@ -38,11 +38,11 @@ final class AttendanceSummaryService
     /** Monthly rate below which a low-attendance alert is raised. */
     public const LOW_ATTENDANCE_THRESHOLD = 70.0;
 
-    /** Alerts for the same member are suppressed for this many days. */
+    /** Alerts for the same student are suppressed for this many days. */
     public const ALERT_SUPPRESSION_DAYS = 7;
 
     /**
-     * Recompute and upsert the summary row for one member for the month
+     * Recompute and upsert the summary row for one student for the month
      * containing $attendanceDate. Returns the computed stats, or null when
      * the persistence layer is unavailable.
      *
@@ -50,11 +50,11 @@ final class AttendanceSummaryService
      */
     public static function recompute(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         string $attendanceDate,
         ?int $academicYearId
     ): ?array {
-        if ($memberId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $attendanceDate)) {
+        if ($studentId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $attendanceDate)) {
             return null;
         }
         $timestamp = strtotime($attendanceDate);
@@ -66,8 +66,8 @@ final class AttendanceSummaryService
         $startOfMonth = date('Y-m-01', $timestamp);
         $endOfMonth = date('Y-m-t', $timestamp);
 
-        // Member-level aggregation (summary key carries no class), bounded by
-        // the member/date index prefix.
+        // Student-level aggregation (summary key carries no class), bounded by
+        // the student/date index prefix.
         $statement = $conn->prepare(
             "SELECT
                 COUNT(*) AS total_days,
@@ -76,13 +76,13 @@ final class AttendanceSummaryService
                 SUM(status = 'late')    AS late_days,
                 SUM(status = 'excused') AS excused_days
              FROM attendance
-             WHERE member_id = ?
+             WHERE student_id = ?
                AND attendance_date BETWEEN ? AND ?"
         );
         if (!$statement) {
             return null;
         }
-        $statement->bind_param('iss', $memberId, $startOfMonth, $endOfMonth);
+        $statement->bind_param('iss', $studentId, $startOfMonth, $endOfMonth);
         if (!$statement->execute()) {
             $statement->close();
             return null;
@@ -109,16 +109,16 @@ final class AttendanceSummaryService
                 // Replace the no-year row deterministically instead.
                 $delete = $conn->prepare(
                     'DELETE FROM attendance_summary
-                     WHERE member_id = ? AND academic_year_id IS NULL AND month = ? AND year = ?'
+                     WHERE student_id = ? AND academic_year_id IS NULL AND month = ? AND year = ?'
                 );
                 if ($delete) {
-                    $delete->bind_param('iii', $memberId, $gcMonth, $gcYear);
+                    $delete->bind_param('iii', $studentId, $gcMonth, $gcYear);
                     $delete->execute();
                     $delete->close();
                 }
                 $insert = $conn->prepare(
                     'INSERT INTO attendance_summary
-                        (member_id, academic_year_id, month, year,
+                        (student_id, academic_year_id, month, year,
                          total_days, present_days, absent_days, late_days, excused_days,
                          attendance_rate)
                      VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -126,7 +126,7 @@ final class AttendanceSummaryService
                 if ($insert) {
                     $insert->bind_param(
                         'iiiiiiiid',
-                        $memberId,
+                        $studentId,
                         $gcMonth,
                         $gcYear,
                         $totalDays,
@@ -142,7 +142,7 @@ final class AttendanceSummaryService
             } else {
                 $upsert = $conn->prepare(
                     "INSERT INTO attendance_summary
-                        (member_id, academic_year_id, month, year,
+                        (student_id, academic_year_id, month, year,
                          total_days, present_days, absent_days, late_days, excused_days,
                          attendance_rate)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -158,7 +158,7 @@ final class AttendanceSummaryService
                     $yearValue = (int)$academicYearId;
                     $upsert->bind_param(
                         'iiiiiiiiid',
-                        $memberId,
+                        $studentId,
                         $yearValue,
                         $gcMonth,
                         $gcYear,
@@ -191,25 +191,25 @@ final class AttendanceSummaryService
     }
 
     /**
-     * Refresh the member-level rollup (average of monthly rates). The
+     * Refresh the student-level rollup (average of monthly rates). The
      * compatibility columns come from PHP migration 002; a deployment
      * without them simply skips this step.
      */
-    public static function refreshMemberTotals(\mysqli $conn, int $memberId): void
+    public static function refreshMemberTotals(\mysqli $conn, int $studentId): void
     {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return;
         }
         try {
             $statement = $conn->prepare(
                 'SELECT AVG(attendance_rate) AS avg_rate
                  FROM attendance_summary
-                 WHERE member_id = ? AND attendance_rate IS NOT NULL'
+                 WHERE student_id = ? AND attendance_rate IS NOT NULL'
             );
             if (!$statement) {
                 return;
             }
-            $statement->bind_param('i', $memberId);
+            $statement->bind_param('i', $studentId);
             $statement->execute();
             $average = $statement->get_result()->fetch_assoc();
             $statement->close();
@@ -217,42 +217,42 @@ final class AttendanceSummaryService
             if ($average && $average['avg_rate'] !== null) {
                 // Audit 2026-10-02, finding E: this used CURDATE(), so ANY
                 // save — backfilling last term's register, correcting a row
-                // from six months ago — stamped the member as having attended
+                // from six months ago — stamped the student as having attended
                 // TODAY. last_attendance_date must describe the attendance
                 // data, not the moment the row happened to be written.
                 //
                 // Derived from the same source that feeds total_attendance_rate
                 // (the `attendance` table; HR/Mezmur keep their own datasets by
                 // product rule and are never merged here). Index-backed:
-                // idx_att_member_date (member_id, attendance_date) from
-                // sql/028 — and uq_att_member_class_date before it — are both
-                // member_id-prefixed, so MAX() on an equality-bound member is
+                // idx_att_student_date (student_id, attendance_date) from
+                // sql/028 — and uq_att_student_class_date before it — are both
+                // student_id-prefixed, so MAX() on an equality-bound student is
                 // a bounded index probe, not a scan.
                 //
-                // COALESCE keeps any existing value when the member has no
+                // COALESCE keeps any existing value when the student has no
                 // attendance rows left (e.g. the last row was deleted), so the
                 // fix can never blank a populated column.
                 $update = $conn->prepare(
-                    'UPDATE members
+                    'UPDATE students
                      SET total_attendance_rate = ?,
                          last_attendance_date = COALESCE(
                              (SELECT MAX(a.attendance_date)
                                 FROM attendance a
-                               WHERE a.member_id = ?),
+                               WHERE a.student_id = ?),
                              last_attendance_date
                          )
                      WHERE id = ?'
                 );
                 if ($update) {
                     $avgRate = round((float)$average['avg_rate'], 2);
-                    $update->bind_param('dii', $avgRate, $memberId, $memberId);
+                    $update->bind_param('dii', $avgRate, $studentId, $studentId);
                     $update->execute();
                     $update->close();
                 }
             }
         } catch (\Throwable $error) {
             // Compatibility columns may be absent; never fail the save path.
-            error_log('Attendance member totals refresh skipped: ' . $error->getMessage());
+            error_log('Attendance student totals refresh skipped: ' . $error->getMessage());
         }
     }
 
@@ -263,29 +263,29 @@ final class AttendanceSummaryService
      * per-department policy thresholds (requirements §4–§6, §8). Kept as a
      * no-op so any external caller keeps working.
      */
-    public static function maybeAlertLowAttendance(\mysqli $conn, int $memberId, ?float $rate): void
+    public static function maybeAlertLowAttendance(\mysqli $conn, int $studentId, ?float $rate): void
     {
         // intentionally empty — see AttendanceWarningService::evaluate()
     }
 
     /**
      * One-call convenience used by attendance writers: recompute the month
-     * of the saved record, refresh the member rollup, then alert if needed.
+     * of the saved record, refresh the student rollup, then alert if needed.
      * Derived-cache semantics make this safe to call repeatedly.
      *
      * @return array{month:int,year:int,total:int,present:int,absent:int,late:int,excused:int,rate:?float}|null
      */
     public static function recordSaved(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         string $attendanceDate,
         ?int $academicYearId
     ): ?array {
-        $stats = self::recompute($conn, $memberId, $attendanceDate, $academicYearId);
+        $stats = self::recompute($conn, $studentId, $attendanceDate, $academicYearId);
         if ($stats === null) {
             return null;
         }
-        self::refreshMemberTotals($conn, $memberId);
+        self::refreshMemberTotals($conn, $studentId);
         return $stats;
     }
 }

@@ -29,10 +29,10 @@ final class AttendancePreparationService
             throw new AttendancePreparationDenied('PREPARATION_BOUND_AUTH_REQUIRED');
         }
         $tables = ['users','academic_years','api_refresh_sessions','classes','teacher_assignments',
-            'class_enrollments','members','timetable_class_days','timetable_makeup_classes',
+            'class_enrollments','students','timetable_class_days','timetable_makeup_classes',
             'school_day_offs','school_holidays'];
         $tables = array_merge($tables, AttendancePreparationWorkflow::tables());
-        if (FeatureGate::isEnabled('attendance_v2')) $tables[] = 'member_department_periods';
+        if (FeatureGate::isEnabled('attendance_v2')) $tables[] = 'student_department_periods';
         $issuedAt = time();
         $today = SchoolCalendarService::today();
         $knownDenial = null;
@@ -85,27 +85,27 @@ final class AttendancePreparationService
                     $seen[$id] = true; $classIds[] = $id;
                 }
                 $calendar = SchoolCalendarService::preparationCalendar($db,$classIds,$yearId,$from,$to);
-                $members = []; $preparedClasses = [];
+                $students = []; $preparedClasses = [];
                 foreach ($classes as $i => $class) {
                     $classId = $classIds[$i];
                     $rosterYear = EnrollmentService::resolvePreparationRosterYear($db,$classId,$yearId);
                     $roster = EnrollmentService::fetchPreparationRosterDates($db,$classId,$rosterYear['year_id'],$dates);
-                    foreach ($roster['members'] as $member) {
-                        $id = $member['member_id'];
-                        if (isset($members[$id]) && $members[$id] !== $member) throw new \RuntimeException('Preparation member identity is inconsistent.');
-                        $members[$id] = $member;
+                    foreach ($roster['students'] as $student) {
+                        $id = $student['student_id'];
+                        if (isset($students[$id]) && $students[$id] !== $student) throw new \RuntimeException('Preparation student identity is inconsistent.');
+                        $students[$id] = $student;
                     }
                     $workflow = AttendancePreparationWorkflow::read($db,$classId,$yearId,$dates);
                     $days = [];
                     foreach ($dates as $j => $date) {
                         $facts = $workflow['days'][$j]; $membership = $roster['dates'][$j];
                         if ($facts['date'] !== $date || $membership['date'] !== $date) throw new \RuntimeException('Preparation date coverage is incomplete.');
-                        $memberIds = $membership['member_ids']; $rosterIds = array_fill_keys($memberIds,true); $baseFitsRoster = true;
+                        $studentIds = $membership['student_ids']; $rosterIds = array_fill_keys($studentIds,true); $baseFitsRoster = true;
                         foreach ($facts['records'] as $record) {
-                            if (!isset($rosterIds[$record['member_id']])) $baseFitsRoster = false;
+                            if (!isset($rosterIds[$record['student_id']])) $baseFitsRoster = false;
                         }
                         $code = $calendar['classes'][$i]['days'][$j];
-                        $days[] = ['date'=>$date,'member_ids'=>$memberIds,'calendar_code'=>$code,
+                        $days[] = ['date'=>$date,'student_ids'=>$studentIds,'calendar_code'=>$code,
                             'base_roster_compatible'=>$baseFitsRoster] + $facts;
                     }
                     $preparedClasses[] = ['class_id'=>$classId,'class_name'=>(string)$class['class_name'],
@@ -115,14 +115,14 @@ final class AttendancePreparationService
                 }
                 // Midnight cannot mix two calendar clock windows in one response.
                 if (SchoolCalendarService::today() !== $today) throw new \RuntimeException('Preparation calendar clock changed; retry.');
-                ksort($members,SORT_NUMERIC);
+                ksort($students,SORT_NUMERIC);
                 $yearEnd = (new \DateTimeImmutable($yearTo.' 23:59:59',new \DateTimeZone('Africa/Addis_Ababa')))->getTimestamp();
                 return ['preparation_version'=>1,'complete'=>true,'owner_user_id'=>$uid,'authorization_version'=>$av,
                     'role'=>$role,'family_id'=>$fid,'issued_at'=>$issuedAt,'deadline'=>min($issuedAt+30*86400,$yearEnd),
                     'server_today'=>$today,'from'=>$from,'to'=>$to,'backdate_days'=>SchoolCalendarService::BACKDATE_DAYS,
                     'write_year'=>['id'=>$yearId,'from'=>$yearFrom,'to'=>$yearTo,'status'=>'active'],
                     'lessons_enabled'=>FeatureGate::isEnabled('attendance_v2'),
-                    'members'=>array_values($members),'classes'=>$preparedClasses,'school_calendar'=>$calendar['school']];
+                    'students'=>array_values($students),'classes'=>$preparedClasses,'school_calendar'=>$calendar['school']];
             });
         } catch (\Throwable $error) {
             // A cleanup failure must not turn a known authority denial into a

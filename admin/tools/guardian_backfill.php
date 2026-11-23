@@ -2,16 +2,16 @@
 /**
  * Family Link one-time backfill.
  *
- * Builds guardian records from the legacy denormalized members.guardian_*
- * columns and links each member to its primary guardian.
+ * Builds guardian records from the legacy denormalized students.guardian_*
+ * columns and links each student to its primary guardian.
  *
  * Usage:
  *   php admin/tools/guardian_backfill.php --dry-run
  *   php admin/tools/guardian_backfill.php --execute
  *
  * Design notes:
- *  - Idempotent: members that already have a primary guardian link are skipped.
- *  - Conservative clustering: members share a guardian ONLY when the
+ *  - Idempotent: students that already have a primary guardian link are skipped.
+ *  - Conservative clustering: students share a guardian ONLY when the
  *    last-9 phone digits match exactly, or (when no phone exists at all)
  *    when the normalized guardian name matches exactly. Near-duplicate
  *    names across different phones are NOT merged here — that is the job
@@ -89,7 +89,7 @@ function bf_first_nonempty(array $values): string
     return '';
 }
 
-// ---- Load unlinked members with guardian data -----------------------------
+// ---- Load unlinked students with guardian data -----------------------------
 $rows = [];
 $cursor = 0;
 while (true) {
@@ -97,9 +97,9 @@ while (true) {
         'SELECT m.id, m.student_name, m.guardian_name, m.guardian_phone1, m.guardian_phone2,
                 m.guardian_city, m.guardian_sub_city, m.guardian_woreda, m.guardian_mender,
                 m.guardian_block_number, m.guardian_house
-         FROM members m
-         LEFT JOIN member_guardians mg ON mg.member_id = m.id AND mg.is_primary = 1
-         WHERE mg.member_id IS NULL
+         FROM students m
+         LEFT JOIN student_guardians mg ON mg.student_id = m.id AND mg.is_primary = 1
+         WHERE mg.student_id IS NULL
            AND (COALESCE(m.guardian_name, \'\') <> \'\' OR COALESCE(m.guardian_phone1, \'\') <> \'\')
            AND m.id > ?
          ORDER BY m.id ASC
@@ -140,9 +140,9 @@ foreach ($rows as $r) {
         continue;
     }
     if (!isset($clusters[$key])) {
-        $clusters[$key] = ['members' => [], 'names' => [], 'p1' => [], 'p2' => [], 'addr' => []];
+        $clusters[$key] = ['students' => [], 'names' => [], 'p1' => [], 'p2' => [], 'addr' => []];
     }
-    $clusters[$key]['members'][] = $r;
+    $clusters[$key]['students'][] = $r;
     $clusters[$key]['names'][] = (string)$r['guardian_name'];
     $clusters[$key]['p1'][] = (string)$r['guardian_phone1'];
     $clusters[$key]['p2'][] = (string)$r['guardian_phone2'];
@@ -155,7 +155,7 @@ $processClusters = array_slice($clusters, 0, MAX_CLUSTERS_PER_RUN, true);
 $deferredClusters = max(0, $totalClusters - count($processClusters));
 
 bf_out(($isDryRun ? "[DRY RUN] " : "[EXECUTE] ") . "Family Link backfill\n");
-bf_out("Unlinked members with guardian data: {$totalMembers}\n");
+bf_out("Unlinked students with guardian data: {$totalMembers}\n");
 bf_out("Conservative clusters found: {$totalClusters}\n");
 bf_out("Clusters in this run: " . count($processClusters) . " (cap " . MAX_CLUSTERS_PER_RUN . ", deferred {$deferredClusters})\n\n");
 
@@ -195,9 +195,9 @@ try {
         if ($shown < 10) {
             $shown++;
             bf_out(sprintf(
-                "  %-34s members=%-3d phone=%-15s aliases=%d\n",
+                "  %-34s students=%-3d phone=%-15s aliases=%d\n",
                 mb_substr($displayName, 0, 32),
-                count($c['members']),
+                count($c['students']),
                 $p1 !== '' ? $p1 : '(none)',
                 count($aliasVariants)
             ));
@@ -205,7 +205,7 @@ try {
 
         if (!$isExecute) {
             $created++;
-            $linked += count($c['members']);
+            $linked += count($c['students']);
             $aliased += count($aliasVariants);
             continue;
         }
@@ -233,7 +233,7 @@ try {
             }
         }
 
-        foreach ($c['members'] as $m) {
+        foreach ($c['students'] as $m) {
             GuardianService::linkMember($conn, $gid, (int)$m['id'], 'other', 1, true, false);
             $linked++;
         }
@@ -243,7 +243,7 @@ try {
         GuardianService::audit(
             $conn,
             'Guardian Backfill',
-            "Created {$created} guardians, linked {$linked} member rows, stored {$aliased} alias variants (batch cap " . MAX_CLUSTERS_PER_RUN . ", deferred clusters {$deferredClusters})."
+            "Created {$created} guardians, linked {$linked} student rows, stored {$aliased} alias variants (batch cap " . MAX_CLUSTERS_PER_RUN . ", deferred clusters {$deferredClusters})."
         );
         $conn->commit();
     } else {
@@ -256,7 +256,7 @@ try {
 }
 
 bf_out("\n" . ($isDryRun ? "Would create" : "Created") . " guardians: {$created}\n");
-bf_out(($isDryRun ? "Would link" : "Linked") . " member rows: {$linked}\n");
+bf_out(($isDryRun ? "Would link" : "Linked") . " student rows: {$linked}\n");
 bf_out("Alias variants stored: {$aliased}\n");
 if ($deferredClusters > 0) {
     bf_out("\nDeferred clusters remain ({$deferredClusters}). Run again until this reaches 0.\n");

@@ -15,7 +15,7 @@
  * How it works (one idea): a teacher saves a LESSON sheet (class + subject
  * + date + lesson number). The lesson rows are stored in
  * `attendance_session_records`; the existing class/day row in `attendance`
- * is then DERIVED from all submitted lessons of that member on that day and
+ * is then DERIVED from all submitted lessons of that student on that day and
  * written through AttendanceRecordService::mergeSheet, so every existing
  * consumer (warnings, roll‑ups, report cards, sync feed, HR / Info views)
  * keeps working without change.
@@ -83,7 +83,7 @@ final class LessonAttendanceService
     // ── pure rule (unit‑testable) ─────────────────────────────────
 
     /**
-     * Day outcome from the member's submitted lesson outcomes (§3 + owner
+     * Day outcome from the student's submitted lesson outcomes (§3 + owner
      * Q6‑3): present › late › excused › absent; holiday only when every
      * lesson is holiday. Empty input → null (no day row).
      * @param list<string> $statuses
@@ -178,36 +178,36 @@ final class LessonAttendanceService
         $session = self::findSession($conn, $classId, $subjectId, $date, $lessonNo);
         $byMember = [];
         if ($session) {
-            $stmt = $conn->prepare('SELECT member_id, status, note FROM ' . self::RECORDS . ' WHERE session_id = ?');
+            $stmt = $conn->prepare('SELECT student_id, status, note FROM ' . self::RECORDS . ' WHERE session_id = ?');
             $stmt->bind_param('i', $session['id']);
             $stmt->execute();
             foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
-                $byMember[(int)$r['member_id']] = $r;
+                $byMember[(int)$r['student_id']] = $r;
             }
             $stmt->close();
         }
-        $memberIds = [];
+        $studentIds = [];
         foreach ($roster as $row) {
-            $memberIds[] = (int)($row['member_id'] ?? $row['id'] ?? 0);
+            $studentIds[] = (int)($row['student_id'] ?? $row['id'] ?? 0);
         }
         $openWarnings = [];
         try {
-            $openWarnings = AttendanceWarningService::openByMembers($conn, 'edu', $memberIds);
+            $openWarnings = AttendanceWarningService::openByMembers($conn, 'edu', $studentIds);
         } catch (\Throwable $e) {
             $openWarnings = [];
         }
         $students = [];
         foreach ($roster as $row) {
-            $mid = (int)($row['member_id'] ?? $row['id'] ?? 0);
+            $mid = (int)($row['student_id'] ?? $row['id'] ?? 0);
             if ($mid <= 0) {
                 continue;
             }
             $rec = $byMember[$mid] ?? null;
             $students[] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'student_name' => (string)($row['student_name'] ?? ''),
                 'father_name' => (string)($row['father_name'] ?? ''),
-                'member_code' => (string)($row['member_code'] ?? ''),
+                'student_code' => (string)($row['student_code'] ?? ''),
                 'status' => $rec['status'] ?? null,
                 'note' => (string)($rec['note'] ?? ''),
                 'warning' => $openWarnings[$mid] ?? null,
@@ -227,19 +227,19 @@ final class LessonAttendanceService
     }
 
     /**
-     * Lesson‑level history of one member (§3: subject, lesson, teacher, date,
+     * Lesson‑level history of one student (§3: subject, lesson, teacher, date,
      * outcome), newest first, EC labels. @return array{items:list<array>,total:int}
      */
-    public static function memberHistory(\mysqli $conn, int $memberId, int $limit = 100, int $offset = 0, ?array $onlyClassIds = null): array
+    public static function memberHistory(\mysqli $conn, int $studentId, int $limit = 100, int $offset = 0, ?array $onlyClassIds = null): array
     {
-        if (!self::available($conn) || $memberId <= 0) {
+        if (!self::available($conn) || $studentId <= 0) {
             return ['items' => [], 'total' => 0];
         }
         $limit = max(1, min(500, $limit));
         $offset = max(0, $offset);
-        $where = 'r.member_id = ?';
+        $where = 'r.student_id = ?';
         $types = 'i';
-        $params = [$memberId];
+        $params = [$studentId];
         if ($onlyClassIds !== null) {
             // teacher scope: only classes the teacher is assigned to
             $ids = array_values(array_filter(array_map('intval', $onlyClassIds), static fn($i) => $i > 0));
@@ -296,9 +296,9 @@ final class LessonAttendanceService
 
     /**
      * Save (= submit, owner T‑2) one lesson sheet and re‑derive the class/day
-     * rows of every member on it. One transaction. Returns counts.
+     * rows of every student on it. One transaction. Returns counts.
      *
-     * @param list<array{member_id:int,status:string,note:string}> $records already normalised against the roster
+     * @param list<array{student_id:int,status:string,note:string}> $records already normalised against the roster
      * @throws \DomainException user‑facing
      */
     public static function saveSheet(\mysqli $conn, int $classId, int $subjectId, string $date, int $lessonNo, ?int $yearId, int $teacherId, array $records, ?SecurityAuditActor $auditActor = null): array
@@ -347,10 +347,10 @@ final class LessonAttendanceService
             $del->bind_param('i', $sessionId);
             $del->execute();
             $del->close();
-            $ins = $conn->prepare('INSERT INTO ' . self::RECORDS . ' (session_id, member_id, status, note, recorded_by) VALUES (?, ?, ?, ?, ?)');
-            $memberIds = [];
+            $ins = $conn->prepare('INSERT INTO ' . self::RECORDS . ' (session_id, student_id, status, note, recorded_by) VALUES (?, ?, ?, ?, ?)');
+            $studentIds = [];
             foreach ($records as $rec) {
-                $mid = (int)$rec['member_id'];
+                $mid = (int)$rec['student_id'];
                 $status = (string)$rec['status'];
                 if (!in_array($status, AttendanceRecordService::VALID_STATUSES, true)) {
                     throw new \InvalidArgumentException('Unvalidated attendance status.');
@@ -359,12 +359,12 @@ final class LessonAttendanceService
                 $noteOrNull = $note !== '' ? mb_substr($note, 0, 255) : null;
                 $ins->bind_param('iissi', $sessionId, $mid, $status, $noteOrNull, $teacherId);
                 $ins->execute();
-                $memberIds[] = $mid;
+                $studentIds[] = $mid;
             }
             $ins->close();
 
             // 3. derive the class/day rows (the only writer of day rows for lesson days)
-            $derived = self::deriveDay($conn, $classId, $date, $yearId, $teacherId, $memberIds);
+            $derived = self::deriveDay($conn, $classId, $date, $yearId, $teacherId, $studentIds);
 
             $conn->commit();
         } catch (\Throwable $e) {
@@ -373,7 +373,7 @@ final class LessonAttendanceService
         }
 
         // after commit: warnings / roll‑ups (never fail the save)
-        AttendanceWarningService::safeEvaluateMany($conn, 'edu', $memberIds, $date, $teacherId);
+        AttendanceWarningService::safeEvaluateMany($conn, 'edu', $studentIds, $date, $teacherId);
         $details = ['lesson_id' => $sessionId, 'class_id' => $classId, 'subject_id' => $subjectId, 'date_ec' => self::ecLabel($date),
                     'lesson_no' => $lessonNo, 'records' => count($records), 'derived_rows' => $derived] + $counts;
         self::audit($conn, $auditActor, 'Lesson Attendance Saved', $details, 'class', $classId);
@@ -382,7 +382,7 @@ final class LessonAttendanceService
 
     /**
      * Education cancels a lesson (kept, flagged; its rows no longer count).
-     * The day rows of its members are re‑derived from the remaining lessons.
+     * The day rows of its students are re‑derived from the remaining lessons.
      * @throws \DomainException
      */
     public static function cancelSession(\mysqli $conn, int $sessionId, string $reason, int $actorId, ?SecurityAuditActor $auditActor = null): array
@@ -405,12 +405,12 @@ final class LessonAttendanceService
         if ($s['status'] === 'cancelled') {
             throw new \DomainException('This lesson is already cancelled.');
         }
-        $memberIds = [];
-        $r = $conn->prepare('SELECT member_id FROM ' . self::RECORDS . ' WHERE session_id = ?');
+        $studentIds = [];
+        $r = $conn->prepare('SELECT student_id FROM ' . self::RECORDS . ' WHERE session_id = ?');
         $r->bind_param('i', $sessionId);
         $r->execute();
         foreach ($r->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $memberIds[] = (int)$row['member_id'];
+            $studentIds[] = (int)$row['student_id'];
         }
         $r->close();
 
@@ -422,13 +422,13 @@ final class LessonAttendanceService
             $u->close();
             // Re-derive as the lesson's teacher so the day rows / packet keep a
             // teacher owner (the cancellation itself is attributed to $actorId).
-            $derived = self::deriveDay($conn, (int)$s['class_id'], (string)$s['session_date'], $s['academic_year_id'] !== null ? (int)$s['academic_year_id'] : null, (int)$s['teacher_id'], $memberIds);
+            $derived = self::deriveDay($conn, (int)$s['class_id'], (string)$s['session_date'], $s['academic_year_id'] !== null ? (int)$s['academic_year_id'] : null, (int)$s['teacher_id'], $studentIds);
             $conn->commit();
         } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
-        AttendanceWarningService::safeEvaluateMany($conn, 'edu', $memberIds, (string)$s['session_date'], $actorId);
+        AttendanceWarningService::safeEvaluateMany($conn, 'edu', $studentIds, (string)$s['session_date'], $actorId);
         self::audit($conn, $auditActor, 'Lesson Attendance Cancelled', ['lesson_id' => $sessionId, 'class_id' => (int)$s['class_id'],
             'subject_id' => (int)$s['subject_id'], 'date_ec' => self::ecLabel((string)$s['session_date']), 'lesson_no' => (int)$s['lesson_no'], 'reason' => $reason], 'class', (int)$s['class_id']);
         return ['cancelled' => true, 'derived' => $derived];
@@ -437,48 +437,48 @@ final class LessonAttendanceService
     // ── derivation (inside the caller's transaction) ──────────────
 
     /**
-     * Re‑derive the class/day rows of $memberIds from every submitted lesson
+     * Re‑derive the class/day rows of $studentIds from every submitted lesson
      * of (class, date) and write them through AttendanceRecordService::mergeSheet
      * (so the Phase 2/4 machinery and the sync triggers see a normal save).
-     * A member whose last submitted lesson was cancelled loses the DERIVED day
+     * A student whose last submitted lesson was cancelled loses the DERIVED day
      * row again (only rows this service wrote — note "derived from …" — are
      * removed; a manually entered row is never touched; the lesson rows stay
      * for history — §13). When no day row is left the packet goes back to
      * `incomplete` so the class/day sheet is open again.
-     * @param list<int> $memberIds
+     * @param list<int> $studentIds
      */
-    private static function deriveDay(\mysqli $conn, int $classId, string $date, ?int $yearId, int $actorId, array $memberIds): int
+    private static function deriveDay(\mysqli $conn, int $classId, string $date, ?int $yearId, int $actorId, array $studentIds): int
     {
-        $memberIds = array_values(array_unique(array_map('intval', $memberIds)));
-        if ($memberIds === []) {
+        $studentIds = array_values(array_unique(array_map('intval', $studentIds)));
+        if ($studentIds === []) {
             return 0;
         }
-        $in = implode(',', $memberIds);
+        $in = implode(',', $studentIds);
         $stmt = $conn->prepare(
-            'SELECT r.member_id, r.status FROM ' . self::RECORDS . ' r JOIN ' . self::SESSIONS . ' s ON s.id = r.session_id
-              WHERE s.class_id = ? AND s.session_date = ? AND s.status = \'submitted\' AND r.member_id IN (' . $in . ')'
+            'SELECT r.student_id, r.status FROM ' . self::RECORDS . ' r JOIN ' . self::SESSIONS . ' s ON s.id = r.session_id
+              WHERE s.class_id = ? AND s.session_date = ? AND s.status = \'submitted\' AND r.student_id IN (' . $in . ')'
         );
         $stmt->bind_param('is', $classId, $date);
         $stmt->execute();
         $byMember = [];
         foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
-            $byMember[(int)$r['member_id']][] = (string)$r['status'];
+            $byMember[(int)$r['student_id']][] = (string)$r['status'];
         }
         $stmt->close();
 
         $records = [];
         $orphans = [];
-        foreach ($memberIds as $mid) {
+        foreach ($studentIds as $mid) {
             $day = self::deriveDayStatus($byMember[$mid] ?? []);
             if ($day === null) {
                 $orphans[] = $mid;
                 continue;
             }
-            $records[] = ['member_id' => $mid, 'status' => $day, 'note' => 'derived from ' . count($byMember[$mid]) . ' lesson(s)'];
+            $records[] = ['student_id' => $mid, 'status' => $day, 'note' => 'derived from ' . count($byMember[$mid]) . ' lesson(s)'];
         }
         if ($orphans !== []) {
             $rm = $conn->prepare(
-                'DELETE FROM attendance WHERE class_id = ? AND attendance_date = ? AND notes LIKE \'derived from %\' AND member_id IN (' . implode(',', $orphans) . ')'
+                'DELETE FROM attendance WHERE class_id = ? AND attendance_date = ? AND notes LIKE \'derived from %\' AND student_id IN (' . implode(',', $orphans) . ')'
             );
             $rm->bind_param('is', $classId, $date);
             $rm->execute();

@@ -46,12 +46,12 @@ final class AttendancePreparationWorkflow
         $params = array_merge([$classId], $dates);
         $types = 'i' . str_repeat('s', count($dates));
         $seen = [];
-        $records = self::rows($conn, 'SELECT attendance_date,member_id,academic_year_id,status,notes FROM attendance
-            WHERE class_id=? AND attendance_date IN (' . $placeholders . ') ORDER BY attendance_date,member_id,academic_year_id', $types, $params);
+        $records = self::rows($conn, 'SELECT attendance_date,student_id,academic_year_id,status,notes FROM attendance
+            WHERE class_id=? AND attendance_date IN (' . $placeholders . ') ORDER BY attendance_date,student_id,academic_year_id', $types, $params);
         foreach ($records as $row) {
             $date = $row['attendance_date'];
             if (!isset($days[$date])) throw new \RuntimeException('Attendance preparation coverage is invalid.');
-            $id = self::positiveId($row['member_id']);
+            $id = self::positiveId($row['student_id']);
             $year = self::originYear($row['academic_year_id']);
             $key = $id . ':' . ($year ?? 'unknown');
             if (isset($seen[$date][$key]) || !in_array($row['status'], ['present','absent','late','excused','holiday'], true)) {
@@ -59,7 +59,7 @@ final class AttendancePreparationWorkflow
             }
             $seen[$date][$key] = true;
             self::addOrigin($days[$date], $year);
-            $days[$date]['records'][] = ['member_id'=>$id, 'academic_year_id'=>$year,
+            $days[$date]['records'][] = ['student_id'=>$id, 'academic_year_id'=>$year,
                 'status'=>$row['status'], 'note'=>(string)$row['notes']];
         }
         // ALL packet origins matter; only latest id controls existing workflow.
@@ -82,7 +82,7 @@ final class AttendancePreparationWorkflow
         $lessonsEnabled = FeatureGate::isEnabled('attendance_v2');
         if ($lessonsEnabled) {
             // Enabled schema must exist; OFF never probes or enables it.
-            self::rows($conn, 'SELECT session_id,member_id,status FROM attendance_session_records LIMIT 0', '', []);
+            self::rows($conn, 'SELECT session_id,student_id,status FROM attendance_session_records LIMIT 0', '', []);
             $lessons = self::rows($conn, 'SELECT session_date,academic_year_id,status FROM attendance_sessions
                 WHERE class_id=? AND session_date IN (' . $placeholders . ')', $types, $params);
             foreach ($lessons as $row) {

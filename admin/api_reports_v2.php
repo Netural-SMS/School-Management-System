@@ -66,7 +66,7 @@ if (!in_array($action, ['schema', 'list', 'aggregate', 'kpis', 'options', 'expor
 
 // Per‑user rate limits: reads share one bucket, exports a stricter one.
 $rl = new \App\Services\SecurityRateLimiter($pdo, sys_get_temp_dir() . '/ssms_ratelimit');
-$bucket = $isExport ? ['member_report_export', 20, 60] : ['member_reports_v2_read', 240, 60];
+$bucket = $isExport ? ['student_report_export', 20, 60] : ['student_reports_v2_read', 240, 60];
 $check = $rl->consume($bucket[0], 'user:' . $adminId, $bucket[1], $bucket[2]);
 if (!$check['allowed']) {
     $fail(429, 'Too many requests. Please wait a moment and try again.');
@@ -97,7 +97,7 @@ function reportsV2ExportHistory(PDO $pdo, int $limit): array
         'SELECT al.id, al.username, al.action, al.details, al.ip_address, al.created_at, u.role AS user_role
            FROM activity_logs al
            LEFT JOIN users u ON u.id = al.user_id
-          WHERE al.action IN (\'Member Report Exported\', \'Member Report Requested\', \'Member Export Requested\')
+          WHERE al.action IN (\'Student Report Exported\', \'Student Report Requested\', \'Student Export Requested\')
           ORDER BY al.id DESC
           LIMIT ' . max(1, min(500, $limit))
     );
@@ -137,13 +137,13 @@ try {
             $format = 'csv';
             $fallback = true;
         }
-        // Audit BEFORE streaming (same policy as export_pdf.php / api_export_members.php).
+        // Audit BEFORE streaming (same policy as export_pdf.php / api_export_students.php).
         $summary = ReportQueryService::auditSummary($export['definition']);
         $summary['format'] = $format;
         $summary['pii_fields'] = $export['pii_fields'];
-        $title = (string)($_GET['title'] ?? 'members');
+        $title = (string)($_GET['title'] ?? 'students');
         $summary['title'] = mb_substr(preg_replace('/[^\p{L}\p{N} _.\-]/u', '', $title) ?? '', 0, 80);
-        SecurityAuditService::record($conn, 'Member Report Exported', $summary, 'member_analytics');
+        SecurityAuditService::record($conn, 'Student Report Exported', $summary, 'student_analytics');
 
         $filename = ReportExportService::safeFilename($title, $format);
         if ($fallback) {
@@ -166,8 +166,8 @@ try {
             $payload['xlsx_available'] = ReportExportService::xlsxAvailable();
             break;
         case 'list':
-            // Bulk member rows (PII) → audited like the old explorer.
-            SecurityAuditService::record($conn, 'Member Analytics Explorer Queried', ReportQueryService::auditSummary($definition), 'member_analytics');
+            // Bulk student rows (PII) → audited like the old explorer.
+            SecurityAuditService::record($conn, 'Student Analytics Explorer Queried', ReportQueryService::auditSummary($definition), 'student_analytics');
             $payload = $service->list($definition);
             break;
         case 'aggregate':

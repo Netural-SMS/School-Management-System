@@ -7,7 +7,7 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/backend/workflow.php';
-require_once __DIR__ . '/backend/member_sync.php';
+require_once __DIR__ . '/backend/student_sync.php';
 require_once __DIR__ . '/backend/services/EnrollmentService.php';
 require_once __DIR__ . '/backend/services/AssignmentService.php';
 require_once __DIR__ . '/backend/services/AttendanceRecordService.php';
@@ -18,7 +18,7 @@ require_once __DIR__ . '/backend/danger_confirm.php';
 use App\Services\AssignmentService;
 use App\Services\AttendanceRecordService;
 use App\Services\EnrollmentService;
-use App\Services\MemberCategory;
+use App\Services\StudentCategory;
 
 // Check authentication
 if (empty($_SESSION['admin_id'])) {
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $action = is_scalar($_REQUEST['action'] ?? '') ? (string)($_REQUEST['action'] ?? '') : '';
-requirePostActions($action, ['enroll', 'assign_teacher', 'record_grade', 'record_attendance', 'batch_attendance', 'promote', 'unenroll_student', 'save_class', 'delete_class', 'save_academic_year', 'set_current_year', 'delete_year', 'save_term', 'set_current_term', 'reopen_term', 'close_term_reopen', 'delete_term', 'bulk_enroll', 'transfer_student', 'sync_member_types', 'toggle_class', 'save_assessment_type', 'toggle_assessment_type', 'delete_assessment_type', 'copy_assessments']);
+requirePostActions($action, ['enroll', 'assign_teacher', 'record_grade', 'record_attendance', 'batch_attendance', 'promote', 'unenroll_student', 'save_class', 'delete_class', 'save_academic_year', 'set_current_year', 'delete_year', 'save_term', 'set_current_term', 'reopen_term', 'close_term_reopen', 'delete_term', 'bulk_enroll', 'transfer_student', 'sync_student_types', 'toggle_class', 'save_assessment_type', 'toggle_assessment_type', 'delete_assessment_type', 'copy_assessments']);
 $__featureActions = [
     'grades' => ['record_grade'],
     'attendance' => ['record_attendance', 'batch_attendance'],
@@ -91,7 +91,7 @@ if (in_array($action, $__termActions, true)
 $__manageActions = [
     'enroll', 'unenroll_student', 'promote', 'bulk_enroll', 'transfer_student',
     'assign_teacher', 'save_class', 'delete_class', 'toggle_class',
-    'sync_member_types', 'impact_delete_class', 'copy_assessments',
+    'sync_student_types', 'impact_delete_class', 'copy_assessments',
 ];
 if (in_array($action, $__manageActions, true)) {
     if (!in_array($__role, ['super_admin', 'school_admin', 'edu_dept'], true)) {
@@ -117,11 +117,11 @@ if (in_array($action, $__legacyWriteActions, true)
 }
 
 // TIER 2c — Enrolment-management READS (audit 2026-10-20). The "unassigned"
-// lists return every active member / teacher of the school with date of
+// lists return every active student / teacher of the school with date of
 // birth, education level and staff flags; they exist only for the Education
 // enrolment screen (dashboards/edu_dept.php). Teachers and takers never call
 // them and must not be able to list the whole school through them. The
-// school-wide roster / member search / teacher directory belong to the same
+// school-wide roster / student search / teacher directory belong to the same
 // screen (teacher + taker dashboards only ever call get_enrolled_students).
 $__manageReadActions = ['get_unassigned_members', 'get_unassigned_teachers', 'enrollment_overview',
     'roster', 'search_members', 'list_teachers'];
@@ -189,7 +189,7 @@ $currentYear = function_exists('ay_resolve') ? ay_resolve($conn)['year'] : null;
 
 // ── PII minimization (PATCH H7) ─────────────────────────────────────────────
 // Teachers and attendance takers receive rosters to teach, not contact
-// details: member/teacher phone numbers are stripped from every payload
+// details: student/teacher phone numbers are stripped from every payload
 // for those roles. Staff roles keep full contact data.
 $__maskPhone = in_array($__role, ['teacher', 'attendance_taker'], true);
 
@@ -251,7 +251,7 @@ function _ay_check_date_pair(&$start, &$end, string $what): ?string {
 // they are how the active year is administered, not year-scoped data writes.
 if (function_exists('ay_require_writable')) {
     $ayYearScopedWrites = ['enroll','assign_teacher','record_grade','record_attendance','batch_attendance','promote','bulk_enroll','transfer_student'];
-    $ayReadonlyBlocked  = ['save_class','delete_class','unenroll_student','sync_member_types'];
+    $ayReadonlyBlocked  = ['save_class','delete_class','unenroll_student','sync_student_types'];
     if (in_array($action, $ayYearScopedWrites, true)) {
         ay_require_writable($conn);
     } elseif (in_array($action, $ayReadonlyBlocked, true)) {
@@ -338,24 +338,24 @@ switch ($action) {
     // ENROLL STUDENT IN CLASS
     // ============================================================
     case 'enroll':
-        $memberId = (int)($_POST['member_id'] ?? 0);
+        $studentId = (int)($_POST['student_id'] ?? 0);
         $classId = (int)($_POST['class_id'] ?? 0);
 
-        if (!$memberId || !$classId) {
-            echo json_encode(['status' => 'error', 'message' => 'Please select both member and class']);
+        if (!$studentId || !$classId) {
+            echo json_encode(['status' => 'error', 'message' => 'Please select both student and class']);
             exit;
         }
 
-        $enr = EnrollmentService::enroll($conn, $memberId, $classId, $currentYear['id'] ?? null, (int)($_SESSION['admin_id'] ?? 0));
+        $enr = EnrollmentService::enroll($conn, $studentId, $classId, $currentYear['id'] ?? null, (int)($_SESSION['admin_id'] ?? 0));
         if (($enr['status'] ?? '') !== 'success') {
             echo json_encode($enr);
             exit;
         }
 
-        $stmt = $conn->prepare("SELECT student_name, father_name, member_code FROM members WHERE id = ?");
-        $stmt->bind_param("i", $memberId);
+        $stmt = $conn->prepare("SELECT student_name, father_name, student_code FROM students WHERE id = ?");
+        $stmt->bind_param("i", $studentId);
         $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc();
+        $student = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
         $stmt = $conn->prepare("SELECT class_name FROM classes WHERE id = ?");
@@ -364,7 +364,7 @@ switch ($action) {
         $class = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        $memberName = trim(($member['student_name'] ?? '') . ' ' . ($member['father_name'] ?? ''));
+        $memberName = trim(($student['student_name'] ?? '') . ' ' . ($student['father_name'] ?? ''));
         $className = $class['class_name'] ?? 'class';
 
         if (empty($enr['skipped']) && function_exists('sendNotification')) {
@@ -372,7 +372,7 @@ switch ($action) {
                 "Student Enrolled in Class",
                 "$memberName has been enrolled in {$className}",
                 [
-                    'data' => ['member_id' => $memberId, 'class_id' => $classId],
+                    'data' => ['student_id' => $studentId, 'class_id' => $classId],
                     'target_roles' => ['info_dept', 'school_admin']
                 ]
             );
@@ -415,7 +415,7 @@ switch ($action) {
     // RECORD GRADES
     // ============================================================
     case 'record_grade':
-        $memberId = (int)($_POST['member_id'] ?? 0);
+        $studentId = (int)($_POST['student_id'] ?? 0);
         $classId = (int)($_POST['class_id'] ?? 0);
         $subjectId = (int)($_POST['subject_id'] ?? 0);
         $assessmentType = $_POST['assessment_type'] ?? 'test';
@@ -423,7 +423,7 @@ switch ($action) {
         $maxScore = isset($_POST['max_score']) ? (float)$_POST['max_score'] : 100;
         $remarks = trim($_POST['remarks'] ?? '');
         
-        if (!$memberId || !$classId || !$subjectId) {
+        if (!$studentId || !$classId || !$subjectId) {
             echo json_encode(['status' => 'error', 'message' => 'Missing required fields']);
             exit;
         }
@@ -445,13 +445,13 @@ switch ($action) {
         // Insert grade record
         $stmt = $conn->prepare("
             INSERT INTO academic_records 
-            (member_id, class_id, subject_id, academic_year_id, term_id, assessment_type, 
+            (student_id, class_id, subject_id, academic_year_id, term_id, assessment_type, 
              score, max_score, grade_letter, remarks, recorded_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $recordedBy = $_SESSION['admin_id'];
         $stmt->bind_param("iiiissddssi", 
-            $memberId, $classId, $subjectId, $currentYear['id'], $termId,
+            $studentId, $classId, $subjectId, $currentYear['id'], $termId,
             $assessmentType, $score, $maxScore, $gradeLetter, $remarks, $recordedBy
         );
         
@@ -471,7 +471,7 @@ switch ($action) {
     // RECORD ATTENDANCE
     // ============================================================
     case 'record_attendance':
-        $memberId = (int)($_POST['member_id'] ?? 0);
+        $studentId = (int)($_POST['student_id'] ?? 0);
         $classId = (int)($_POST['class_id'] ?? 0);
         $attendanceDate = validateDate($_POST['attendance_date'] ?? '', date('Y-m-d'));
         $statusValue = $_POST['status'] ?? null;
@@ -483,8 +483,8 @@ switch ($action) {
         $noteValue = $_POST['notes'] ?? '';
         $notes = is_string($noteValue) ? trim($noteValue) : '';
         
-        if (!$memberId || !$classId) {
-            echo json_encode(['status' => 'error', 'message' => 'Member ID and class ID are required']);
+        if (!$studentId || !$classId) {
+            echo json_encode(['status' => 'error', 'message' => 'Student ID and class ID are required']);
             exit;
         }
         
@@ -513,23 +513,23 @@ switch ($action) {
         $recordedBy = (int)$_SESSION['admin_id'];
         $enrollment = $conn->prepare(
             "SELECT 1 FROM class_enrollments
-             WHERE member_id = ? AND class_id = ? AND status = 'active'
+             WHERE student_id = ? AND class_id = ? AND status = 'active'
                AND (? IS NULL OR academic_year_id = ?)
              LIMIT 1"
         );
-        $enrollment->bind_param('iiii', $memberId, $classId, $yearId, $yearId);
+        $enrollment->bind_param('iiii', $studentId, $classId, $yearId, $yearId);
         $enrollment->execute();
         $isEnrolled = $enrollment->get_result()->num_rows > 0;
         $enrollment->close();
         if (!$isEnrolled) {
-            echo json_encode(['status' => 'error', 'message' => 'The member is not actively enrolled in this class.']);
+            echo json_encode(['status' => 'error', 'message' => 'The student is not actively enrolled in this class.']);
             exit;
         }
         
         // Upsert one explicitly selected attendance record.
         $stmt = $conn->prepare("
             INSERT INTO attendance 
-            (member_id, class_id, academic_year_id, attendance_date, status, check_in_time, notes, recorded_by)
+            (student_id, class_id, academic_year_id, attendance_date, status, check_in_time, notes, recorded_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
@@ -538,15 +538,15 @@ switch ($action) {
                 recorded_by = VALUES(recorded_by)
         ");
         $stmt->bind_param("iiissssi",
-            $memberId, $classId, $yearId, $attendanceDate, 
+            $studentId, $classId, $yearId, $attendanceDate, 
             $status, $checkInTime, $notes, $recordedBy
         );
         
         if ($stmt->execute()) {
             // Update attendance summary for the RECORDED date's month.
-            updateAttendanceSummary($conn, $memberId, $yearId, $attendanceDate);
-            // Attendance alerting Phase 2: Education edits re-evaluate the member.
-            \App\Services\AttendanceWarningService::safeEvaluateMany($conn, 'edu', [$memberId], $attendanceDate, $recordedBy);
+            updateAttendanceSummary($conn, $studentId, $yearId, $attendanceDate);
+            // Attendance alerting Phase 2: Education edits re-evaluate the student.
+            \App\Services\AttendanceWarningService::safeEvaluateMany($conn, 'edu', [$studentId], $attendanceDate, $recordedBy);
             
             echo json_encode(['status' => 'success', 'message' => 'Attendance recorded!']);
         } else {
@@ -615,13 +615,13 @@ switch ($action) {
         }
 
         foreach ($records as $record) {
-            updateAttendanceSummary($conn, (int)$record['member_id'], $yearId, $attendanceDate);
+            updateAttendanceSummary($conn, (int)$record['student_id'], $yearId, $attendanceDate);
         }
         // Attendance alerting Phase 2 (flag-gated, never fails the save).
         \App\Services\AttendanceWarningService::safeEvaluateMany(
             $conn,
             'edu',
-            \App\Services\AttendanceWarningService::memberIdsFromRecords($records),
+            \App\Services\AttendanceWarningService::studentIdsFromRecords($records),
             $attendanceDate,
             $recordedBy
         );
@@ -664,15 +664,15 @@ switch ($action) {
     // ============================================================
     case 'promote':
         // ATOMICITY GUARANTEE: a promotion either completes fully (old
-        // enrollment closed + new enrollment created + member denormalized)
+        // enrollment closed + new enrollment created + student denormalized)
         // or makes NO changes at all. Previously the four steps ran as
         // independent autocommits, so a mid-sequence failure could leave a
-        // member enrolled in two classes or in none.
-        $memberId = (int)($_POST['member_id'] ?? 0);
+        // student enrolled in two classes or in none.
+        $studentId = (int)($_POST['student_id'] ?? 0);
         $fromClassId = (int)($_POST['from_class_id'] ?? 0);
         $toClassId = (int)($_POST['to_class_id'] ?? 0);
 
-        if (!$memberId || !$fromClassId || !$toClassId) {
+        if (!$studentId || !$fromClassId || !$toClassId) {
             echo json_encode(['status' => 'error', 'message' => 'Missing required fields']);
             exit;
         }
@@ -689,9 +689,9 @@ switch ($action) {
         // diagnostic ever reaches the client.
         $check = $conn->prepare(
             "SELECT id FROM class_enrollments
-             WHERE member_id = ? AND class_id = ? AND status = 'active' LIMIT 1"
+             WHERE student_id = ? AND class_id = ? AND status = 'active' LIMIT 1"
         );
-        $check->bind_param('ii', $memberId, $fromClassId);
+        $check->bind_param('ii', $studentId, $fromClassId);
         $check->execute();
         $sourceEnrollment = $check->get_result()->fetch_assoc();
         $check->close();
@@ -715,12 +715,12 @@ switch ($action) {
         try {
             // Mark old enrollment as completed.
             // Finding K (2026-10-02): the pre-flight SELECT above is a plain
-            // read, so two concurrent promotions of the same member to
+            // read, so two concurrent promotions of the same student to
             // *different* target classes both passed it and both inserted an
-            // 'active' row — verified at runtime, the member ended up active
+            // 'active' row — verified at runtime, the student ended up active
             // in two classes. Re-assert the precondition here so only one
             // request can close the source enrollment. `unique_enrollment`
-            // does not help: it is on (member_id, class_id, academic_year_id)
+            // does not help: it is on (student_id, class_id, academic_year_id)
             // and the two targets differ.
             $stmt = $conn->prepare("UPDATE class_enrollments SET status = 'completed' WHERE id = ? AND status = 'active'");
             $stmt->bind_param("i", $sourceEnrollment['id']);
@@ -732,24 +732,24 @@ switch ($action) {
             // Create new enrollment
             $stmt = $conn->prepare("
                 INSERT INTO class_enrollments
-                (member_id, class_id, academic_year_id, enrolled_at, status, promoted_from, enrolled_by)
+                (student_id, class_id, academic_year_id, enrolled_at, status, promoted_from, enrolled_by)
                 VALUES (?, ?, ?, CURDATE(), 'active', ?, ?)
             ");
             $enrolledBy = (int)($_SESSION['admin_id'] ?? 0);
             $yearId = (int)$currentYear['id'];
-            $stmt->bind_param("iiiii", $memberId, $toClassId, $yearId, $fromClassId, $enrolledBy);
+            $stmt->bind_param("iiiii", $studentId, $toClassId, $yearId, $fromClassId, $enrolledBy);
             if (!$stmt->execute()) {
                 throw new RuntimeException('Unable to create the new enrollment.');
             }
             $stmt->close();
 
-            // Update member's denormalized class reference
-            autoUpdateMemberClass($conn, $memberId, $toClassId, $yearId);
+            // Update student's denormalized class reference
+            autoUpdateMemberClass($conn, $studentId, $toClassId, $yearId);
 
             // Update promoted_at (column added by migration/config auto-fix)
             try {
-                $stmt = $conn->prepare("UPDATE members SET promoted_at = CURDATE() WHERE id = ?");
-                $stmt->bind_param("i", $memberId);
+                $stmt = $conn->prepare("UPDATE students SET promoted_at = CURDATE() WHERE id = ?");
+                $stmt->bind_param("i", $studentId);
                 $stmt->execute();
                 $stmt->close();
             } catch (Exception $e) { /* promoted_at column may not exist yet */ }
@@ -777,7 +777,7 @@ switch ($action) {
         $classId = (int)($_GET['class_id'] ?? 0);
         $search = trim($_GET['search'] ?? '');
         $genderFilter = trim($_GET['gender'] ?? '');
-        $memberTypeFilter = trim($_GET['member_type'] ?? '');
+        $memberTypeFilter = trim($_GET['student_type'] ?? '');
         $sortBy = trim($_GET['sort'] ?? 'name');
         if (!$classId) {
             echo json_encode(['status' => 'error', 'message' => 'Please pick a class first.']);
@@ -789,13 +789,12 @@ switch ($action) {
             $students = EnrollmentService::fetchRoster($conn, $classId, $scope['year_id'] ?? null, [
                 'search' => $search,
                 'gender' => $genderFilter,
-                'member_type' => $memberTypeFilter,
-                'sort' => $sortBy,
+                                'sort' => $sortBy,
             ]);
             $stats = ['total' => count($students), 'male' => 0, 'female' => 0, 'regular' => 0, 'special_regular' => 0, 'honorary' => 0, 'teachers' => 0];
             foreach ($students as $s) {
                 if (($s['gender'] ?? '') === 'male') $stats['male']++; else $stats['female']++;
-                $mt = $s['member_type'] ?? 'regular';
+                $mt = $s['student_type'] ?? 'regular';
                 if (isset($stats[$mt])) $stats[$mt]++; else $stats['regular']++;
                 if (!empty($s['is_teacher'])) $stats['teachers']++;
             }
@@ -975,20 +974,20 @@ switch ($action) {
         $level = (int)($_POST['level_order'] ?? 0);
         $section = trim($_POST['section'] ?? '');
         $ageGroup = trim((string)($_POST['age_group'] ?? ''));
-        // P71 — single source of truth (App\Services\MemberCategory):
+        // P71 — single source of truth (App\Services\StudentCategory):
         // section IS the age group's name. The UI posts one Section/Age
         // select (the age_group code); the section name is always DERIVED
         // server-side so the stored pair can never disagree. A legacy
         // client that posts only a section name still resolves through
         // the canonical map; unknown values are rejected, never guessed.
-        if ($ageGroup !== '' && !in_array($ageGroup, MemberCategory::groups(), true)) {
+        if ($ageGroup !== '' && !in_array($ageGroup, StudentCategory::groups(), true)) {
             echo json_encode(['status' => 'error', 'message' => 'Unknown section / age group. Please pick one of the sections listed in the form.']);
             exit;
         }
         if ($ageGroup === '') {
-            $ageGroup = MemberCategory::ageGroupForSectionAm($section) ?? '';
+            $ageGroup = StudentCategory::ageGroupForSectionAm($section) ?? '';
         }
-        $section = $ageGroup !== '' ? (MemberCategory::sectionAm($ageGroup) ?? '') : '';
+        $section = $ageGroup !== '' ? (StudentCategory::sectionAm($ageGroup) ?? '') : '';
         // ENUM columns reject empty strings — convert to NULL
         if ($ageGroup === '' || $ageGroup === null) {
             $ageGroup = null;
@@ -1003,7 +1002,7 @@ switch ($action) {
             $stmt = $conn->prepare("UPDATE classes SET class_name=?,class_name_en=?,class_code=?,level_order=?,section=?,age_group=?,description=?,is_active=? WHERE id=?");
             $stmt->bind_param("sssisssii", $name, $nameEn, $code, $level, $section, $ageGroup, $desc, $isActive, $id);
         } else {
-            $stmt = $conn->prepare("INSERT INTO classes (class_name,class_name_en,class_code,level_order,section,age_group,description,is_active) VALUES (?,?,?,?,?,?,?,?)");
+            $stmt = $conn->prepare("INSERT INTO classes (class_name,class_name_en,class_code,level_order,section, description,is_active) VALUES (?,?,?,?,?,?,?,?)");
             $stmt->bind_param("sssisssi", $name, $nameEn, $code, $level, $section, $ageGroup, $desc, $isActive);
         }
         if ($stmt->execute()) {
@@ -1764,9 +1763,9 @@ switch ($action) {
     // ============================================================
     case 'bulk_enroll':
         $classId = (int)($_POST['class_id'] ?? 0);
-        $memberIds = json_decode($_POST['member_ids'] ?? '[]', true);
-        if (!$classId || empty($memberIds)) {
-            echo json_encode(['status' => 'error', 'message' => 'Pick a class and at least one student.', 'field' => !$classId ? 'class_id' : 'member_ids']);
+        $studentIds = json_decode($_POST['student_ids'] ?? '[]', true);
+        if (!$classId || empty($studentIds)) {
+            echo json_encode(['status' => 'error', 'message' => 'Pick a class and at least one student.', 'field' => !$classId ? 'class_id' : 'student_ids']);
             exit;
         }
         if (!$currentYear) {
@@ -1774,7 +1773,7 @@ switch ($action) {
             exit;
         }
         $by = (int)($_SESSION['admin_id'] ?? 0); $ok=0; $skip=0; $fail=0;
-        foreach ($memberIds as $mid) {
+        foreach ($studentIds as $mid) {
             $mid = (int)$mid; if (!$mid) continue;
             $res = EnrollmentService::enroll($conn, $mid, $classId, (int)$currentYear['id'], $by);
             if (($res['status'] ?? '') === 'success') {
@@ -1796,11 +1795,11 @@ switch ($action) {
         $reason = trim($_POST['reason'] ?? '');
         if (!$enrollmentId || !$toClassId) { echo json_encode(['status'=>'error','message'=>'Enrollment and target class required']); exit; }
         if (!$currentYear) { echo json_encode(['status'=>'error','message'=>'No active academic year']); exit; }
-        $stmt = $conn->prepare("SELECT ce.*, m.student_name, m.father_name FROM class_enrollments ce JOIN members m ON ce.member_id=m.id WHERE ce.id=?");
+        $stmt = $conn->prepare("SELECT ce.*, m.student_name, m.father_name FROM class_enrollments ce JOIN students m ON ce.student_id=m.id WHERE ce.id=?");
         $stmt->bind_param("i", $enrollmentId); $stmt->execute(); $enr = $stmt->get_result()->fetch_assoc();
         if (!$enr) { echo json_encode(['status'=>'error','message'=>'Enrollment not found']); exit; }
-        $stmt = $conn->prepare("SELECT id FROM class_enrollments WHERE member_id=? AND class_id=? AND academic_year_id=? AND status='active'");
-        $stmt->bind_param("iii", $enr['member_id'], $toClassId, $currentYear['id']); $stmt->execute();
+        $stmt = $conn->prepare("SELECT id FROM class_enrollments WHERE student_id=? AND class_id=? AND academic_year_id=? AND status='active'");
+        $stmt->bind_param("iii", $enr['student_id'], $toClassId, $currentYear['id']); $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) { echo json_encode(['status'=>'error','message'=>'Already in target class']); exit; }
         // Target class must exist before mutating anything.
         $classCheck = $conn->prepare('SELECT id FROM classes WHERE id = ? LIMIT 1');
@@ -1809,19 +1808,19 @@ switch ($action) {
         $classCheck->close();
 
         // ATOMICITY GUARANTEE: closing the old enrollment and creating the
-        // new one commit together or not at all — a member can never end up
+        // new one commit together or not at all — a student can never end up
         // stranded (no active enrollment) or double-enrolled by a
         // mid-sequence failure.
         $conn->begin_transaction();
         try {
             // Finding K (2026-10-02): the SELECT at the top of this case is a
             // plain read, so a replayed or concurrent request could transfer an
-            // enrollment that has ALREADY been transferred — leaving the member
+            // enrollment that has ALREADY been transferred — leaving the student
             // active in two classes at once. Re-assert the precondition inside
             // the UPDATE so only a still-active row can be closed, and treat a
             // zero-row result as a lost race rather than success. The
             // `unique_enrollment` key does NOT catch this: it is on
-            // (member_id, class_id, academic_year_id), so two transfers to
+            // (student_id, class_id, academic_year_id), so two transfers to
             // *different* target classes both insert cleanly.
             // EnrollmentService::transferByEnrollment() and the 'promote' case
             // already enforce this same rule; this path was the outlier.
@@ -1833,12 +1832,12 @@ switch ($action) {
             if ($closedRows < 1) { throw new RuntimeException('__ENROLLMENT_NOT_ACTIVE__'); }
             $by = (int)($_SESSION['admin_id'] ?? 0); $dt = date('Y-m-d'); $from = $enr['class_id'];
             $tnote = "Transferred from class #$from".($reason ? ": $reason" : '');
-            $yearId = (int)$currentYear['id']; $memberId = (int)$enr['member_id'];
-            $stmt = $conn->prepare("INSERT INTO class_enrollments (member_id,class_id,academic_year_id,enrolled_at,status,notes,promoted_from,enrolled_by) VALUES (?,?,?,?,'active',?,?,?)");
-            $stmt->bind_param("iiissii", $memberId, $toClassId, $yearId, $dt, $tnote, $from, $by);
+            $yearId = (int)$currentYear['id']; $studentId = (int)$enr['student_id'];
+            $stmt = $conn->prepare("INSERT INTO class_enrollments (student_id,class_id,academic_year_id,enrolled_at,status,notes,promoted_from,enrolled_by) VALUES (?,?,?,?,'active',?,?,?)");
+            $stmt->bind_param("iiissii", $studentId, $toClassId, $yearId, $dt, $tnote, $from, $by);
             if (!$stmt->execute()) { throw new RuntimeException('Unable to create the target enrollment.'); }
             $stmt->close();
-            if (function_exists('autoUpdateMemberClass')) autoUpdateMemberClass($conn, $memberId, $toClassId, $yearId);
+            if (function_exists('autoUpdateMemberClass')) autoUpdateMemberClass($conn, $studentId, $toClassId, $yearId);
             $conn->commit();
             echo json_encode(['status'=>'success','message'=>$enr['student_name'].' '.$enr['father_name'].' transferred!']);
         } catch (Exception $e) {
@@ -1860,26 +1859,26 @@ switch ($action) {
     // ============================================================
     case 'get_unassigned_members':
         $search=trim($_GET['search']??''); $genderFilter=trim($_GET['gender']??'');
-        $ageGroupFilter=trim($_GET['age_group']??''); $memberTypeFilter=trim($_GET['member_type']??'');
+        $ageGroupFilter=trim($_GET['age_group']??''); $memberTypeFilter=trim($_GET['student_type']??'');
         $limit=min(100,max(10,(int)($_GET['limit']??50)));
         $offset=max(0,(int)($_GET['offset']??0));
-        if (!$currentYear) { echo json_encode(['status'=>'success','members'=>[],'total'=>0]); exit; }
+        if (!$currentYear) { echo json_encode(['status'=>'success','students'=>[],'total'=>0]); exit; }
         $w=["m.status='active'"]; $p=[]; $t='';
-        if ($search!=='') { $w[]="(m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ? OR m.baptismal_name LIKE ?)"; $st="%$search%"; $p=array_merge($p,[$st,$st,$st,$st]); $t.='ssss'; }
+        if ($search!=='') { $w[]="(m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ? OR m.baptismal_name LIKE ?)"; $st="%$search%"; $p=array_merge($p,[$st,$st,$st,$st]); $t.='ssss'; }
         if ($genderFilter!=='' && in_array($genderFilter,['male','female'])) { $w[]="m.gender=?"; $p[]=$genderFilter; $t.='s'; }
-        if ($ageGroupFilter!=='' && in_array($ageGroupFilter, MemberCategory::groups(), true)) { $w[]="m.age_group=?"; $p[]=$ageGroupFilter; $t.='s'; }
-        if ($memberTypeFilter!=='' && in_array($memberTypeFilter,['regular','special_regular','honorary'])) { $w[]="m.member_type=?"; $p[]=$memberTypeFilter; $t.='s'; }
+        if ($ageGroupFilter!=='' && in_array($ageGroupFilter, StudentCategory::groups(), true)) { $w[]="=?"; $p[]=$ageGroupFilter; $t.='s'; }
+        if ($memberTypeFilter!=='' && in_array($memberTypeFilter,['regular','special_regular','honorary'])) { $w[]="m=?"; $p[]=$memberTypeFilter; $t.='s'; }
         $wc=implode(' AND ',$w);
-        $csql="SELECT COUNT(*) as total FROM members m WHERE $wc AND m.id NOT IN (SELECT ce.member_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active')";
+        $csql="SELECT COUNT(*) as total FROM students m WHERE $wc AND m.id NOT IN (SELECT ce.student_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active')";
         $cp=array_merge($p,[$currentYear['id']]); $ct=$t.'i';
         if(!empty($cp)) { $stmt=$conn->prepare($csql); $stmt->bind_param($ct,...$cp); $stmt->execute(); }
         else { $stmt=$conn->prepare($csql); $stmt->execute(); }
         $total=(int)$stmt->get_result()->fetch_assoc()['total'];
-        $sql="SELECT m.id, m.student_name, m.father_name, m.grandfather_name, m.member_code, m.gender, m.phone_number, m.phone_primary, m.age_group, m.current_section, m.date_of_birth, m.age, m.baptismal_name, m.education_level, m.is_teacher, m.member_type, m.is_staff, m.is_committee, m.is_volunteer, m.registered_at FROM members m WHERE $wc AND m.id NOT IN (SELECT ce.member_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active') ORDER BY m.student_name LIMIT ? OFFSET ?";
+        $sql="SELECT m.id, m.student_name, m.father_name, m.grandfather_name, m.student_code, m.gender, m.phone_number, m.phone_primary, , , m.date_of_birth, m.age, m.baptismal_name, m.education_level, m.is_teacher, m, m.is_staff, m.is_committee, m.is_volunteer, m.registered_at FROM students m WHERE $wc AND m.id NOT IN (SELECT ce.student_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active') ORDER BY m.student_name LIMIT ? OFFSET ?";
         $fp=array_merge($p,[$currentYear['id'],$limit,$offset]); $ft=$t.'iii';
         $stmt=$conn->prepare($sql); $stmt->bind_param($ft,...$fp); $stmt->execute();
-        $members=[]; $r=$stmt->get_result(); while($row=$r->fetch_assoc()) $members[]=$row;
-        echo json_encode(['status'=>'success','members'=>edu_scrub_phone($members, $__maskPhone),'total'=>$total,'limit'=>$limit,'offset'=>$offset]);
+        $students=[]; $r=$stmt->get_result(); while($row=$r->fetch_assoc()) $students[]=$row;
+        echo json_encode(['status'=>'success','students'=>edu_scrub_phone($students, $__maskPhone),'total'=>$total,'limit'=>$limit,'offset'=>$offset]);
         break;
 
     // ============================================================
@@ -1891,7 +1890,7 @@ switch ($action) {
         if ($search!=='') { $w[]="(u.full_name LIKE ? OR u.username LIKE ? OR u.email LIKE ?)"; $st="%$search%"; $p=[$st,$st,$st]; $t='sss'; }
         $wc=implode(' AND ',$w);
         $yc=$currentYear ? " AND ta.academic_year_id=".(int)$currentYear['id'] : "";
-        $sql="SELECT u.id, u.full_name, u.username, u.email, u.member_id, COALESCE(m.member_code,'') as member_code, COALESCE(m.phone_number,'') as phone FROM users u LEFT JOIN members m ON u.member_id=m.id WHERE $wc AND u.id NOT IN (SELECT ta.teacher_id FROM teacher_assignments ta WHERE ta.is_active=1 $yc) ORDER BY u.full_name";
+        $sql="SELECT u.id, u.full_name, u.username, u.email, u.student_id, COALESCE(m.student_code,'') as student_code, COALESCE(m.phone_number,'') as phone FROM users u LEFT JOIN students m ON u.student_id=m.id WHERE $wc AND u.id NOT IN (SELECT ta.teacher_id FROM teacher_assignments ta WHERE ta.is_active=1 $yc) ORDER BY u.full_name";
         if (!empty($p)) { $stmt=$conn->prepare($sql); $stmt->bind_param($t,...$p); $stmt->execute(); $result=$stmt->get_result(); }
         else $result=$conn->query($sql);
         $teachers=[]; if($result) while($row=$result->fetch_assoc()) $teachers[]=$row;
@@ -1906,11 +1905,11 @@ switch ($action) {
         $classes = [];
         try {
             // Try full query with teacher info
-            $sql="SELECT c.id, c.class_name, c.class_name_en, c.class_code, c.level_order, c.section, c.age_group,
+            $sql="SELECT c.id, c.class_name, c.class_name_en, c.class_code, c.level_order, c.section, c,
                 COALESCE(enr.total,0) as enrolled_count, COALESCE(enr.male_count,0) as male_count, COALESCE(enr.female_count,0) as female_count,
                 COALESCE(tch.teacher_count,0) as teacher_count, COALESCE(tch.class_teacher_name,'') as class_teacher_name
             FROM classes c
-            LEFT JOIN (SELECT ce.class_id, COUNT(*) as total, SUM(CASE WHEN m.gender='male' THEN 1 ELSE 0 END) as male_count, SUM(CASE WHEN m.gender='female' THEN 1 ELSE 0 END) as female_count FROM class_enrollments ce JOIN members m ON ce.member_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY ce.class_id) enr ON c.id=enr.class_id
+            LEFT JOIN (SELECT ce.class_id, COUNT(*) as total, SUM(CASE WHEN m.gender='male' THEN 1 ELSE 0 END) as male_count, SUM(CASE WHEN m.gender='female' THEN 1 ELSE 0 END) as female_count FROM class_enrollments ce JOIN students m ON ce.student_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY ce.class_id) enr ON c.id=enr.class_id
             LEFT JOIN (SELECT ta.class_id, COUNT(DISTINCT ta.teacher_id) as teacher_count, (SELECT u2.full_name FROM teacher_assignments ta2 JOIN users u2 ON ta2.teacher_id=u2.id WHERE ta2.class_id=ta.class_id AND ta2.is_class_teacher=1 AND ta2.is_active=1 LIMIT 1) as class_teacher_name FROM teacher_assignments ta WHERE ta.is_active=1 GROUP BY ta.class_id) tch ON c.id=tch.class_id
             WHERE c.is_active=1 ORDER BY c.level_order";
             $stmt=$conn->prepare($sql); $stmt->bind_param("i",$currentYear['id']); $stmt->execute();
@@ -1918,31 +1917,31 @@ switch ($action) {
         } catch (Exception $e) {
             // Fallback without teacher_assignments join
             try {
-                $stmt=$conn->prepare("SELECT c.id, c.class_name, c.class_name_en, c.class_code, c.level_order, c.section, c.age_group,
+                $stmt=$conn->prepare("SELECT c.id, c.class_name, c.class_name_en, c.class_code, c.level_order, c.section, c,
                     COALESCE(enr.total,0) as enrolled_count, COALESCE(enr.male_count,0) as male_count, COALESCE(enr.female_count,0) as female_count,
                     0 as teacher_count, '' as class_teacher_name
                 FROM classes c
-                LEFT JOIN (SELECT ce.class_id, COUNT(*) as total, SUM(CASE WHEN m.gender='male' THEN 1 ELSE 0 END) as male_count, SUM(CASE WHEN m.gender='female' THEN 1 ELSE 0 END) as female_count FROM class_enrollments ce JOIN members m ON ce.member_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY ce.class_id) enr ON c.id=enr.class_id
+                LEFT JOIN (SELECT ce.class_id, COUNT(*) as total, SUM(CASE WHEN m.gender='male' THEN 1 ELSE 0 END) as male_count, SUM(CASE WHEN m.gender='female' THEN 1 ELSE 0 END) as female_count FROM class_enrollments ce JOIN students m ON ce.student_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY ce.class_id) enr ON c.id=enr.class_id
                 WHERE c.is_active=1 ORDER BY c.level_order");
                 $stmt->bind_param("i",$currentYear['id']); $stmt->execute();
                 $r=$stmt->get_result(); while($row=$r->fetch_assoc()) $classes[]=$row;
             } catch (Exception $e2) { /* tables don't exist yet */ }
         }
-        $totalM=0; $r=$conn->query("SELECT COUNT(*) c FROM members WHERE status='active'"); if($r) $totalM=(int)$r->fetch_assoc()['c'];
-        $totalE=0; $stmt=$conn->prepare("SELECT COUNT(DISTINCT ce.member_id) c FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active'");
+        $totalM=0; $r=$conn->query("SELECT COUNT(*) c FROM students WHERE status='active'"); if($r) $totalM=(int)$r->fetch_assoc()['c'];
+        $totalE=0; $stmt=$conn->prepare("SELECT COUNT(DISTINCT ce.student_id) c FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active'");
         $stmt->bind_param("i",$currentYear['id']); $stmt->execute(); $r=$stmt->get_result(); if($r) $totalE=(int)$r->fetch_assoc()['c'];
         $totalT=0; $r2=$conn->query("SELECT COUNT(*) c FROM users WHERE role='teacher' AND is_active=1"); if($r2) $totalT=(int)$r2->fetch_assoc()['c'];
         $assignedT=0; try { $yc2=$currentYear?" AND ta.academic_year_id=".(int)$currentYear['id']:""; $r3=$conn->query("SELECT COUNT(DISTINCT ta.teacher_id) c FROM teacher_assignments ta WHERE ta.is_active=1 $yc2"); if($r3) $assignedT=(int)$r3->fetch_assoc()['c']; } catch(Exception $e){}
-        // Member type breakdown
+        // Student type breakdown
         $typeBreakdown=['regular'=>0,'special_regular'=>0,'honorary'=>0];
-        try { $r4=$conn->query("SELECT member_type, COUNT(*) as c FROM members WHERE status='active' GROUP BY member_type");
-            if($r4) while($rw=$r4->fetch_assoc()) { $typeBreakdown[$rw['member_type']??'regular']=(int)$rw['c']; }
+        try { $r4=$conn->query("SELECT student_type, COUNT(*) as c FROM students WHERE status='active' GROUP BY student_type");
+            if($r4) while($rw=$r4->fetch_assoc()) { $typeBreakdown[$rw['student_type']??'regular']=(int)$rw['c']; }
         } catch(Exception $e){}
         // Enrolled by type
         $enrolledByType=['regular'=>0,'special_regular'=>0,'honorary'=>0];
-        if($currentYear) { try { $stmt4=$conn->prepare("SELECT m.member_type, COUNT(DISTINCT ce.member_id) c FROM class_enrollments ce JOIN members m ON ce.member_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY m.member_type");
+        if($currentYear) { try { $stmt4=$conn->prepare("SELECT m, COUNT(DISTINCT ce.student_id) c FROM class_enrollments ce JOIN students m ON ce.student_id=m.id WHERE ce.academic_year_id=? AND ce.status='active' GROUP BY m");
             $stmt4->bind_param("i",$currentYear['id']); $stmt4->execute(); $r5=$stmt4->get_result();
-            if($r5) while($rw=$r5->fetch_assoc()) { $enrolledByType[$rw['member_type']??'regular']=(int)$rw['c']; } $stmt4->close();
+            if($r5) while($rw=$r5->fetch_assoc()) { $enrolledByType[$rw['student_type']??'regular']=(int)$rw['c']; } $stmt4->close();
         } catch(Exception $e){} }
         echo json_encode(['status'=>'success','classes'=>$classes,'summary'=>[
             'total_members'=>$totalM,'total_enrolled'=>$totalE,'unassigned_members'=>$totalM-$totalE,
@@ -1953,14 +1952,14 @@ switch ($action) {
         break;
 
     // ============================================================
-    // RETIRED: member types are manual, never inferred from roles.
+    // RETIRED: student types are manual, never inferred from roles.
     // ============================================================
-    case 'sync_member_types':
+    case 'sync_student_types':
         http_response_code(410);
         echo json_encode([
             'status' => 'error',
-            'code' => 'member_type_manual_only',
-            'message' => 'Automatic member type synchronization has been retired. Edit the member type manually in the member record.'
+            'code' => 'student_type_manual_only',
+            'message' => 'Automatic student type synchronization has been retired. Edit the student type manually in the student record.'
         ]);
         break;
 
@@ -1970,17 +1969,17 @@ switch ($action) {
     case 'search_members':
         $q=trim($_GET['q']??''); $excClass=(int)($_GET['exclude_class']??0);
         $limit=min(30,max(5,(int)($_GET['limit']??15))); $unassigned=isset($_GET['unassigned'])&&$_GET['unassigned']==='1';
-        if (strlen($q)<1) { echo json_encode(['status'=>'success','members'=>[]]); exit; }
+        if (strlen($q)<1) { echo json_encode(['status'=>'success','students'=>[]]); exit; }
         $w=["m.status='active'"]; $p=[]; $t='';
-        $w[]="(m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ? OR m.baptismal_name LIKE ?)";
+        $w[]="(m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ? OR m.baptismal_name LIKE ?)";
         $st="%$q%"; $p=[$st,$st,$st,$st]; $t='ssss';
-        if ($excClass>0 && $currentYear) { $w[]="m.id NOT IN (SELECT ce.member_id FROM class_enrollments ce WHERE ce.class_id=? AND ce.academic_year_id=? AND ce.status='active')"; $p[]=$excClass; $p[]=$currentYear['id']; $t.='ii'; }
-        if ($unassigned && $currentYear) { $w[]="m.id NOT IN (SELECT ce.member_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active')"; $p[]=$currentYear['id']; $t.='i'; }
+        if ($excClass>0 && $currentYear) { $w[]="m.id NOT IN (SELECT ce.student_id FROM class_enrollments ce WHERE ce.class_id=? AND ce.academic_year_id=? AND ce.status='active')"; $p[]=$excClass; $p[]=$currentYear['id']; $t.='ii'; }
+        if ($unassigned && $currentYear) { $w[]="m.id NOT IN (SELECT ce.student_id FROM class_enrollments ce WHERE ce.academic_year_id=? AND ce.status='active')"; $p[]=$currentYear['id']; $t.='i'; }
         $wc=implode(' AND ',$w); $p[]=$limit; $t.='i';
-        $sql="SELECT m.id, m.student_name, m.father_name, m.member_code, m.gender, m.age_group, m.phone_number, m.current_section, m.is_teacher, m.member_type FROM members m WHERE $wc ORDER BY m.student_name LIMIT ?";
+        $sql="SELECT m.id, m.student_name, m.father_name, m.student_code, m.gender, , m.phone_number, , m.is_teacher, m FROM students m WHERE $wc ORDER BY m.student_name LIMIT ?";
         $stmt=$conn->prepare($sql); $stmt->bind_param($t,...$p); $stmt->execute();
-        $members=[]; $r=$stmt->get_result(); while($row=$r->fetch_assoc()) $members[]=$row;
-        echo json_encode(['status'=>'success','members'=>edu_scrub_phone($members, $__maskPhone)]);
+        $students=[]; $r=$stmt->get_result(); while($row=$r->fetch_assoc()) $students[]=$row;
+        echo json_encode(['status'=>'success','students'=>edu_scrub_phone($students, $__maskPhone)]);
         break;
 
     // ============================================================
@@ -1992,7 +1991,7 @@ switch ($action) {
         $unassigned = isset($_GET['unassigned']) && $_GET['unassigned'] === '1';
         $gender = trim((string)($_GET['gender'] ?? ''));
         $ageGroup = trim((string)($_GET['age_group'] ?? ''));
-        $memberType = trim((string)($_GET['member_type'] ?? ''));
+        $ = trim((string)($_GET['student_type'] ?? ''));
         $status = trim((string)($_GET['status'] ?? 'active'));
         $teacherId = (int)($_GET['teacher_id'] ?? 0);
         $sort = trim((string)($_GET['sort'] ?? 'name'));
@@ -2019,28 +2018,28 @@ switch ($action) {
             $p[] = $gender;
             $t .= 's';
         }
-        if ($ageGroup !== '' && in_array($ageGroup, MemberCategory::groups(), true)) {
-            $w[] = 'm.age_group = ?';
+        if ($ageGroup !== '' && in_array($ageGroup, StudentCategory::groups(), true)) {
+            $w[] = ' = ?';
             $p[] = $ageGroup;
             $t .= 's';
         }
-        if ($memberType !== '' && in_array($memberType, ['regular', 'special_regular', 'honorary'], true)) {
-            $w[] = 'm.member_type = ?';
-            $p[] = $memberType;
+        if ($ !== '' && in_array($, ['regular', 'special_regular', 'honorary'], true)) {
+            $w[] = 'm = ?';
+            $p[] = $;
             $t .= 's';
         }
         if ($q !== '') {
-            $w[] = '(m.student_name LIKE ? OR m.father_name LIKE ? OR m.grandfather_name LIKE ? OR m.member_code LIKE ? OR m.baptismal_name LIKE ? OR m.phone_number LIKE ?)';
+            $w[] = '(m.student_name LIKE ? OR m.father_name LIKE ? OR m.grandfather_name LIKE ? OR m.student_code LIKE ? OR m.baptismal_name LIKE ? OR m.phone_number LIKE ?)';
             $st = '%' . $q . '%';
             array_push($p, $st, $st, $st, $st, $st, $st);
             $t .= 'ssssss';
         }
 
-        // H2: dedupe enrollments to ONE row per member BEFORE joining, so a
-        // member with active enrollments in two classes appears once and the
+        // H2: dedupe enrollments to ONE row per student BEFORE joining, so a
+        // student with active enrollments in two classes appears once and the
         // row count matches COUNT(DISTINCT m.id). The dedupe is scoped the
         // same way the roster is (year, class, teacher) so class rosters and
-        // teacher rosters keep every legitimate member.
+        // teacher rosters keep every legitimate student.
         $innerW = ["e0.status = 'active'"];
         $innerP = [];
         $innerT = '';
@@ -2062,13 +2061,13 @@ switch ($action) {
             $innerT .= 'ii';
         }
         $join = "LEFT JOIN (
-                    SELECT e1.member_id, e1.id, e1.class_id, e1.enrolled_at, e1.status
+                    SELECT e1.student_id, e1.id, e1.class_id, e1.enrolled_at, e1.status
                     FROM class_enrollments e1
-                    JOIN (SELECT member_id, MIN(id) AS pick_id
+                    JOIN (SELECT student_id, MIN(id) AS pick_id
                           FROM class_enrollments e0
                           WHERE " . implode(' AND ', $innerW) . "
-                          GROUP BY member_id) ep ON ep.pick_id = e1.id
-                 ) ce ON ce.member_id = m.id
+                          GROUP BY student_id) ep ON ep.pick_id = e1.id
+                 ) ce ON ce.student_id = m.id
                  LEFT JOIN classes c ON c.id = ce.class_id";
         $p = array_merge($innerP, $p);
         $t = $innerT . $t;
@@ -2090,7 +2089,7 @@ switch ($action) {
 
         $orderMap = [
             'name' => 'm.student_name',
-            'code' => 'm.member_code',
+            'code' => 'm.student_code',
             'class' => 'c.level_order',
             'gender' => 'm.gender',
             'date' => 'ce.enrolled_at',
@@ -2098,7 +2097,7 @@ switch ($action) {
         $orderCol = $orderMap[$sort] ?? 'm.student_name';
         $wc = implode(' AND ', $w);
 
-        $countSql = "SELECT COUNT(DISTINCT m.id) AS total FROM members m $join WHERE $wc";
+        $countSql = "SELECT COUNT(DISTINCT m.id) AS total FROM students m $join WHERE $wc";
         $stmt = $conn->prepare($countSql);
         if (!$stmt) {
             echo json_encode(['status' => 'error', 'message' => 'Query prepare failed.']);
@@ -2111,12 +2110,12 @@ switch ($action) {
         $total = (int)($stmt->get_result()->fetch_assoc()['total'] ?? 0);
         $stmt->close();
 
-        $sql = "SELECT m.id, m.member_code, m.student_name, m.father_name, m.grandfather_name,
-                       m.baptismal_name, m.gender, m.age, m.age_group, m.member_type, m.status,
-                       m.phone_number, m.current_section, m.education_level, m.is_teacher,
+        $sql = "SELECT m.id, m.student_code, m.student_name, m.father_name, m.grandfather_name,
+                       m.baptismal_name, m.gender, m.age, , m, m.status,
+                       m.phone_number, , m.education_level, m.is_teacher,
                        ce.id AS enrollment_id, ce.enrolled_at, ce.status AS enrollment_status,
                        c.id AS class_id, c.class_name, c.class_name_en, c.class_code
-                FROM members m
+                FROM students m
                 $join
                 WHERE $wc
                 ORDER BY $orderCol $dir, m.student_name ASC
@@ -2166,7 +2165,7 @@ switch ($action) {
             $w[] = 'u.is_active = 1';
         }
         if ($q !== '') {
-            $w[] = '(u.full_name LIKE ? OR u.username LIKE ? OR u.email LIKE ? OR m.member_code LIKE ?)';
+            $w[] = '(u.full_name LIKE ? OR u.username LIKE ? OR u.email LIKE ? OR m.student_code LIKE ?)';
             $st = '%' . $q . '%';
             array_push($p, $st, $st, $st, $st);
             $t .= 'ssss';
@@ -2179,7 +2178,7 @@ switch ($action) {
         }
         $wc = implode(' AND ', $w);
 
-        $csql = "SELECT COUNT(*) AS total FROM users u LEFT JOIN members m ON u.member_id = m.id WHERE $wc";
+        $csql = "SELECT COUNT(*) AS total FROM users u LEFT JOIN students m ON u.student_id = m.id WHERE $wc";
         if ($t !== '') {
             $stmt = $conn->prepare($csql);
             $stmt->bind_param($t, ...$p);
@@ -2191,12 +2190,12 @@ switch ($action) {
             $total = $r ? (int)$r->fetch_assoc()['total'] : 0;
         }
 
-        $sql = "SELECT u.id, u.full_name, u.username, u.email, u.is_active, u.member_id,
-                       COALESCE(m.member_code,'') AS member_code,
+        $sql = "SELECT u.id, u.full_name, u.username, u.email, u.is_active, u.student_id,
+                       COALESCE(m.student_code,'') AS student_code,
                        COALESCE(m.phone_number,'') AS phone,
                        (SELECT COUNT(DISTINCT ta.class_id) FROM teacher_assignments ta WHERE ta.teacher_id = u.id AND ta.is_active = 1 $yc) AS assigned_classes
                 FROM users u
-                LEFT JOIN members m ON u.member_id = m.id
+                LEFT JOIN students m ON u.student_id = m.id
                 WHERE $wc
                 ORDER BY u.full_name
                 LIMIT ? OFFSET ?";
@@ -2315,7 +2314,7 @@ switch ($action) {
     case 'tracking_student_assessments':
         require_once __DIR__ . '/backend/services/AcademicTrackingService.php';
 
-        $trkMember = (int)($_GET['member_id'] ?? 0);
+        $trkMember = (int)($_GET['student_id'] ?? 0);
         $trkClass  = (int)($_GET['class_id'] ?? 0);
         $trkYear   = !empty($_GET['year_id']) ? (int)$_GET['year_id'] : (int)($currentYear['id'] ?? 0);
         $trkTerm   = !empty($_GET['term_id']) ? (int)$_GET['term_id'] : 0;
@@ -2723,7 +2722,7 @@ switch ($action) {
             $res = \App\Services\AcademicIntelligenceService::perspective($conn, $aiPerspective, [
                 'year_id' => $aiYear,
                 'term_id' => !empty($_GET['term_id']) ? (int)$_GET['term_id'] : 0,
-                'member_id' => (int)($_GET['member_id'] ?? 0),
+                'student_id' => (int)($_GET['student_id'] ?? 0),
                 'teacher_id' => (int)($_GET['teacher_id'] ?? 0),
                 'subject_id' => (int)($_GET['subject_id'] ?? 0),
                 'class_id' => $aiClass,

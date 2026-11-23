@@ -489,26 +489,26 @@ $csrfToken = generateCsrfToken();
                 // is never inferred — absent is the conservative default.
                 const status = AttendanceSheet.normalizeStatus(s.status) || 'absent';
                 return `
-                <tr data-member-id="${s.member_id || s.id}">
+                <tr data-student-id="${s.student_id || s.id}">
                     <td>${i + 1}</td>
                     <td class="font-medium">${escapeHtml((s.student_name || '') + ' ' + (s.father_name || ''))}${s.warning && s.warning.kind ? ' <span class="badge badge-warning" title="Open attendance warning (read-only)">' + escapeHtml(s.warning.kind === 'low_month' ? 'Low month' : (s.warning.stage || 'warning')) + '</span>' : ''}</td>
-                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code || '—')}</code></td>
+                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code || '—')}</code></td>
                     <td>
                         <div class="flex justify-center gap-2">
-                            <button type="button" class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-attendance-status="present" onclick="setAttStatus(this, ${s.member_id || s.id}, 'present')" title="Present">✓</button>
-                            <button type="button" class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-attendance-status="absent" onclick="setAttStatus(this, ${s.member_id || s.id}, 'absent')" title="Absent">✗</button>
-                            <button type="button" class="att-btn att-late ${status === 'late' ? 'active' : ''}" data-attendance-status="late" onclick="setAttStatus(this, ${s.member_id || s.id}, 'late')" title="Late">L</button>
-                            <button type="button" class="att-btn att-excused ${status === 'excused' ? 'active' : ''}" data-attendance-status="excused" onclick="setAttStatus(this, ${s.member_id || s.id}, 'excused')" title="Excused">E</button>
+                            <button type="button" class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-attendance-status="present" onclick="setAttStatus(this, ${s.student_id || s.id}, 'present')" title="Present">✓</button>
+                            <button type="button" class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-attendance-status="absent" onclick="setAttStatus(this, ${s.student_id || s.id}, 'absent')" title="Absent">✗</button>
+                            <button type="button" class="att-btn att-late ${status === 'late' ? 'active' : ''}" data-attendance-status="late" onclick="setAttStatus(this, ${s.student_id || s.id}, 'late')" title="Late">L</button>
+                            <button type="button" class="att-btn att-excused ${status === 'excused' ? 'active' : ''}" data-attendance-status="excused" onclick="setAttStatus(this, ${s.student_id || s.id}, 'excused')" title="Excused">E</button>
                         </div>
                     </td>
-                    <td><input type="text" class="form-input att-note" style="width:120px" maxlength="500" data-member-id="${s.member_id || s.id}" value="${escapeHtml(s.note || '')}" placeholder="Note"></td>
+                    <td><input type="text" class="form-input att-note" style="width:120px" maxlength="500" data-student-id="${s.student_id || s.id}" value="${escapeHtml(s.note || '')}" placeholder="Note"></td>
                 </tr>
             `}).join('');
         }
         
-        function setAttStatus(btn, memberId, status) {
+        function setAttStatus(btn, studentId, status) {
             if (!AttendanceSheet.setStatus(btn, status)) return;
-            const idx = attendanceData.findIndex(s => (s.member_id || s.id) == memberId);
+            const idx = attendanceData.findIndex(s => (s.student_id || s.id) == studentId);
             if (idx !== -1) attendanceData[idx].status = status;
             updateSummary();
         }
@@ -545,7 +545,7 @@ $csrfToken = generateCsrfToken();
         // Danger confirmation (T1): saved statuses at load time; changing them asks first.
         let attSaved = {};
         function attNameOf(mid) {
-            const s = attendanceData.find(x => (x.member_id || x.id) == mid);
+            const s = attendanceData.find(x => (x.student_id || x.id) == mid);
             return s ? ((s.student_name || '') + ' ' + (s.father_name || '')).trim() : '';
         }
         async function saveAttendance() {
@@ -602,7 +602,7 @@ $csrfToken = generateCsrfToken();
             
             const formData = new FormData();
             formData.append('action', 'scan_member');
-            formData.append('member_code', code);
+            formData.append('student_code', code);
             formData.append('class_id', classId);
             formData.append('date', date);
             formData.append('csrf_token', CSRF_TOKEN);
@@ -615,13 +615,13 @@ $csrfToken = generateCsrfToken();
                     inputField.focus();
                     
                     if (data.status === 'success') {
-                        showToast(`Scanned: ${data.member_name}`, 'success');
+                        showToast(`Scanned: ${data.student_name}`, 'success');
                         
                         // Update UI row to present
-                        const row = document.querySelector(`tr[data-member-id="${data.member_id}"]`);
+                        const row = document.querySelector(`tr[data-student-id="${data.student_id}"]`);
                         if (row) {
                             const btn = row.querySelector('.att-present');
-                            if (btn) setAttStatus(btn, data.member_id, 'present');
+                            if (btn) setAttStatus(btn, data.student_id, 'present');
                             row.style.animation = 'none';
                             row.offsetHeight; // trigger reflow
                             row.style.animation = 'flashGreen 1s ease';

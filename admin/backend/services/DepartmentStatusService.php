@@ -2,11 +2,11 @@
 /**
  * Department status periods (Attendance alerting — Phase 1).
  *
- * A member is active or inactive PER DEPARTMENT (Education / Mezmur),
- * independently of the global `members.status` (which remains a manual
- * HR / Information decision). Periods live in `member_department_periods`:
+ * A student is active or inactive PER DEPARTMENT (Education / Mezmur),
+ * independently of the global `students.status` (which remains a manual
+ * HR / Information decision). Periods live in `student_department_periods`:
  *
- *   - no row for (member, department)  =>  active (no back-fill required);
+ *   - no row for (student, department)  =>  active (no back-fill required);
  *   - the open period (ended_at IS NULL) is the current status;
  *   - every change closes the open period and opens a new one, so a
  *     reactivation always starts a fresh period and a consecutive-absence
@@ -15,11 +15,11 @@
  * Day semantics (used by rosters and, in Phase 2, by eligibility):
  *   inactive on day D  <=>  an inactive period has started_at < D+1
  *                           and (ended_at IS NULL or ended_at >= D+1).
- *   A member reactivated during D therefore counts as active on D.
+ *   A student reactivated during D therefore counts as active on D.
  *
  * Everything degrades gracefully: when FEATURE_ATTENDANCE_V2 is off or the
  * table has not been created yet (owner runs sql/071 in phpMyAdmin), the
- * service reports `available() === false`, every member is "active" and
+ * service reports `available() === false`, every student is "active" and
  * `exclusionSql()` returns '' so rosters behave exactly as before.
  */
 namespace App\Services;
@@ -33,7 +33,7 @@ final class DepartmentStatusService
     public const DEPARTMENTS = ['edu', 'mezmur'];
     public const STATUSES = ['active', 'inactive'];
     public const SOURCES = ['manual', 'auto', 'rollout'];
-    public const TABLE = 'member_department_periods';
+    public const TABLE = 'student_department_periods';
     public const LABELS = ['edu' => 'Education', 'mezmur' => 'Mezmur'];
 
     /** @var array<int,bool> keyed by spl_object_id of the connection */
@@ -84,21 +84,21 @@ final class DepartmentStatusService
     /**
      * @return array{department:string,status:string,since:?string,period_id:?int,reason:?string,source:?string,changed_by:?int}
      */
-    public static function currentStatus(\mysqli $conn, int $memberId, string $dept): array
+    public static function currentStatus(\mysqli $conn, int $studentId, string $dept): array
     {
         $base = ['department' => $dept, 'status' => 'active', 'since' => null, 'period_id' => null,
                  'reason' => null, 'source' => null, 'changed_by' => null];
-        if (!self::isDepartment($dept) || $memberId <= 0 || !self::available($conn)) {
+        if (!self::isDepartment($dept) || $studentId <= 0 || !self::available($conn)) {
             return $base;
         }
         $stmt = $conn->prepare(
             'SELECT id, status, started_at, reason, source, changed_by FROM ' . self::TABLE .
-            ' WHERE member_id = ? AND department = ? AND ended_at IS NULL ORDER BY id DESC LIMIT 1'
+            ' WHERE student_id = ? AND department = ? AND ended_at IS NULL ORDER BY id DESC LIMIT 1'
         );
         if (!$stmt) {
             return $base;
         }
-        $stmt->bind_param('is', $memberId, $dept);
+        $stmt->bind_param('is', $studentId, $dept);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -117,23 +117,23 @@ final class DepartmentStatusService
     }
 
     /** @return array<string,array> both departments keyed by code */
-    public static function statuses(\mysqli $conn, int $memberId): array
+    public static function statuses(\mysqli $conn, int $studentId): array
     {
         $out = [];
         foreach (self::DEPARTMENTS as $dept) {
-            $out[$dept] = self::currentStatus($conn, $memberId, $dept);
+            $out[$dept] = self::currentStatus($conn, $studentId, $dept);
         }
         return $out;
     }
 
     /**
-     * Bulk current statuses for many members (one query per department).
-     * @param int[] $memberIds
-     * @return array<int,array<string,string>> member_id => [dept => status]
+     * Bulk current statuses for many students (one query per department).
+     * @param int[] $studentIds
+     * @return array<int,array<string,string>> student_id => [dept => status]
      */
-    public static function statusesFor(\mysqli $conn, array $memberIds): array
+    public static function statusesFor(\mysqli $conn, array $studentIds): array
     {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn($i) => $i > 0)));
+        $ids = array_values(array_unique(array_filter(array_map('intval', $studentIds), static fn($i) => $i > 0)));
         $out = [];
         foreach ($ids as $id) {
             $out[$id] = ['edu' => 'active', 'mezmur' => 'active'];
@@ -145,21 +145,21 @@ final class DepartmentStatusService
         foreach ($chunks as $chunk) {
             $in = implode(',', $chunk);
             $res = $conn->query(
-                'SELECT member_id, department, status FROM ' . self::TABLE .
-                " WHERE ended_at IS NULL AND member_id IN ($in)"
+                'SELECT student_id, department, status FROM ' . self::TABLE .
+                " WHERE ended_at IS NULL AND student_id IN ($in)"
             );
             if ($res) {
                 while ($row = $res->fetch_assoc()) {
-                    $out[(int)$row['member_id']][(string)$row['department']] = (string)$row['status'];
+                    $out[(int)$row['student_id']][(string)$row['department']] = (string)$row['status'];
                 }
             }
         }
         return $out;
     }
 
-    public static function isActiveOn(\mysqli $conn, int $memberId, string $dept, string $date): bool
+    public static function isActiveOn(\mysqli $conn, int $studentId, string $dept, string $date): bool
     {
-        if (!self::isDepartment($dept) || $memberId <= 0 || !self::available($conn)) {
+        if (!self::isDepartment($dept) || $studentId <= 0 || !self::available($conn)) {
             return true;
         }
         $next = self::nextDay($date);
@@ -168,13 +168,13 @@ final class DepartmentStatusService
         }
         $stmt = $conn->prepare(
             'SELECT 1 FROM ' . self::TABLE .
-            " WHERE member_id = ? AND department = ? AND status = 'inactive'
+            " WHERE student_id = ? AND department = ? AND status = 'inactive'
                AND started_at < ? AND (ended_at IS NULL OR ended_at >= ?) LIMIT 1"
         );
         if (!$stmt) {
             return true;
         }
-        $stmt->bind_param('isss', $memberId, $dept, $next, $next);
+        $stmt->bind_param('isss', $studentId, $dept, $next, $next);
         $stmt->execute();
         $inactive = $stmt->get_result()->num_rows > 0;
         $stmt->close();
@@ -186,25 +186,25 @@ final class DepartmentStatusService
      * Phase 2 risk engine to restrict eligible sessions to active periods.
      * @return array<int,array{from:string,to:string}>
      */
-    public static function activePeriods(\mysqli $conn, int $memberId, string $dept, string $from, string $to): array
+    public static function activePeriods(\mysqli $conn, int $studentId, string $dept, string $from, string $to): array
     {
         if ($from > $to) {
             return [];
         }
-        if (!self::isDepartment($dept) || $memberId <= 0 || !self::available($conn)) {
+        if (!self::isDepartment($dept) || $studentId <= 0 || !self::available($conn)) {
             return [['from' => $from, 'to' => $to]];
         }
         $toNext = self::nextDay($to) ?? $to;
         $stmt = $conn->prepare(
             'SELECT started_at, ended_at FROM ' . self::TABLE .
-            " WHERE member_id = ? AND department = ? AND status = 'inactive'
+            " WHERE student_id = ? AND department = ? AND status = 'inactive'
                AND started_at < ? AND (ended_at IS NULL OR ended_at >= ?)
              ORDER BY started_at"
         );
         if (!$stmt) {
             return [['from' => $from, 'to' => $to]];
         }
-        $stmt->bind_param('isss', $memberId, $dept, $toNext, $from);
+        $stmt->bind_param('isss', $studentId, $dept, $toNext, $from);
         $stmt->execute();
         $res = $stmt->get_result();
         $ranges = [];
@@ -230,9 +230,9 @@ final class DepartmentStatusService
     }
 
     /** @return array<int,array<string,mixed>> newest first */
-    public static function history(\mysqli $conn, int $memberId, ?string $dept = null, int $limit = 100): array
+    public static function history(\mysqli $conn, int $studentId, ?string $dept = null, int $limit = 100): array
     {
-        if ($memberId <= 0 || !self::available($conn)) {
+        if ($studentId <= 0 || !self::available($conn)) {
             return [];
         }
         $limit = max(1, min(500, $limit));
@@ -240,9 +240,9 @@ final class DepartmentStatusService
                        p.changed_by, p.warning_id, u.full_name AS changed_by_name
                 FROM ' . self::TABLE . ' p
                 LEFT JOIN users u ON u.id = p.changed_by
-                WHERE p.member_id = ?';
+                WHERE p.student_id = ?';
         $types = 'i';
-        $params = [$memberId];
+        $params = [$studentId];
         if ($dept !== null && self::isDepartment($dept)) {
             $sql .= ' AND p.department = ?';
             $types .= 's';
@@ -278,7 +278,7 @@ final class DepartmentStatusService
      */
     public static function setStatus(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         string $dept,
         string $status,
         int $actorId,
@@ -307,8 +307,8 @@ final class DepartmentStatusService
         if ($source === 'manual' && mb_strlen($reason) < 3) {
             throw new \DomainException('A reason (at least 3 characters) is required.');
         }
-        if ($memberId <= 0) {
-            throw new \DomainException('Invalid member.');
+        if ($studentId <= 0) {
+            throw new \DomainException('Invalid student.');
         }
 
         // Callers that already hold a transaction pass $withinTransaction=true
@@ -318,26 +318,26 @@ final class DepartmentStatusService
             $conn->begin_transaction();
         }
         try {
-            $lock = $conn->prepare('SELECT id, status FROM members WHERE id = ? FOR UPDATE');
+            $lock = $conn->prepare('SELECT id, status FROM students WHERE id = ? FOR UPDATE');
             if (!$lock) {
-                throw new \RuntimeException('Member lookup failed.');
+                throw new \RuntimeException('Student lookup failed.');
             }
-            $lock->bind_param('i', $memberId);
+            $lock->bind_param('i', $studentId);
             $lock->execute();
-            $member = $lock->get_result()->fetch_assoc();
+            $student = $lock->get_result()->fetch_assoc();
             $lock->close();
-            if (!$member) {
-                throw new \DomainException('Member not found.');
+            if (!$student) {
+                throw new \DomainException('Student not found.');
             }
-            if ((string)$member['status'] === 'archived') {
-                throw new \DomainException('Archived members cannot change department status.');
+            if ((string)$student['status'] === 'archived') {
+                throw new \DomainException('Archived students cannot change department status.');
             }
 
             $open = $conn->prepare(
                 'SELECT id, status FROM ' . self::TABLE .
-                ' WHERE member_id = ? AND department = ? AND ended_at IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE'
+                ' WHERE student_id = ? AND department = ? AND ended_at IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE'
             );
-            $open->bind_param('is', $memberId, $dept);
+            $open->bind_param('is', $studentId, $dept);
             $open->execute();
             $current = $open->get_result()->fetch_assoc();
             $open->close();
@@ -361,12 +361,12 @@ final class DepartmentStatusService
             }
             $ins = $conn->prepare(
                 'INSERT INTO ' . self::TABLE .
-                ' (member_id, department, status, started_at, ended_at, source, changed_by, reason, warning_id)
+                ' (student_id, department, status, started_at, ended_at, source, changed_by, reason, warning_id)
                   VALUES (?, ?, ?, NOW(), NULL, ?, ?, ?, ?)'
             );
             $changedBy = $actorId > 0 ? $actorId : null;
             $reasonOrNull = $reason !== '' ? $reason : null;
-            $ins->bind_param('isssisi', $memberId, $dept, $status, $source, $changedBy, $reasonOrNull, $warningId);
+            $ins->bind_param('isssisi', $studentId, $dept, $status, $source, $changedBy, $reasonOrNull, $warningId);
             $ins->execute();
             $periodId = (int)$conn->insert_id;
             $ins->close();
@@ -382,7 +382,7 @@ final class DepartmentStatusService
         }
 
         $details = [
-            'member_id' => $memberId,
+            'student_id' => $studentId,
             'department' => $dept,
             'from' => $previous,
             'to' => $status,
@@ -395,9 +395,9 @@ final class DepartmentStatusService
         }
         try {
             if ($auditActor !== null) {
-                SecurityAuditService::recordTrusted($conn, $auditActor, 'Department Status Changed', $details, 'member', $memberId);
+                SecurityAuditService::recordTrusted($conn, $auditActor, 'Department Status Changed', $details, 'student', $studentId);
             } else {
-                SecurityAuditService::record($conn, 'Department Status Changed', $details, 'member', $memberId);
+                SecurityAuditService::record($conn, 'Department Status Changed', $details, 'student', $studentId);
             }
         } catch (\Throwable $e) {
             error_log('Department status audit failed: ' . $e->getMessage());
@@ -409,7 +409,7 @@ final class DepartmentStatusService
         // commit, never throws, no-op until FEATURE_ATTENDANCE_V2 + sql/075.
         $followups = null;
         if ($dept === 'edu' && $status === 'active' && $previous === 'inactive' && $current && class_exists('\\App\\Services\\AssessmentFollowupService')) {
-            $followups = AssessmentFollowupService::safeOnEducationReactivation($conn, $memberId, (int)$current['id'], $actorId, $auditActor);
+            $followups = AssessmentFollowupService::safeOnEducationReactivation($conn, $studentId, (int)$current['id'], $actorId, $auditActor);
         }
 
         return ['changed' => true, 'status' => $status, 'previous' => $previous, 'period_id' => $periodId, 'followups' => $followups];
@@ -418,19 +418,19 @@ final class DepartmentStatusService
     // ── SQL helpers for rosters / denominators ────────────────────
 
     /**
-     * SQL fragment (starting with " AND ") that excludes members inactive in
-     * $dept on $onDate (default today). $memberIdExpr is the column holding
-     * the member id in the outer query (e.g. "m.id", "ce.member_id").
+     * SQL fragment (starting with " AND ") that excludes students inactive in
+     * $dept on $onDate (default today). $studentIdExpr is the column holding
+     * the student id in the outer query (e.g. "m.id", "ce.student_id").
      * Legacy default returns '' when unavailable. Opt-in preparation requires
      * an explicit valid date and complete eligibility schema when enabled.
      */
-    public static function exclusionSql(\mysqli $conn, string $dept, string $memberIdExpr, ?string $onDate = null, bool $strictPreparation = false): string
+    public static function exclusionSql(\mysqli $conn, string $dept, string $studentIdExpr, ?string $onDate = null, bool $strictPreparation = false): string
     {
-        return self::buildExclusionSql($conn, $dept, $memberIdExpr, $onDate, $strictPreparation, true);
+        return self::buildExclusionSql($conn, $dept, $studentIdExpr, $onDate, $strictPreparation, true);
     }
 
     /** Strict batch compiler; local schema proof only, no static cache/grant. */
-    public static function preparationExclusions(\mysqli $conn, string $dept, string $memberIdExpr, array $dates): array
+    public static function preparationExclusions(\mysqli $conn, string $dept, string $studentIdExpr, array $dates): array
     {
         if (!$dates || !array_is_list($dates)) {
             throw new \InvalidArgumentException('Explicit preparation dates are required.');
@@ -440,14 +440,14 @@ final class DepartmentStatusService
             if (!is_string($date) || isset($out[$date])) {
                 throw new \InvalidArgumentException('Unique explicit preparation dates are required.');
             }
-            $out[$date] = self::buildExclusionSql($conn, $dept, $memberIdExpr, $date, true, $probe);
+            $out[$date] = self::buildExclusionSql($conn, $dept, $studentIdExpr, $date, true, $probe);
             $probe = false;
         }
         return $out;
     }
 
     /** One existing eligibility predicate for legacy/single-date/batch paths. */
-    private static function buildExclusionSql(\mysqli $conn, string $dept, string $memberIdExpr, ?string $onDate, bool $strictPreparation, bool $probeColumns): string
+    private static function buildExclusionSql(\mysqli $conn, string $dept, string $studentIdExpr, ?string $onDate, bool $strictPreparation, bool $probeColumns): string
     {
         if ($strictPreparation) {
             if (!self::isDepartment($dept) || $onDate === null
@@ -459,15 +459,15 @@ final class DepartmentStatusService
         if (!self::isDepartment($dept) || !($strictPreparation ? self::enabled() : self::available($conn))) {
             return '';
         }
-        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $memberIdExpr)) {
-            throw new \InvalidArgumentException('Unsafe member id expression.');
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $studentIdExpr)) {
+            throw new \InvalidArgumentException('Unsafe student id expression.');
         }
         if ($strictPreparation && $probeColumns) {
             // Do not trust a permissive cached availability result. Probe every
             // eligibility column and surface failure in either mysqli mode.
             $stmt = null;
             try {
-                $stmt = $conn->prepare('SELECT member_id, department, status, started_at, ended_at FROM ' . self::TABLE . ' LIMIT 0');
+                $stmt = $conn->prepare('SELECT student_id, department, status, started_at, ended_at FROM ' . self::TABLE . ' LIMIT 0');
                 if (!$stmt || !$stmt->execute() || !$stmt->get_result()) {
                     throw new \RuntimeException('Eligibility query failed.');
                 }
@@ -483,22 +483,22 @@ final class DepartmentStatusService
         }
         $nextSql = $conn->real_escape_string($next);
         return " AND NOT EXISTS (SELECT 1 FROM " . self::TABLE . " dsp
-                     WHERE dsp.member_id = {$memberIdExpr}
+                     WHERE dsp.student_id = {$studentIdExpr}
                        AND dsp.department = '{$dept}'
                        AND dsp.status = 'inactive'
                        AND dsp.started_at < '{$nextSql}'
                        AND (dsp.ended_at IS NULL OR dsp.ended_at >= '{$nextSql}'))";
     }
 
-    /** Count of members currently inactive in a department (0 when unavailable). */
+    /** Count of students currently inactive in a department (0 when unavailable). */
     public static function inactiveCount(\mysqli $conn, string $dept): int
     {
         if (!self::isDepartment($dept) || !self::available($conn)) {
             return 0;
         }
         $stmt = $conn->prepare(
-            'SELECT COUNT(DISTINCT p.member_id) FROM ' . self::TABLE . " p
-             JOIN members m ON m.id = p.member_id AND m.status != 'archived'
+            'SELECT COUNT(DISTINCT p.student_id) FROM ' . self::TABLE . " p
+             JOIN students m ON m.id = p.student_id AND m.status != 'archived'
              WHERE p.department = ? AND p.status = 'inactive' AND p.ended_at IS NULL"
         );
         if (!$stmt) {

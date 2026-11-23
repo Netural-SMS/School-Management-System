@@ -1,13 +1,13 @@
 <?php
 /**
- * Format-v2 identity code migration — renumbers every active member to
+ * Format-v2 identity code migration — renumbers every active student to
  * `{PREFIX}-{random 5-digit tail}` and regenerates ID-card QR images.
  *
  * Usage (CLI ONLY, from the deployment root):
  *   php admin/tools/migrate_identity_codes.php --dry-run
  *   php admin/tools/migrate_identity_codes.php --execute
  *
- * Idempotent: members whose code already matches their computed v2
+ * Idempotent: students whose code already matches their computed v2
  * prefix are skipped. Shared engine with the web runner
  * (admin/api_identity_migration.php) via IdentityMigrationService.
  */
@@ -39,7 +39,7 @@ if ($conn->connect_error) {
 }
 $conn->set_charset('utf8mb4');
 
-$check = $conn->query("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'member_code_migrations'");
+$check = $conn->query("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'student_code_migrations'");
 if (!$check || (int)$check->fetch_assoc()['c'] === 0) {
     fwrite(STDERR, "Run sql/017_identity_codes.sql first.\n");
     exit(1);

@@ -80,8 +80,8 @@
       if (w.status === 'open' && !w.below_threshold) flags += ' ' + pill('flag', 'no longer meets threshold');
       if (w.auto_deactivated) flags += ' ' + pill('critical', 'auto-deactivated');
       return '<tr data-id="' + esc(w.id) + '">' +
-        '<td><a href="' + esc(cfg.memberUrl + w.member_id) + '" target="_blank" rel="noopener">' + esc(w.member_name || ('#' + w.member_id)) + '</a>' +
-        (w.member_code ? '<div class="rc-muted">' + esc(w.member_code) + (w.section ? ' · ' + esc(w.section) : '') + '</div>' : '') + '</td>' +
+        '<td><a href="' + esc(cfg.studentUrl + w.student_id) + '" target="_blank" rel="noopener">' + esc(w.student_name || ('#' + w.student_id)) + '</a>' +
+        (w.student_code ? '<div class="rc-muted">' + esc(w.student_code) + (w.section ? ' · ' + esc(w.section) : '') + '</div>' : '') + '</td>' +
         '<td>' + deptPill(w) + '</td>' +
         '<td>' + esc(w.reason) + '<div class="rc-muted amh">' + esc(w.reason_am) + '</div>' + flags + '</td>' +
         '<td>' + stagePill(w) + '</td>' +
@@ -93,7 +93,7 @@
         '</tr>';
     }).join('');
     els.list.innerHTML = '<table class="aw-table"><thead><tr>' +
-      '<th>Member</th><th>Department</th><th>Reason</th><th>Stage</th><th>Opened</th><th>Status</th><th></th>' +
+      '<th>Student</th><th>Department</th><th>Reason</th><th>Stage</th><th>Opened</th><th>Status</th><th></th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
@@ -107,7 +107,7 @@
       kind: els.kind.value,
       stage: els.stage.value,
       q: els.q.value.trim(),
-      member_id: cfg.initial && cfg.initial.member_id ? cfg.initial.member_id : ''
+      student_id: cfg.initial && cfg.initial.student_id ? cfg.initial.student_id : ''
     };
   }
   function fetchPage(page, perPage) {
@@ -201,17 +201,17 @@
       }).join('');
       var absences = (w.absence_dates_ec || []).length ? '<dt>Absence dates</dt><dd>' + esc(w.absence_dates_ec.join(', ')) + '</dd>' : '';
       var other = '';
-      if (j.member_summary && j.member_summary.departments) {
-        Object.keys(j.member_summary.departments).forEach(function (d) {
+      if (j.student_summary && j.student_summary.departments) {
+        Object.keys(j.student_summary.departments).forEach(function (d) {
           if (d === w.department) return;
-          var e = j.member_summary.departments[d];
+          var e = j.student_summary.departments[d];
           var r = e.risk || {};
           other = '<dt>' + esc(e.label) + ' (other dept.)</dt><dd>status ' + esc(r.status || 'active') + ' · streak ' + esc((r.streak || {}).length || 0) +
             ' · month ' + ((r.month || {}).rate == null ? 'no data' : esc(r.month.rate) + '%') + ' · open warnings ' + esc((e.warnings || []).filter(function (x) { return x.status === 'open'; }).length) + '</dd>';
         });
       }
       els.modalRoot.innerHTML = '<div class="aw-modal" data-close="1"><div class="aw-dialog" role="dialog" aria-modal="true">' +
-        '<h2>' + esc(w.member_name || ('#' + w.member_id)) + ' ' + deptPill(w) + ' ' + stagePill(w) + ' ' + pill(w.status, w.status) + '</h2>' +
+        '<h2>' + esc(w.student_name || ('#' + w.student_id)) + ' ' + deptPill(w) + ' ' + stagePill(w) + ' ' + pill(w.status, w.status) + '</h2>' +
         '<div class="aw-note">' + esc(w.reason) + ' · <span class="amh">' + esc(w.reason_am) + '</span></div>' +
         riskBlock(w.risk) +
         '<dl class="aw-kv">' +
@@ -219,10 +219,10 @@
         '<dt>Threshold</dt><dd>' + esc(w.threshold_value) + (w.kind === 'low_month' ? ' %' : ' consecutive sessions') + '</dd>' +
         absences + other +
         (w.status === 'closed' ? '<dt>Closed</dt><dd>' + esc(w.closed_ec) + ' · ' + esc(w.outcome_label) + (w.closure_note ? ' — ' + esc(w.closure_note) : '') + '</dd>' : '') +
-        (!w.below_threshold && w.status === 'open' ? '<dt>Note</dt><dd>No longer meets the threshold (a day was corrected or the member returned). Please close with an outcome.</dd>' : '') +
+        (!w.below_threshold && w.status === 'open' ? '<dt>Note</dt><dd>No longer meets the threshold (a day was corrected or the student returned). Please close with an outcome.</dd>' : '') +
         '</dl>' +
         '<h3 style="font-size:13px;margin:10px 0 4px">History</h3><ul class="aw-events">' + events + '</ul>' +
-        '<div class="aw-actions"><a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc(cfg.memberUrl + w.member_id) + '" target="_blank" rel="noopener">Open member profile</a>' +
+        '<div class="aw-actions"><a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc(cfg.studentUrl + w.student_id) + '" target="_blank" rel="noopener">Open student profile</a>' +
         (canClose ? '<button type="button" class="rc-btn rc-btn-primary rc-btn-sm" data-act="close" data-id="' + esc(w.id) + '">Close with outcome…</button>' : '') +
         '<button type="button" class="rc-btn rc-btn-ghost rc-btn-sm" data-close="1">Dismiss</button></div>' +
         '</div></div>';
@@ -235,7 +235,7 @@
       return '<label><input type="radio" name="aw-outcome" value="' + esc(k) + '"' + (i === 0 ? ' checked' : '') + '><span>' + esc(outcomes[k]) + '</span></label>';
     }).join('');
     els.modalRoot.innerHTML = '<div class="aw-modal" data-close="1"><div class="aw-dialog" role="dialog" aria-modal="true">' +
-      '<h2>Close warning</h2><div class="aw-note">' + esc(w.member_name || '') + ' · ' + esc(w.reason || '') + '</div>' +
+      '<h2>Close warning</h2><div class="aw-note">' + esc(w.student_name || '') + ' · ' + esc(w.reason || '') + '</div>' +
       '<p class="aw-note">Outcome (required) — what was done about this warning. The warning stays in the history with this outcome.</p>' +
       '<div class="aw-radio">' + radios + '</div>' +
       '<textarea id="aw-close-note" maxlength="500" placeholder="Optional note (max 500 characters)"></textarea>' +

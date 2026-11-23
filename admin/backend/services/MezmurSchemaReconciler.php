@@ -77,7 +77,7 @@ final class MezmurSchemaReconciler
         'mezmur_attendance' => [
             'session_id'      => "BIGINT UNSIGNED DEFAULT NULL",
             'attendance_date' => "DATE DEFAULT NULL",
-            'member_id'       => "INT UNSIGNED NOT NULL",
+            'student_id'       => "INT UNSIGNED NOT NULL",
             'status'          => "ENUM('present','late','absent','excused') NOT NULL DEFAULT 'present'",
             'notes'           => "VARCHAR(500) DEFAULT NULL",
             'marked_by'       => "INT UNSIGNED DEFAULT NULL",
@@ -95,7 +95,7 @@ final class MezmurSchemaReconciler
             'section'         => "VARCHAR(64) NOT NULL",
             'taker_id'        => "INT UNSIGNED DEFAULT NULL",
             'status'          => "VARCHAR(20) NOT NULL DEFAULT 'draft'",
-            'member_count'    => "INT NOT NULL DEFAULT 0",
+            'student_count'    => "INT NOT NULL DEFAULT 0",
             'present_count'   => "INT NOT NULL DEFAULT 0",
             'late_count'      => "INT NOT NULL DEFAULT 0",
             'absent_count'    => "INT NOT NULL DEFAULT 0",

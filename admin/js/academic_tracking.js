@@ -127,7 +127,7 @@
           options: [['active', 'Active'], ['inactive', 'Inactive'], ['graduated', 'Graduated']]
         }
       ],
-      sorts: [['name', 'Name'], ['code', 'Member code'], ['class', 'Class']],
+      sorts: [['name', 'Name'], ['code', 'Student code'], ['class', 'Class']],
       defaultSort: 'name',
       columns: [
         {
@@ -135,7 +135,7 @@
           cell: function (r, self) {
             return '<div style="display:flex;flex-direction:column">'
               + '<span class="amharic" style="font-weight:700;color:#1e293b">' + esc(self.nameOf(r)) + '</span>'
-              + '<span style="font-size:.68rem;color:#94a3b8">' + esc(r.member_code || '—') + '</span>'
+              + '<span style="font-size:.68rem;color:#94a3b8">' + esc(r.student_code || '—') + '</span>'
               + '</div>';
           }
         },
@@ -189,12 +189,12 @@
           }
         },
         {
-          head: 'Member record',
-          // A login without a members row is legal, so say so plainly rather
+          head: 'Student record',
+          // A login without a students row is legal, so say so plainly rather
           // than rendering an empty cell that looks like a loading failure.
           cell: function (r) {
-            return r.member_code
-              ? '<code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">' + esc(r.member_code) + '</code>'
+            return r.student_code
+              ? '<code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">' + esc(r.student_code) + '</code>'
               : '<span style="color:#94a3b8;font-size:.72rem">Not linked</span>';
           }
         },
@@ -1460,7 +1460,7 @@
   /** Loading / fetching ----------------------------------------------- */
 
   AcademicTracking.prototype.studentQs = function () {
-    var p = ['action=tracking_student_detail', 'member_id=' + encodeURIComponent(this.scope.id)];
+    var p = ['action=tracking_student_detail', 'student_id=' + encodeURIComponent(this.scope.id)];
     if (this.context.year_id) p.push('year_id=' + encodeURIComponent(this.context.year_id));
     return p;
   };
@@ -1469,7 +1469,7 @@
     var self = this;
     if (!this.scope || this.scope.type !== 'students') return Promise.resolve();
     var seq = ++this._detailSeq;
-    var memberId = this.scope.id;
+    var studentId = this.scope.id;
     this.detail = { status: 'loading', data: null, error: '', code: '' };
     this.render();
 
@@ -1479,7 +1479,7 @@
       .then(function (d) {
         // Two guards, not one: a stale response, and a response for a
         // student the user has since navigated away from.
-        if (seq !== self._detailSeq || !self.scope || self.scope.id !== memberId) return;
+        if (seq !== self._detailSeq || !self.scope || self.scope.id !== studentId) return;
         if (!d || d.status !== 'success') {
           self.detail = {
             status: 'error', data: null,
@@ -1509,11 +1509,11 @@
     var self = this;
     if (!this.scope || this.scope.type !== 'students') return Promise.resolve();
     var seq = ++this._lazySeq.assessments;
-    var memberId = this.scope.id;
+    var studentId = this.scope.id;
     this.lazy.assessments = { status: 'loading', data: null, error: '', code: '' };
     this.render();
 
-    var p = ['action=tracking_student_assessments', 'member_id=' + encodeURIComponent(memberId)];
+    var p = ['action=tracking_student_assessments', 'student_id=' + encodeURIComponent(studentId)];
     if (this.context.year_id) p.push('year_id=' + encodeURIComponent(this.context.year_id));
     var cid = this.detailClassId();
     if (cid) p.push('class_id=' + encodeURIComponent(cid));
@@ -1521,7 +1521,7 @@
     return fetch(API_EDU + '?' + p.join('&'))
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (seq !== self._lazySeq.assessments || !self.scope || self.scope.id !== memberId) return;
+        if (seq !== self._lazySeq.assessments || !self.scope || self.scope.id !== studentId) return;
         if (!d || d.status !== 'success') {
           self.lazy.assessments = {
             status: 'error', data: null,
@@ -1555,11 +1555,11 @@
     var self = this;
     if (!this.scope || this.scope.type !== 'students') return Promise.resolve();
     var seq = ++this._lazySeq.report_card;
-    var memberId = this.scope.id;
+    var studentId = this.scope.id;
     this.lazy.report_card = { status: 'loading', data: null, error: '', code: '' };
     this.render();
 
-    var p = ['action=get_report_card', 'member_id=' + encodeURIComponent(memberId)];
+    var p = ['action=get_report_card', 'student_id=' + encodeURIComponent(studentId)];
     var cid = this.detailClassId();
     if (cid) p.push('class_id=' + encodeURIComponent(cid));
     if (this.context.year_id) p.push('year_id=' + encodeURIComponent(this.context.year_id));
@@ -1567,7 +1567,7 @@
     return fetch(API_COMM + '?' + p.join('&'))
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (seq !== self._lazySeq.report_card || !self.scope || self.scope.id !== memberId) return;
+        if (seq !== self._lazySeq.report_card || !self.scope || self.scope.id !== studentId) return;
         if (!d || d.status !== 'success') {
           self.lazy.report_card = {
             status: 'error', data: null,
@@ -1631,7 +1631,7 @@
       sub = '<span style="color:' + PALETTE.bad + '">Details unavailable</span>';
     } else if (d) {
       var bits = [];
-      if (d.student.member_code) bits.push(esc(d.student.member_code));
+      if (d.student.student_code) bits.push(esc(d.student.student_code));
       if (d.class.class_name) {
         bits.push(esc(d.class.class_name) + (d.class.class_name_en ? ' · ' + esc(d.class.class_name_en) : ''));
       }
@@ -2270,11 +2270,11 @@
       sub = '<span style="color:' + PALETTE.bad + '">Details unavailable</span>';
     } else if (d && d.teacher) {
       var bits = [];
-      if (d.teacher.member_code) bits.push(esc(d.teacher.member_code));
+      if (d.teacher.student_code) bits.push(esc(d.teacher.student_code));
       if (d.teacher.username) bits.push('@' + esc(d.teacher.username));
-      // A teacher login need not be linked to a member record, so the code
+      // A teacher login need not be linked to a student record, so the code
       // is genuinely absent rather than empty. Say so.
-      sub = bits.join(' &nbsp;\u00b7&nbsp; ') || 'No member record linked';
+      sub = bits.join(' &nbsp;\u00b7&nbsp; ') || 'No student record linked';
 
       chips += '<span class="ch ch-i" title="Reporting period. Context, not a filter.">'
         + '<i class="fa-solid fa-calendar" aria-hidden="true"></i> '
@@ -2914,7 +2914,7 @@
       return '<tr>'
         + '<td><span class="amharic" style="font-weight:700;color:#1e293b">' + esc(t.full_name || '') + '</span>'
         + '<div style="font-size:.67rem;color:#94a3b8">'
-        + esc(t.member_code || ('@' + (t.username || ''))) + '</div></td>'
+        + esc(t.student_code || ('@' + (t.username || ''))) + '</div></td>'
         + '<td>' + role + standing + '</td>'
         + '<td>' + (t.is_active
             ? '<span class="ch ch-ok">Active</span>' : '<span class="ch ch-d">Inactive</span>') + '</td>'
@@ -2962,7 +2962,7 @@
       return '<tr>'
         + '<td><span class="amharic" style="font-weight:700;color:#1e293b">'
         + esc([s.student_name, s.father_name].filter(Boolean).join(' ')) + '</span></td>'
-        + '<td>' + esc(s.member_code || '\u2014') + '</td>'
+        + '<td>' + esc(s.student_code || '\u2014') + '</td>'
         + '<td>' + (s.status
             ? '<span class="ch ' + (s.status === 'active' ? 'ch-ok' : 'ch-d') + '">'
               + esc(titleCase(s.status)) + '</span>' : '\u2014') + '</td>'
@@ -3411,12 +3411,12 @@
       return '<tr>'
         + '<td><span class="amharic" style="font-weight:700;color:#1e293b">'
         + esc([s.student_name, s.father_name].filter(Boolean).join(' ')) + '</span></td>'
-        + '<td>' + esc(s.member_code || '\u2014') + '</td>'
+        + '<td>' + esc(s.student_code || '\u2014') + '</td>'
         + '<td>' + (s.status
             ? '<span class="ch ' + (s.status === 'active' ? 'ch-ok' : 'ch-d') + '">'
               + esc(titleCase(s.status)) + '</span>' : '\u2014') + '</td>'
         + '<td style="text-align:right">'
-        + '<button type="button" class="btn btn-o btn-xs" data-open-student="' + esc(s.member_id) + '" '
+        + '<button type="button" class="btn btn-o btn-xs" data-open-student="' + esc(s.student_id) + '" '
         + 'data-open-student-name="' + esc([s.student_name, s.father_name].filter(Boolean).join(' ')) + '">'
         + 'Track <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></td>'
         + '</tr>';
@@ -3529,7 +3529,7 @@
       return '<tr>'
         + '<td><span class="amharic" style="font-weight:700;color:#1e293b">' + esc(t.full_name || '') + '</span>'
         + '<div style="font-size:.67rem;color:#94a3b8">'
-        + esc(t.member_code || ('@' + (t.username || ''))) + '</div></td>'
+        + esc(t.student_code || ('@' + (t.username || ''))) + '</div></td>'
         + '<td>' + what + '</td><td>' + role + standing + '</td>'
         + '<td>' + (t.is_active
             ? '<span class="ch ch-ok">Active</span>' : '<span class="ch ch-d">Inactive</span>') + '</td>'

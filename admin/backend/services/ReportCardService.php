@@ -80,19 +80,19 @@ class ReportCardService
     /**
      * @return array{status:string,message?:string}|array<string,mixed>
      */
-    public static function getCard(\mysqli $conn, int $memberId, int $classId, int $yearId = 0, int $termId = 0): array
+    public static function getCard(\mysqli $conn, int $studentId, int $classId, int $yearId = 0, int $termId = 0): array
     {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return ['status' => 'error', 'message' => 'Student is required.'];
         }
         if ($classId <= 0) {
             $stmt = $conn->prepare(
                 "SELECT class_id FROM class_enrollments
-                 WHERE member_id = ? AND status = 'active'
+                 WHERE student_id = ? AND status = 'active'
                  ORDER BY id DESC LIMIT 1"
             );
             if ($stmt) {
-                $stmt->bind_param('i', $memberId);
+                $stmt->bind_param('i', $studentId);
                 $stmt->execute();
                 $row = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
@@ -106,7 +106,7 @@ class ReportCardService
         if (($pack['status'] ?? '') !== 'success') {
             return $pack;
         }
-        return self::cardFromPack($conn, $pack, $memberId);
+        return self::cardFromPack($conn, $pack, $studentId);
     }
 
     /**
@@ -147,12 +147,12 @@ class ReportCardService
 
         $students = [];
         $computedByMember = [];
-        foreach ($bundle['roster'] as $memberId => $member) {
+        foreach ($bundle['roster'] as $studentId => $student) {
             $computed = self::computeStudent(
-                $memberId,
+                $studentId,
                 $bundle['subjects'],
-                $bundle['scores'][$memberId] ?? [],
-                $bundle['attendance'][$memberId] ?? self::emptyAttendance(),
+                $bundle['scores'][$studentId] ?? [],
+                $bundle['attendance'][$studentId] ?? self::emptyAttendance(),
                 $subjectId,
                 $bundle['assessments'] ?? [],
                 [
@@ -162,15 +162,15 @@ class ReportCardService
                     'term_numbers' => $bundle['term_numbers'] ?? [],
                 ]
             );
-            $computedByMember[$memberId] = $computed;
+            $computedByMember[$studentId] = $computed;
             $avg = $computed['totals']['average'];
             $students[] = [
-                'id' => $memberId,
-                'student_name' => (string)($member['student_name'] ?? ''),
-                'father_name' => (string)($member['father_name'] ?? ''),
-                'christian_name' => (string)($member['baptismal_name'] ?? ''),
-                'member_code' => (string)($member['member_code'] ?? ''),
-                'gender' => (string)($member['gender'] ?? ''),
+                'id' => $studentId,
+                'student_name' => (string)($student['student_name'] ?? ''),
+                'father_name' => (string)($student['father_name'] ?? ''),
+                'christian_name' => (string)($student['baptismal_name'] ?? ''),
+                'student_code' => (string)($student['student_code'] ?? ''),
+                'gender' => (string)($student['gender'] ?? ''),
                 'overall_average' => $avg,
                 'avg_percentage' => $avg,
                 'overall_grade' => $computed['totals']['grade_letter'],
@@ -344,11 +344,11 @@ class ReportCardService
      * @param array<string,mixed> $pack
      * @return array<string,mixed>
      */
-    private static function cardFromPack(\mysqli $conn, array $pack, int $memberId): array
+    private static function cardFromPack(\mysqli $conn, array $pack, int $studentId): array
     {
         $studentRow = null;
         foreach ($pack['students'] as $row) {
-            if ((int)$row['id'] === $memberId) {
+            if ((int)$row['id'] === $studentId) {
                 $studentRow = $row;
                 break;
             }
@@ -357,16 +357,16 @@ class ReportCardService
             return ['status' => 'error', 'message' => 'This student is not in the selected class.'];
         }
         $bundle = $pack['_bundle'] ?? null;
-        $computed = $pack['_computed'][$memberId] ?? null;
+        $computed = $pack['_computed'][$studentId] ?? null;
         if (!$bundle || !$computed) {
             return ['status' => 'error', 'message' => 'Could not build this report card.'];
         }
-        $student = self::safeStudent($bundle['roster'][$memberId] ?? [
-            'id' => $memberId,
+        $student = self::safeStudent($bundle['roster'][$studentId] ?? [
+            'id' => $studentId,
             'student_name' => $studentRow['student_name'] ?? '',
             'father_name' => $studentRow['father_name'] ?? '',
             'baptismal_name' => $studentRow['christian_name'] ?? '',
-            'member_code' => $studentRow['member_code'] ?? '',
+            'student_code' => $studentRow['student_code'] ?? '',
         ]);
         return [
             'status' => 'success',
@@ -447,7 +447,7 @@ class ReportCardService
         ]);
         $roster = [];
         foreach ($rosterRows as $row) {
-            $mid = (int)($row['member_id'] ?? $row['id'] ?? 0);
+            $mid = (int)($row['student_id'] ?? $row['id'] ?? 0);
             if ($mid > 0) {
                 $roster[$mid] = $row;
             }
@@ -514,7 +514,7 @@ class ReportCardService
      * @return array{subjects:list<array<string,mixed>>,totals:array<string,mixed>,attendance:array<string,mixed>,highlights:array<string,mixed>}
      */
     private static function computeStudent(
-        int $memberId,
+        int $studentId,
         array $subjects,
         array $memberScores,
         array $attendance,
@@ -522,7 +522,7 @@ class ReportCardService
         array $plannedBySubject = [],
         array $ctx = []
     ): array {
-        unset($memberId);
+        unset($studentId);
         $isAnnual = (bool)($ctx['is_annual'] ?? false);
         $reportTermNumber = (int)($ctx['report_term_number'] ?? 0);
         $weights = $ctx['weights'] ?? ['s1' => 50.0, 's2' => 50.0];
@@ -922,11 +922,11 @@ class ReportCardService
      * Scores for every student in the class. Year / term filters keep
      * NULL rows so a first Save still appears on the card.
      *
-     * @return array<int,array<int,list<array<string,mixed>>>> member_id => subject_id => rows
+     * @return array<int,array<int,list<array<string,mixed>>>> student_id => subject_id => rows
      */
     private static function fetchScores(\mysqli $conn, int $classId, int $yearId, int $termId): array
     {
-        $sql = "SELECT ar.id, ar.member_id, ar.class_id, ar.subject_id, ar.assessment_id,
+        $sql = "SELECT ar.id, ar.student_id, ar.class_id, ar.subject_id, ar.assessment_id,
                        ar.score, ar.max_score, ar.remarks, ar.academic_year_id, ar.term_id,
                        a.assessment_name, a.weight_percentage, a.max_score AS assess_max,
                        a.class_id AS a_class_id, a.subject_id AS a_subject_id,
@@ -960,7 +960,7 @@ class ReportCardService
         $r = $stmt->get_result();
         $out = [];
         while ($row = $r->fetch_assoc()) {
-            $mid = (int)$row['member_id'];
+            $mid = (int)$row['student_id'];
             $sid = (int)($row['subject_id'] ?: 0);
             if ($sid <= 0) {
                 $sid = (int)($row['a_subject_id'] ?: 0);
@@ -1030,7 +1030,7 @@ class ReportCardService
                 return $out;
             }
             $roster = [];
-            $rs = $conn->prepare("SELECT member_id, academic_year_id FROM class_enrollments WHERE class_id = ? AND status = 'active'");
+            $rs = $conn->prepare("SELECT student_id, academic_year_id FROM class_enrollments WHERE class_id = ? AND status = 'active'");
             if (!$rs) {
                 return $out;
             }
@@ -1038,7 +1038,7 @@ class ReportCardService
             $rs->execute();
             $rr = $rs->get_result();
             while ($e = $rr->fetch_assoc()) {
-                $roster[(int)$e['academic_year_id']][] = (int)$e['member_id'];
+                $roster[(int)$e['academic_year_id']][] = (int)$e['student_id'];
             }
             $rs->close();
         } catch (\Throwable $e) {
@@ -1060,7 +1060,7 @@ class ReportCardService
                 }
                 $out[$mid][$sid][] = [
                     'id' => 0,
-                    'member_id' => $mid,
+                    'student_id' => $mid,
                     'class_id' => $classId,
                     'subject_id' => $sid,
                     'assessment_id' => $aid,
@@ -1086,9 +1086,9 @@ class ReportCardService
     /**
      * Attendance alerting Phase 5 (requirements §12, plan §Phase 5 — display
      * precedence flagged for owner confirmation): when a make-up attempt
-     * exists for (member, assessment) the LATEST make-up supersedes the
+     * exists for (student, assessment) the LATEST make-up supersedes the
      * original score on the card; the original academic_records row is
-     * never modified. A member who had no original row gets a synthesized
+     * never modified. A student who had no original row gets a synthesized
      * row so the make-up is not invisible. No-op until FEATURE_ATTENDANCE_V2
      * + sql/075 (AssessmentFollowupService::available).
      *
@@ -1129,7 +1129,7 @@ class ReportCardService
                 if (!$replaced) {
                     $out[$mid][$sid][] = [
                         'id' => 0,
-                        'member_id' => $mid,
+                        'student_id' => $mid,
                         'class_id' => (int)$mk['class_id'],
                         'subject_id' => $sid,
                         'assessment_id' => (int)$aid,
@@ -1155,20 +1155,20 @@ class ReportCardService
     }
 
     /**
-     * @param list<int> $memberIds
+     * @param list<int> $studentIds
      * @return array<int,array<string,int|float>>
      */
-    private static function fetchAttendance(\mysqli $conn, int $classId, array $memberIds, int $yearId): array
+    private static function fetchAttendance(\mysqli $conn, int $classId, array $studentIds, int $yearId): array
     {
         $out = [];
-        foreach ($memberIds as $id) {
+        foreach ($studentIds as $id) {
             $out[(int)$id] = self::emptyAttendance();
         }
         if ($classId <= 0) {
             return $out;
         }
 
-        $sql = "SELECT member_id,
+        $sql = "SELECT student_id,
                        COUNT(*) AS total,
                        SUM(status = 'present') AS present_count,
                        SUM(status = 'absent') AS absent_count,
@@ -1183,7 +1183,7 @@ class ReportCardService
             $params[] = $yearId;
             $types .= 'i';
         }
-        $sql .= " GROUP BY member_id";
+        $sql .= " GROUP BY student_id";
 
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -1193,7 +1193,7 @@ class ReportCardService
         $stmt->execute();
         $r = $stmt->get_result();
         while ($row = $r->fetch_assoc()) {
-            $mid = (int)$row['member_id'];
+            $mid = (int)$row['student_id'];
             $total = (int)$row['total'];
             $present = (int)$row['present_count'];
             $absent = (int)$row['absent_count'];
@@ -1386,12 +1386,12 @@ class ReportCardService
     private static function safeStudent(array $row): array
     {
         return [
-            'id' => (int)($row['id'] ?? $row['member_id'] ?? 0),
+            'id' => (int)($row['id'] ?? $row['student_id'] ?? 0),
             'student_name' => (string)($row['student_name'] ?? ''),
             'father_name' => (string)($row['father_name'] ?? ''),
             'grandfather_name' => (string)($row['grandfather_name'] ?? ''),
             'christian_name' => (string)($row['baptismal_name'] ?? ''),
-            'member_code' => (string)($row['member_code'] ?? ''),
+            'student_code' => (string)($row['student_code'] ?? ''),
             'gender' => (string)($row['gender'] ?? ''),
         ];
     }
@@ -1666,7 +1666,7 @@ class ReportCardService
                 $st['rank'] ?? '',
                 trim(($st['student_name'] ?? '') . ' ' . ($st['father_name'] ?? '')),
                 $st['christian_name'] ?? '',
-                $st['member_code'] ?? '',
+                $st['student_code'] ?? '',
             ];
             foreach ($subjectCols as $sub) {
                 $ss = $byId[(int)$sub['id']] ?? [];
@@ -1769,7 +1769,7 @@ class ReportCardService
                 $rows = $ss['assessments'] ?? [];
                 if (!$rows) {
                     $marks->fromArray([
-                        $full, $st['christian_name'] ?? '', $st['member_code'] ?? '',
+                        $full, $st['christian_name'] ?? '', $st['student_code'] ?? '',
                         $ss['subject_name'] ?? '', '', '', '', '',
                     ], null, 'A' . $mr);
                     $mr++;
@@ -1779,7 +1779,7 @@ class ReportCardService
                     $marks->fromArray([
                         $full,
                         $st['christian_name'] ?? '',
-                        $st['member_code'] ?? '',
+                        $st['student_code'] ?? '',
                         $ss['subject_name'] ?? '',
                         $a['assessment_name'] ?? '',
                         $a['score'] ?? '',
@@ -1916,7 +1916,7 @@ class ReportCardService
                 $stLetter = (string)($st['grade_letter'] ?? 'F');
                 $stName = (string)($st['student_name'] ?? '');
                 $stFather = (string)($st['father_name'] ?? '');
-                $stCode = (string)($st['member_code'] ?? '');
+                $stCode = (string)($st['student_code'] ?? '');
                 $stChristian = (string)($st['christian_name'] ?? '');
 
                 $stTotDays = (int)($st['total_days'] ?? 0);
@@ -2233,7 +2233,7 @@ class ReportCardService
         $sheet->setTitle('Filtered Performance');
 
         $headers = [
-            '#', 'Student Name', 'Father Name', 'Baptismal Name', 'Member Code',
+            '#', 'Student Name', 'Father Name', 'Baptismal Name', 'Student Code',
             'Class', 'Gender', 'Grade Average (%)', 'Letter Grade',
             'Total Obtained', 'Total Max', 'Assessments Count',
             'Attendance Rate (%)', 'Attendance Breakdown', 'Present Days', 'Absent Days', 'Late Days', 'Excused Days', 'Total Sessions'
@@ -2274,7 +2274,7 @@ class ReportCardService
             $sheet->setCellValue('B' . $rIdx, $st['student_name'] ?? '');
             $sheet->setCellValue('C' . $rIdx, $st['father_name'] ?? '');
             $sheet->setCellValue('D' . $rIdx, $st['christian_name'] ?? '');
-            $sheet->setCellValue('E' . $rIdx, $st['member_code'] ?? '');
+            $sheet->setCellValue('E' . $rIdx, $st['student_code'] ?? '');
             $sheet->setCellValue('F' . $rIdx, $st['class_name'] ?? '');
             $sheet->setCellValue('G' . $rIdx, ucfirst((string)($st['gender'] ?? '')));
             $sheet->setCellValue('H' . $rIdx, $st['overall_average'] !== null ? $st['overall_average'] . '%' : '—');

@@ -40,7 +40,7 @@ final class GradesPreparationGrant
             'role'=>$facts['role'],'family_id'=>$facts['family_id'],'issued_at'=>$facts['issued_at'],'deadline'=>$facts['deadline']];
         // Silent compat: old APKs use exactKeys(10) for class — sending 11th context_token breaks them. Keep payload minimal; provenance still via root grant.
         // foreach ($facts['classes'] as &$class) {
-        //     $rosterDigest = self::digest($class['member_ids'] ?? []);
+        //     $rosterDigest = self::digest($class['student_ids'] ?? []);
         //     $assessmentDigest = self::digest($class['assessments'] ?? []);
         //     $context = $common + ['kind'=>'grades_class','class_id'=>$class['class_id'],
         //         'write_year_id'=>$class['write_year_id'],'roster_year_id'=>$class['roster_year_id'],

@@ -343,7 +343,7 @@ class GuardianMatchService
                 }
                 $band = $r['band'] === 'auto' ? 'auto' : 'review';
                 $ev = json_encode($r['evidence'] + ['source' => 'rematch'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                $ins = $conn->prepare("INSERT INTO guardian_link_suggestions (guardian_a, guardian_b, member_id, score, band, evidence, status) VALUES (?, ?, NULL, ?, ?, ?, 'pending')");
+                $ins = $conn->prepare("INSERT INTO guardian_link_suggestions (guardian_a, guardian_b, student_id, score, band, evidence, status) VALUES (?, ?, NULL, ?, ?, ?, 'pending')");
                 if ($ins) {
                     $sc = (float)$r['score'];
                     $ins->bind_param('iidss', $a, $b, $sc, $band, $ev);

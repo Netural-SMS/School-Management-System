@@ -1,9 +1,9 @@
 <?php
 /**
  * ============================================================================
- * Lesson attendance history — one member (Attendance alerting — Phase 6)
+ * Lesson attendance history — one student (Attendance alerting — Phase 6)
  * ============================================================================
- * Requirements §3: Education, HR and Information can see, per member, every
+ * Requirements §3: Education, HR and Information can see, per student, every
  * lesson outcome with subject, lesson number, teacher, date and result.
  * Teachers see only lessons of their own classes (scoped by the API).
  * Education may cancel a lesson here (kept, flagged, re-derives the day).
@@ -25,7 +25,7 @@ if (!in_array($userRole, \App\Services\LessonAttendanceService::READ_ROLES, true
     header('Location: dashboard.php?error=access_denied');
     exit;
 }
-$memberId = (int)($_GET['member_id'] ?? 0);
+$studentId = (int)($_GET['student_id'] ?? 0);
 $today = new DateTime('now', new DateTimeZone('Africa/Addis_Ababa'));
 $roleLabels = [
     'super_admin' => 'Super Admin', 'school_admin' => 'School Admin', 'info_dept' => 'Information Department',
@@ -34,10 +34,10 @@ $roleLabels = [
 $cfg = [
     'api' => '/admin/api_lesson_attendance.php',
     'csrf' => generateCsrfToken(),
-    'memberUrl' => '/admin/info_manage_member.php?id=',
+    'studentUrl' => '/admin/info_manage_student.php?id=',
     'role' => $userRole,
     'canCancel' => $userRole === 'edu_dept',
-    'memberId' => $memberId,
+    'studentId' => $studentId,
 ];
 $assetVer = '20261022p';
 $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
@@ -85,7 +85,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
     </div>
     <div class="rc-header-right">
       <form class="la-form" id="la-form">
-        <input type="number" min="1" id="la-member" placeholder="Member ID" value="<?= $memberId > 0 ? $memberId : '' ?>">
+        <input type="number" min="1" id="la-student" placeholder="Student ID" value="<?= $studentId > 0 ? $studentId : '' ?>">
         <button class="rc-btn rc-btn-ghost rc-btn-sm" type="submit">Open</button>
       </form>
     </div>
@@ -96,7 +96,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
       Lesson attendance is not available yet (feature flag off or <code>sql/076_attendance_sessions.sql</code> not applied).
     </div>
     <div class="la-head">
-      <h2 id="la-title">Select a member</h2>
+      <h2 id="la-title">Select a student</h2>
       <span class="rc-muted" id="la-total"></span>
     </div>
     <div id="la-list"></div>
@@ -122,7 +122,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
   // Phase 3 paging: per page remembered; Load more appends; Next continues after the rows shown.
   var LA_KEY = 'fkss_pp_lesson_att';
   var PAGE = (function () { try { var v = parseInt(localStorage.getItem(LA_KEY), 10); return [25, 50, 100, 200].indexOf(v) >= 0 ? v : 50; } catch (e) { return 50; } })();
-  var offset = 0, total = 0, memberId = cfg.memberId || 0, shown = [], busy = false;
+  var offset = 0, total = 0, studentId = cfg.studentId || 0, shown = [], busy = false;
   var $ = function (id) { return document.getElementById(id); };
   if ($('la-size')) $('la-size').value = String(PAGE);
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -131,20 +131,20 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
     document.body.appendChild(t); setTimeout(function () { t.remove(); }, 3200);
   }
   function load(append) {
-    if (!memberId) { $('la-list').innerHTML = ''; return; }
+    if (!studentId) { $('la-list').innerHTML = ''; return; }
     if (busy) return;
     busy = true;
     var from = append ? offset + shown.length : offset;
     if (append && $('la-more')) { $('la-more').disabled = true; $('la-more').textContent = 'Loading…'; }
-    fetch(cfg.api + '?action=member&member_id=' + encodeURIComponent(memberId) + '&limit=' + PAGE + '&offset=' + from, { credentials: 'same-origin' })
+    fetch(cfg.api + '?action=student&student_id=' + encodeURIComponent(studentId) + '&limit=' + PAGE + '&offset=' + from, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         busy = false;
         if (d.status !== 'success') { toast(d.message || 'Could not load.', false); render([]); return; }
         $('la-unavailable').hidden = !!d.available;
         total = d.total || 0;
-        var m = d.member || {};
-        $('la-title').innerHTML = '<a href="' + esc(cfg.memberUrl + memberId) + '">' + esc(m.name || ('Member #' + memberId)) + '</a> <span class="rc-muted">' + esc(m.member_code || '') + '</span>';
+        var m = d.student || {};
+        $('la-title').innerHTML = '<a href="' + esc(cfg.studentUrl + studentId) + '">' + esc(m.name || ('Student #' + studentId)) + '</a> <span class="rc-muted">' + esc(m.student_code || '') + '</span>';
         $('la-total').textContent = total ? total + ' lesson record(s)' : '';
         shown = append ? shown.concat(d.items || []) : (d.items || []);
         render(shown);
@@ -154,7 +154,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
   function render(items) {
     var more = $('la-more');
     if (more) { var left = Math.max(0, total - (offset + items.length)); more.hidden = left <= 0; more.disabled = false; more.textContent = 'Load more (' + left + ' left)'; }
-    if (!items.length) { $('la-list').innerHTML = '<div class="la-empty">No lesson attendance recorded for this member' + (cfg.role === 'teacher' ? ' in your classes' : '') + '.</div>'; $('la-meta').textContent = ''; return; }
+    if (!items.length) { $('la-list').innerHTML = '<div class="la-empty">No lesson attendance recorded for this student' + (cfg.role === 'teacher' ? ' in your classes' : '') + '.</div>'; $('la-meta').textContent = ''; return; }
     var rows = items.map(function (it) {
       var cancelled = it.session_status === 'cancelled';
       return '<tr' + (cancelled ? ' style="opacity:.6"' : '') + '>' +
@@ -178,9 +178,9 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
     if (!(window.DangerConfirm && window.DangerConfirm.ask)) { toast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.', false); return; }
     var cells = b.closest('tr') ? b.closest('tr').children : [];
     var label = [0, 1, 2].map(function (i) { return cells[i] ? cells[i].textContent.trim() : ''; }).filter(Boolean).join(' · ');
-    window.DangerConfirm.ask({ tier: 'medium', title: 'Cancel this lesson?', object: label || 'This lesson', summary: 'The lesson no longer counts for this member.',
+    window.DangerConfirm.ask({ tier: 'medium', title: 'Cancel this lesson?', object: label || 'This lesson', summary: 'The lesson no longer counts for this student.',
       intent: 'I want to cancel this lesson',
-      consequences: ['The lesson is marked CANCELLED and does not count in attendance.', 'The member\u2019s day result is recalculated.'],
+      consequences: ['The lesson is marked CANCELLED and does not count in attendance.', 'The student\u2019s day result is recalculated.'],
       keeps: ['The original record and your reason stay in the history.'],
       reason: { label: 'Reason for cancelling (at least 3 letters)', required: true, minLength: 3, maxLength: 500 },
       phrase: 'CANCEL LESSON', confirmLabel: 'Cancel lesson' }).then(function (dc) { if (dc) sendCancel(b.getAttribute('data-cancel'), dc.reason); });
@@ -191,7 +191,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
       .then(function (d) { toast(d.message || (d.status === 'success' ? 'Done' : 'Failed'), d.status === 'success'); if (d.status === 'success') load(); })
       .catch(function () { toast('Request failed.', false); });
   }
-  $('la-form').addEventListener('submit', function (e) { e.preventDefault(); memberId = parseInt($('la-member').value, 10) || 0; offset = 0; if (memberId) { history.replaceState(null, '', '?member_id=' + memberId); } load(); });
+  $('la-form').addEventListener('submit', function (e) { e.preventDefault(); studentId = parseInt($('la-student').value, 10) || 0; offset = 0; if (studentId) { history.replaceState(null, '', '?student_id=' + studentId); } load(); });
   $('la-prev').addEventListener('click', function () { offset = Math.max(0, offset - PAGE); load(); });
   $('la-next').addEventListener('click', function () { offset += Math.max(shown.length, 1); load(); });
   if ($('la-more')) $('la-more').addEventListener('click', function () { load(true); });

@@ -13,7 +13,7 @@
  *               HR_ATTENDANCE_RETIRED. HR analyses the Education +
  *               Mezmur attendance through the shared Attendance
  *               Analytics Hub (api_info_analytics.php) and the
- *               per-member view (api_hr_reports.php) instead.
+ *               per-student view (api_hr_reports.php) instead.
  *
  * The hr_* tables remain in the database as an untouched archive;
  * nothing reads them. No migration is required.

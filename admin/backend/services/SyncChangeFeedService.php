@@ -184,7 +184,7 @@ final class SyncChangeFeedService
         }
 
         $sql = "SELECT revision, entity_type, entity_id, op, scope_class_id,
-                       scope_year_id, scope_member_id, {$this->scopeDateExpr()}, changed_at
+                       scope_year_id, scope_student_id, {$this->scopeDateExpr()}, changed_at
                   FROM sync_changes
                  WHERE revision > ? AND entity_type = ?";
         $types = 'is';
@@ -233,7 +233,7 @@ final class SyncChangeFeedService
             $nextCursor = (int)$row['revision'];
             // Scope keys travel with the entry so a tombstone stays
             // self-describing: a deleted row has no canonical record
-            // left, and the device needs class + date + member to find
+            // left, and the device needs class + date + student to find
             // the cached sheet it must correct. Additive fields — older
             // clients simply ignore them.
             $items[] = [
@@ -242,7 +242,7 @@ final class SyncChangeFeedService
                 'entity_id'   => (int)$row['entity_id'],
                 'op'          => (string)$row['op'],
                 'class_id'    => $row['scope_class_id'] === null ? null : (int)$row['scope_class_id'],
-                'member_id'   => $row['scope_member_id'] === null ? null : (int)$row['scope_member_id'],
+                'student_id'   => $row['scope_student_id'] === null ? null : (int)$row['scope_student_id'],
                 'date'        => $row['scope_date'] === null ? null : (string)$row['scope_date'],
                 'changed_at'  => (string)$row['changed_at'],
             ];
@@ -275,7 +275,7 @@ final class SyncChangeFeedService
         }
         $placeholders = implode(',', array_fill(0, count($entityIds), '?'));
         $statement = $this->database->prepare(
-            "SELECT id, member_id, class_id, academic_year_id, attendance_date,
+            "SELECT id, student_id, class_id, academic_year_id, attendance_date,
                     status, check_in_time, check_out_time, notes, recorded_by, recorded_at
                FROM attendance
               WHERE id IN ({$placeholders})"
@@ -291,7 +291,7 @@ final class SyncChangeFeedService
         while ($row = $result->fetch_assoc()) {
             $byId[(int)$row['id']] = [
                 'id'               => (int)$row['id'],
-                'member_id'        => (int)$row['member_id'],
+                'student_id'        => (int)$row['student_id'],
                 'class_id'         => $row['class_id'] === null ? null : (int)$row['class_id'],
                 'academic_year_id' => $row['academic_year_id'] === null ? null : (int)$row['academic_year_id'],
                 'attendance_date'  => (string)$row['attendance_date'],

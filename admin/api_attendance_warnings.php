@@ -3,11 +3,11 @@
  * ============================================================
  * Attendance warnings API (Attendance alerting — Phase 2)
  * ============================================================
- *   GET  ?action=list[&department=edu|mezmur&status=open|closed|all&kind=&stage=&member_id=&source=&q=&limit=&offset=]
+ *   GET  ?action=list[&department=edu|mezmur&status=open|closed|all&kind=&stage=&student_id=&source=&q=&limit=&offset=]
  *   GET  ?action=detail&id=N              → warning + events + risk + EC absence dates
  *   GET  ?action=counts                   → open counts per department / stage (dashboard card)
- *   GET  ?action=member_summary&member_id=N → both departments: risk + warnings (profile tab)
- *   GET  ?action=risk&member_id=N&department=edu|mezmur → the shared risk object
+ *   GET  ?action=student_summary&student_id=N → both departments: risk + warnings (profile tab)
+ *   GET  ?action=risk&student_id=N&department=edu|mezmur → the shared risk object
  *   POST action=close {id, outcome(contacted|excused|escalated|deactivated|no_action), note?}
  *
  * Role scoping (requirements §8, §9):
@@ -62,7 +62,7 @@ if ($method === 'POST' && stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'app
     }
 }
 
-$readActions = ['list', 'detail', 'counts', 'member_summary', 'risk'];
+$readActions = ['list', 'detail', 'counts', 'student_summary', 'risk'];
 $writeActions = ['close'];
 if (!in_array($action, array_merge($readActions, $writeActions), true)) {
     $fail(400, 'Unknown action');
@@ -123,7 +123,7 @@ switch ($action) {
             'status' => (string)($_GET['status'] ?? 'open'),
             'kind' => (string)($_GET['kind'] ?? ''),
             'stage' => (string)($_GET['stage'] ?? ''),
-            'member_id' => (int)($_GET['member_id'] ?? 0),
+            'student_id' => (int)($_GET['student_id'] ?? 0),
             'source' => (string)($_GET['source'] ?? ''),
             'q' => (string)($_GET['q'] ?? ''),
             'limit' => (int)($_GET['limit'] ?? 100),
@@ -149,36 +149,36 @@ switch ($action) {
         $payload = ['warning' => $row];
         // Cross-department summary for HR / Information / admins only.
         if (count($myDepartments) === 2) {
-            $payload['member_summary'] = AttendanceWarningService::memberSummary($conn, (int)$row['member_id']);
+            $payload['student_summary'] = AttendanceWarningService::memberSummary($conn, (int)$row['student_id']);
         }
         $ok($meta + $payload);
     }
     case 'counts': {
         $ok($meta + ['counts' => AttendanceWarningService::openCounts($conn, $myDepartments)]);
     }
-    case 'member_summary': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+    case 'student_summary': {
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
-        $ok($meta + ['summary' => AttendanceWarningService::memberSummary($conn, $memberId, $myDepartments)]);
+        $ok($meta + ['summary' => AttendanceWarningService::memberSummary($conn, $studentId, $myDepartments)]);
     }
     case 'risk': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
         $depts = $scopeDepartments($_GET['department'] ?? null);
         $out = [];
         foreach ($depts as $d) {
             try {
-                $out[$d] = AttendanceWarningService::decorate($conn, AttendanceRiskService::riskFor($conn, $d, $memberId));
+                $out[$d] = AttendanceWarningService::decorate($conn, AttendanceRiskService::riskFor($conn, $d, $studentId));
             } catch (\Throwable $e) {
                 error_log('Attendance risk failed: ' . $e->getMessage());
                 $out[$d] = null;
             }
         }
-        $ok($meta + ['member_id' => $memberId, 'risk' => $out]);
+        $ok($meta + ['student_id' => $studentId, 'risk' => $out]);
     }
     case 'close': {
         if (!$available) {

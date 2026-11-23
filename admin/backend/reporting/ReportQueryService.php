@@ -7,10 +7,10 @@
  *
  * Definition (JSON from the client, or a saved report):
  * {
- *   "dataset":  "members",
+ *   "dataset":  "students",
  *   "filters":  [{"field":"status","op":"eq","value":"active"}, ...],
  *   "search":   "free text (searchable fields only)",
- *   "columns":  ["member_code","full_name_am", ...],        // list / export
+ *   "columns":  ["student_code","full_name_am", ...],        // list / export
  *   "sort":     [{"field":"registered_at","dir":"desc"}],
  *   "page":     1,  "page_size": 50,
  *   "group_by": "age_group",                                  // aggregate
@@ -132,7 +132,7 @@ final class ReportQueryService
             $where .= " AND {$f['sql']} LIKE ?";
             $params[] = self::escapeLike(mb_substr($prefix, 0, 40)) . '%';
         }
-        $sql = "SELECT {$f['sql']} AS v, COUNT(*) AS n FROM " . $this->fromClause(['members'], $f['requires'])
+        $sql = "SELECT {$f['sql']} AS v, COUNT(*) AS n FROM " . $this->fromClause(['students'], $f['requires'])
              . " WHERE {$where} GROUP BY v ORDER BY n DESC, v ASC LIMIT 100";
         return ['field' => $fieldKey, 'values' => $this->fetchAll($sql, $params)];
     }
@@ -172,7 +172,7 @@ final class ReportQueryService
             $filters[] = ($f['field'] ?? '?') . ':' . ($f['op'] ?? '?');
         }
         return [
-            'dataset'    => (string)($definition['dataset'] ?? 'members'),
+            'dataset'    => (string)($definition['dataset'] ?? 'students'),
             'filters'    => array_slice($filters, 0, ReportRegistry::MAX_FILTERS),
             'columns'    => count($definition['columns'] ?? []),
             'group_by'   => $definition['group_by'] ?? null,
@@ -205,7 +205,7 @@ final class ReportQueryService
         $joins = $this->flattenJoins($joins);
 
         $sql = 'SELECT ' . implode(', ', $select)
-             . ' FROM ' . $this->fromClause(['members'], $joins)
+             . ' FROM ' . $this->fromClause(['students'], $joins)
              . ($where !== '' ? " WHERE {$where}" : '')
              . ' ORDER BY ' . implode(', ', $order);
 
@@ -222,7 +222,7 @@ final class ReportQueryService
     public function buildCountSql(array $d): array
     {
         [$where, $params, $joins] = $this->whereClause($d);
-        $sql = 'SELECT COUNT(*) AS total FROM ' . $this->fromClause(['members'], $this->flattenJoins($joins))
+        $sql = 'SELECT COUNT(*) AS total FROM ' . $this->fromClause(['students'], $this->flattenJoins($joins))
              . ($where !== '' ? " WHERE {$where}" : '');
         return ['sql' => $sql, 'params' => $params];
     }
@@ -241,7 +241,7 @@ final class ReportQueryService
         }
         $joins = $this->flattenJoins($joins);
         $sql = 'SELECT ' . implode(', ', $sel)
-             . ' FROM ' . $this->fromClause(['members'], $joins)
+             . ' FROM ' . $this->fromClause(['students'], $joins)
              . ($where !== '' ? " WHERE {$where}" : '')
              . ' GROUP BY `bucket` ORDER BY `' . $d['metrics'][0] . '` DESC, `bucket` ASC LIMIT ' . ReportRegistry::MAX_GROUPS;
         return ['sql' => $sql, 'params' => $params];
@@ -258,7 +258,7 @@ final class ReportQueryService
             $joins[] = ReportRegistry::metricRequires($m);
         }
         $sql = 'SELECT ' . implode(', ', $sel)
-             . ' FROM ' . $this->fromClause(['members'], $this->flattenJoins($joins))
+             . ' FROM ' . $this->fromClause(['students'], $this->flattenJoins($joins))
              . ($where !== '' ? " WHERE {$where}" : '');
         return ['sql' => $sql, 'params' => $params];
     }
@@ -271,7 +271,7 @@ final class ReportQueryService
      */
     public function normalise(array $raw, bool $forExport = false): array
     {
-        $dataset = (string)($raw['dataset'] ?? 'members');
+        $dataset = (string)($raw['dataset'] ?? 'students');
         if (!isset(ReportRegistry::datasets()[$dataset])) {
             throw new InvalidArgumentException('Unknown dataset.');
         }
@@ -550,7 +550,7 @@ final class ReportQueryService
 
     private function fromClause(array $datasets, array $joins): string
     {
-        $ds = ReportRegistry::datasets()['members'];
+        $ds = ReportRegistry::datasets()['students'];
         $sql = $ds['base'];
         $needed = [];
         foreach ($this->flattenJoins([$joins]) as $j) {

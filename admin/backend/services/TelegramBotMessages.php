@@ -56,7 +56,7 @@ final class TelegramBotMessages
                 'am' => "የአባሉን መረጃ ከሚመዘገበው ሰው ጋር በማወዳደር ያረጋግጡ።",
             ],
             'same_person_confirmed' => [
-                'am' => "✅ ተመሳሳይ አባል መሆኑ ተረጋግጧል።\n\nይህ ሰው ቀደም ሲል በስርዓቱ ውስጥ ተመዝግቧል።\nየአባል መለያ፦ {member_code}\n\nአዲስ መዝገብ አልተፈጠረም።",
+                'am' => "✅ ተመሳሳይ አባል መሆኑ ተረጋግጧል።\n\nይህ ሰው ቀደም ሲል በስርዓቱ ውስጥ ተመዝግቧል።\nየአባል መለያ፦ {student_code}\n\nአዲስ መዝገብ አልተፈጠረም።",
             ],
             'different_person_confirmed' => [
                 'am' => "✅ የተለያዩ ሰዎች መሆናቸው ተረጋግጧል።\n\nአዲሱን አባል መመዝገብ ይችላሉ።",
@@ -96,7 +96,7 @@ final class TelegramBotMessages
                 'am' => "✅ የምዝገባ መረጃው በተሳካ ሁኔታ ተልኳል።\n\nየአባሉ ምዝገባ ለHR ማጽደቅ ቀርቧል።\n- የምዝገባ መለያ፦ {public_id}\n- ሁኔታ፦ በማጽደቅ ላይ\n- ቀን፦ {date}",
             ],
             'approval_notice' => [
-                'am' => "✅ HR ምዝገባውን አጽድቋል።\nመዝገብ፦ {public_id}\nአባል ቁጥር፦ {member_code}\nአባሉ በተሳካ ሁኔታ ተፈጥሯል።",
+                'am' => "✅ HR ምዝገባውን አጽድቋል።\nመዝገብ፦ {public_id}\nአባል ቁጥር፦ {student_code}\nአባሉ በተሳካ ሁኔታ ተፈጥሯል።",
             ],
             'review_decision_notice' => [
                 'am' => "HR ግምገማ፦ {decision}\nመዝገብ፦ {public_id}\nማስታወሻ፦ {note}",

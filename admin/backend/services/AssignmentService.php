@@ -1356,7 +1356,7 @@ class AssignmentService
     private static function touchTeacherMember(\mysqli $conn, int $teacherUserId, bool $isTeacher): void
     {
         try {
-            $stmt = $conn->prepare("SELECT member_id FROM users WHERE id = ? AND role = 'teacher' LIMIT 1");
+            $stmt = $conn->prepare("SELECT student_id FROM users WHERE id = ? AND role = 'teacher' LIMIT 1");
             if (!$stmt) {
                 return;
             }
@@ -1364,7 +1364,7 @@ class AssignmentService
             $stmt->execute();
             $row = $stmt->get_result()->fetch_assoc();
             $stmt->close();
-            $mid = (int)($row['member_id'] ?? 0);
+            $mid = (int)($row['student_id'] ?? 0);
             if ($mid <= 0) {
                 return;
             }
@@ -1374,7 +1374,7 @@ class AssignmentService
                 autoUpdateTeacherStatus($conn, $mid, $isTeacher);
             }
         } catch (\Throwable $e) {
-            /* never fail the assignment because of member-flag sync */
+            /* never fail the assignment because of student-flag sync */
         }
     }
 

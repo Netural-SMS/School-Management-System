@@ -7,9 +7,9 @@
  * three independent attendance sources. GET-only (a report render
  * writes nothing), CSRF-free because it mutates nothing.
  *
- *   GET ?type=general|sections|classes|member|full
+ *   GET ?type=general|sections|classes|student|full
  *       [&source=mezmur|hr]  (sections template)
- *       [&member_id=N]       (member template)
+ *       [&student_id=N]       (student template)
  *       [&from=YYYY-MM-DD&to=YYYY-MM-DD]
  *
  * Defense in depth: ROLE_MAP gate + re-checked session/role here,
@@ -73,7 +73,7 @@ $source = (string)($_GET['source'] ?? 'mezmur');
 if ($source === 'hr') {
     info_rp_fail('HR attendance was retired; reports cover Education and Mezmur only.', 410);
 }
-$memberId = (int)($_GET['member_id'] ?? 0);
+$studentId = (int)($_GET['student_id'] ?? 0);
 $from = (string)($_GET['from'] ?? '');
 $to = (string)($_GET['to'] ?? '');
 
@@ -81,15 +81,15 @@ $to = (string)($_GET['to'] ?? '');
 SecurityAuditService::record(
     $conn,
     'Info Report Generated',
-    ['type' => $type, 'source' => $source, 'member_id' => $memberId ?: null,
+    ['type' => $type, 'source' => $source, 'student_id' => $studentId ?: null,
      'from' => $from ?: null, 'to' => $to ?: null],
-    'info_reports', $memberId ?: null
+    'info_reports', $studentId ?: null
 );
 
 // ── 4. Build + stream ────────────────────────────────────────
 $result = PdfReportService::build($conn, $type, [
     'source' => $source,
-    'member_id' => $memberId,
+    'student_id' => $studentId,
     'from' => $from,
     'to' => $to,
 ]);

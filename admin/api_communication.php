@@ -148,15 +148,15 @@ switch ($action) {
             $saved = 0; $totalScore = 0.0; $scoreCount = 0; $skipped = [];
             foreach ($grades as $g) {
                 if (!is_array($g)) continue;
-                $memberId = (int)($g['member_id'] ?? 0);
+                $studentId = (int)($g['student_id'] ?? 0);
                 $score = isset($g['score']) && $g['score'] !== '' ? (float)$g['score'] : null;
                 $remark = trim((string)($g['remark'] ?? $g['remarks'] ?? ''));
-                if (!$memberId) continue;
-                if ($score !== null && ($score < 0 || $score > $maxScore)) { $skipped[] = "Invalid score for member $memberId (max: $maxScore)"; continue; }
+                if (!$studentId) continue;
+                if ($score !== null && ($score < 0 || $score > $maxScore)) { $skipped[] = "Invalid score for student $studentId (max: $maxScore)"; continue; }
                 if ($score === null && $remark === '') continue;
                 $rid = \App\Services\SubmissionService::upsertScore($conn, [
                     'assessment_id' => $assessmentId,
-                    'member_id' => $memberId,
+                    'student_id' => $studentId,
                     'score' => $score,
                     'remarks' => $remark,
                     'recorded_by' => (int)$userId,
@@ -166,7 +166,7 @@ switch ($action) {
                     'term_id' => $termId,
                     'max_score' => $maxScore,
                 ]);
-                if ($rid <= 0) { $skipped[] = "Member $memberId is not enrolled in this class — mark not saved."; continue; }
+                if ($rid <= 0) { $skipped[] = "Student $studentId is not enrolled in this class — mark not saved."; continue; }
                 $saved++;
                 if ($score !== null) { $totalScore += $score; $scoreCount++; }
             }
@@ -368,11 +368,11 @@ switch ($action) {
     // GET STUDENT REPORT CARD
     // ============================================================
     case 'get_report_card':
-        $memberId = (int)($_GET['member_id'] ?? 0);
+        $studentId = (int)($_GET['student_id'] ?? 0);
         $classId = (int)($_GET['class_id'] ?? 0);
         $yearId = (int)($_GET['year_id'] ?? 0);
         $termId = (int)($_GET['term_id'] ?? 0);
-        if (!$memberId) {
+        if (!$studentId) {
             echo json_encode(['status' => 'error', 'message' => 'Student is required']);
             exit;
         }
@@ -381,7 +381,7 @@ switch ($action) {
             exit;
         }
         try {
-            $card = \App\Services\ReportCardService::getCard($conn, $memberId, $classId, $yearId, $termId);
+            $card = \App\Services\ReportCardService::getCard($conn, $studentId, $classId, $yearId, $termId);
             if (($card['status'] ?? '') === 'success' && $classId <= 0) {
                 $resolvedClass = (int)($card['class']['id'] ?? 0);
                 if ($resolvedClass && !\App\Services\ReportCardService::canViewClass($conn, (int)$userId, (string)$userRole, $resolvedClass)) {

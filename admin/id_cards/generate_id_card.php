@@ -4,10 +4,10 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../backend/services/SecurityAuditService.php';
 require_once __DIR__ . '/../backend/services/IdentityCodeService.php';
-require_once __DIR__ . '/../backend/services/MemberCategory.php';
+require_once __DIR__ . '/../backend/services/StudentCategory.php';
 
 use App\Services\IdentityCodeService;
-use App\Services\MemberCategory;
+use App\Services\StudentCategory;
 use App\Services\SecurityAuditService;
 
 $idCardFail = static function (int $statusCode, string $message): never {
@@ -35,7 +35,7 @@ $idCardFail = static function (int $statusCode, string $message): never {
     exit;
 };
 
-// SECURITY: ID-card generation mutates member rows and writes assets —
+// SECURITY: ID-card generation mutates student rows and writes assets —
 // an authenticated admin session is mandatory (CSRF alone is not enough,
 // anonymous sessions also receive CSRF tokens).
 if (!isLoggedIn()) {
@@ -50,11 +50,11 @@ if (!validateCsrf($_POST['csrf_token'] ?? '')) {
     $idCardFail(403, 'Invalid security token. Refresh the page and try again.');
 }
 
-$memberId = filter_var($_POST['member_id'] ?? null, FILTER_VALIDATE_INT, [
+$studentId = filter_var($_POST['student_id'] ?? null, FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1],
 ]);
 $action = (string)($_POST['action'] ?? 'generate');
-if ($memberId === false || !in_array($action, ['generate', 'renew'], true)) {
+if ($studentId === false || !in_array($action, ['generate', 'renew'], true)) {
     $idCardFail(422, 'Invalid ID-card request.');
 }
 
@@ -92,49 +92,49 @@ $installedNewFile = false;
 try {
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT id, member_code, age_group, registration_type, member_type, membership_tier, status, id_card_status
-         FROM members WHERE id = ? FOR UPDATE'
+        'SELECT id, student_code,  registration_type,  membership_tier, status, id_card_status
+         FROM students WHERE id = ? FOR UPDATE'
     );
-    $statement->execute([(int)$memberId]);
-    $member = $statement->fetch(PDO::FETCH_ASSOC);
+    $statement->execute([(int)$studentId]);
+    $student = $statement->fetch(PDO::FETCH_ASSOC);
     // H4 (updated 2026-11-18): promotions now flip waiting→direct, but
     // legacy permanent+waiting rows were never backfilled by decision —
     // the tier=permanent clause covers them. Keep in sync with
-    // MemberDirectoryService eligible_for_id_card.
-    $eligible = $member
-        && $member['status'] === 'active'
+    // StudentDirectoryService eligible_for_id_card.
+    $eligible = $student
+        && $student['status'] === 'active'
         && (
-            in_array($member['registration_type'], ['direct', 'transfer'], true)
-            || $member['member_type'] === 'honorary'
-            || ($member['membership_tier'] ?? '') === 'permanent'
+            in_array($student['registration_type'], ['direct', 'transfer'], true)
+            || $student['student_type'] === 'honorary'
+            || ($student['membership_tier'] ?? '') === 'permanent'
         );
     if (!$eligible) {
-        throw new DomainException('The member is not eligible for an ID card.');
+        throw new DomainException('The student is not eligible for an ID card.');
     }
 
-    $memberCode = trim((string)($member['member_code'] ?? ''));
+    $memberCode = trim((string)($student['student_code'] ?? ''));
     if ($memberCode === '') {
         if ($conn instanceof mysqli && !$conn->connect_error) {
-            $segments = IdentityCodeService::resolveStaffSegments($conn, (int)$memberId);
+            $segments = IdentityCodeService::resolveStaffSegments($conn, (int)$studentId);
             if ($segments !== null && $segments !== []) {
                 $memberCode = IdentityCodeService::allocateStaff($conn, $segments);
             } else {
-                $letter = MemberCategory::letterFor((string)($member['age_group'] ?? ''));
+                $letter = StudentCategory::letterFor((string)($student['age_group'] ?? ''));
                 if ($letter !== null) {
                     $memberCode = IdentityCodeService::allocateStudent($conn, $letter);
                 }
             }
         }
         if ($memberCode === '') {
-            throw new DomainException('This member does not have an identity code yet. Assign an age group or position first.');
+            throw new DomainException('This student does not have an identity code yet. Assign an age group or position first.');
         }
-        $statement = $pdo->prepare('UPDATE members SET member_code = ? WHERE id = ?');
-        $statement->execute([$memberCode, (int)$memberId]);
+        $statement = $pdo->prepare('UPDATE students SET student_code = ? WHERE id = ?');
+        $statement->execute([$memberCode, (int)$studentId]);
     }
 
     $baseUrl = defined('SITE_URL') ? rtrim((string)SITE_URL, '/') : '';
-    $qrContent = $baseUrl . '/member.php?code=' . rawurlencode($memberCode);
-    $filename = 'qr_member_' . (int)$memberId . '.png';
+    $qrContent = $baseUrl . '/student.php?code=' . rawurlencode($memberCode);
+    $filename = 'qr_student_' . (int)$studentId . '.png';
     $finalPath = $qrDirectory . '/' . $filename;
     $webPath = '/admin/id_cards/assets/qr/' . $filename;
     $tempPath = tempnam($qrDirectory, '.qr-');
@@ -150,23 +150,23 @@ try {
 
     if (!SecurityAuditService::record(
         $pdo,
-        'Member ID Card ' . ($action === 'renew' ? 'Renewed' : 'Generated'),
+        'Student ID Card ' . ($action === 'renew' ? 'Renewed' : 'Generated'),
         ['action' => $action],
-        'member',
-        (int)$memberId
+        'student',
+        (int)$studentId
     )) {
         throw new RuntimeException('ID-card audit recording failed.');
     }
 
-    $refreshIssueDate = $action === 'renew' || ($member['id_card_status'] ?? 'none') !== 'generated';
+    $refreshIssueDate = $action === 'renew' || ($student['id_card_status'] ?? 'none') !== 'generated';
     $statement = $pdo->prepare(
         $refreshIssueDate
-            ? "UPDATE members
+            ? "UPDATE students
                SET qr_code_path = ?, id_card_status = 'generated', id_card_generated_at = CURRENT_TIMESTAMP
                WHERE id = ?"
-            : 'UPDATE members SET qr_code_path = ? WHERE id = ?'
+            : 'UPDATE students SET qr_code_path = ? WHERE id = ?'
     );
-    $statement->execute([$webPath, (int)$memberId]);
+    $statement->execute([$webPath, (int)$studentId]);
 
     // Replace the generated asset atomically and keep the old image available
     // for restoration if the database commit fails.
@@ -187,7 +187,7 @@ try {
         @unlink($backupPath);
     }
 
-    header('Location: ' . ssms_app_url('admin/id_cards/view_id_card.php') . '?member_id=' . (int)$memberId, true, 303);
+    header('Location: ' . ssms_app_url('admin/id_cards/view_id_card.php') . '?student_id=' . (int)$studentId, true, 303);
     exit;
 } catch (DomainException $error) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) {

@@ -101,16 +101,16 @@ final class AcademicTrackingService
      */
     public static function studentDetail(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         int $classId = 0,
         int $yearId = 0,
         int $termId = 0
     ): array {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return ['status' => 'error', 'code' => 'invalid_student', 'message' => 'Student is required.'];
         }
 
-        $card = ReportCardService::getCard($conn, $memberId, $classId, $yearId, $termId);
+        $card = ReportCardService::getCard($conn, $studentId, $classId, $yearId, $termId);
         if (($card['status'] ?? '') !== 'success') {
             // getCard already distinguishes "not in a class" from "not in
             // THIS class" from a build failure. Keep its sentence rather
@@ -163,7 +163,7 @@ final class AcademicTrackingService
             'status' => 'success',
             'scope' => [
                 'type'      => 'student',
-                'member_id' => $memberId,
+                'student_id' => $studentId,
                 'class_id'  => (int)($card['class']['id'] ?? 0),
             ],
             'context' => [
@@ -179,13 +179,13 @@ final class AcademicTrackingService
             // Identity only. No phone number, no credential field, no
             // administrative column — see safeStudent() in the engine.
             'student' => [
-                'id'             => (int)($student['id'] ?? $memberId),
+                'id'             => (int)($student['id'] ?? $studentId),
                 'student_name'   => (string)($student['student_name'] ?? ''),
                 'father_name'    => (string)($student['father_name'] ?? ''),
                 'christian_name' => (string)($student['christian_name'] ?? ''),
-                'member_code'    => (string)($student['member_code'] ?? ''),
+                'student_code'    => (string)($student['student_code'] ?? ''),
                 'gender'         => (string)($student['gender'] ?? ''),
-                'status'         => self::memberStatus($conn, $memberId),
+                'status'         => self::memberStatus($conn, $studentId),
             ],
             'class' => [
                 'id'            => (int)($card['class']['id'] ?? 0),
@@ -242,16 +242,16 @@ final class AcademicTrackingService
      */
     public static function studentAssessments(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         int $classId = 0,
         int $yearId = 0,
         int $termId = 0
     ): array {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return ['status' => 'error', 'code' => 'invalid_student', 'message' => 'Student is required.'];
         }
 
-        $card = ReportCardService::getCard($conn, $memberId, $classId, $yearId, $termId);
+        $card = ReportCardService::getCard($conn, $studentId, $classId, $yearId, $termId);
         if (($card['status'] ?? '') !== 'success') {
             return [
                 'status' => 'error',
@@ -337,7 +337,7 @@ final class AcademicTrackingService
             'status' => 'success',
             'scope' => [
                 'type'      => 'student',
-                'member_id' => $memberId,
+                'student_id' => $studentId,
                 'class_id'  => (int)($card['class']['id'] ?? 0),
             ],
             'context' => [
@@ -389,13 +389,13 @@ final class AcademicTrackingService
      * Enrolment/membership status for the header. A single scoped row — the
      * one fact the report card does not carry.
      */
-    private static function memberStatus(\mysqli $conn, int $memberId): string
+    private static function memberStatus(\mysqli $conn, int $studentId): string
     {
-        $stmt = $conn->prepare("SELECT status FROM members WHERE id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT status FROM students WHERE id = ? LIMIT 1");
         if (!$stmt) {
             return '';
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -638,18 +638,18 @@ final class AcademicTrackingService
 
     /**
      * The teacher's own record. Teachers are logins (`users`) linked to a
-     * person (`members`) through a NULLABLE member_id, so the join has to
-     * be a LEFT JOIN and the member fields have to be allowed to be absent.
+     * person (`students`) through a NULLABLE student_id, so the join has to
+     * be a LEFT JOIN and the student fields have to be allowed to be absent.
      *
      * @return array<string,mixed>|null
      */
     private static function teacherIdentity(\mysqli $conn, int $teacherId): ?array
     {
         $stmt = $conn->prepare(
-            "SELECT u.id, u.full_name, u.username, u.email, u.is_active, u.member_id,
-                    m.member_code, m.phone_number
+            "SELECT u.id, u.full_name, u.username, u.email, u.is_active, u.student_id,
+                    m.student_code, m.phone_number
                FROM users u
-          LEFT JOIN members m ON u.member_id = m.id
+          LEFT JOIN students m ON u.student_id = m.id
               WHERE u.id = ? AND u.role = 'teacher'
               LIMIT 1"
         );
@@ -669,7 +669,7 @@ final class AcademicTrackingService
             'username'    => (string)($row['username'] ?? ''),
             'email'       => (string)($row['email'] ?? ''),
             'is_active'   => (int)$row['is_active'] === 1,
-            'member_code' => $row['member_code'] === null ? null : (string)$row['member_code'],
+            'student_code' => $row['student_code'] === null ? null : (string)$row['student_code'],
             'phone'       => $row['phone_number'] === null ? null : (string)$row['phone_number'],
         ];
     }
@@ -1033,9 +1033,9 @@ final class AcademicTrackingService
         }
 
         $rows = [];
-        $sql = "SELECT m.id, m.member_code, m.student_name, m.father_name, m.gender, m.status
+        $sql = "SELECT m.id, m.student_code, m.student_name, m.father_name, m.gender, m.status
                   FROM class_enrollments ce
-                  JOIN members m ON m.id = ce.member_id
+                  JOIN students m ON m.id = ce.student_id
                  WHERE $where
                  ORDER BY m.student_name, m.id
                  LIMIT ? OFFSET ?";
@@ -1050,8 +1050,8 @@ final class AcademicTrackingService
             $res = $stmt->get_result();
             while ($r = $res->fetch_assoc()) {
                 $rows[] = [
-                    'member_id'    => (int)$r['id'],
-                    'member_code'  => $r['member_code'] === null ? null : (string)$r['member_code'],
+                    'student_id'    => (int)$r['id'],
+                    'student_code'  => $r['student_code'] === null ? null : (string)$r['student_code'],
                     'student_name' => (string)($r['student_name'] ?? ''),
                     'father_name'  => (string)($r['father_name'] ?? ''),
                     'gender'       => (string)($r['gender'] ?? ''),
@@ -1273,10 +1273,10 @@ final class AcademicTrackingService
     {
         $sql = "SELECT u.id, u.full_name, u.username, u.is_active,
                        ta.assignment_role, ta.is_primary, ta.academic_year_id,
-                       m.member_code
+                       m.student_code
                   FROM teacher_assignments ta
                   JOIN users u ON u.id = ta.teacher_id AND u.role = 'teacher'
-             LEFT JOIN members m ON m.id = u.member_id
+             LEFT JOIN students m ON m.id = u.student_id
                  WHERE ta.class_id = ? AND ta.subject_id = ? AND ta.is_active = 1";
         $params = [$classId, $subjectId];
         $types = 'ii';
@@ -1300,7 +1300,7 @@ final class AcademicTrackingService
                 'teacher_id'      => (int)$r['id'],
                 'full_name'       => (string)($r['full_name'] ?? ''),
                 'username'        => (string)($r['username'] ?? ''),
-                'member_code'     => $r['member_code'] === null ? null : (string)$r['member_code'],
+                'student_code'     => $r['student_code'] === null ? null : (string)$r['student_code'],
                 'is_active'       => (int)($r['is_active'] ?? 0) === 1,
                 'assignment_role' => (string)($r['assignment_role'] ?? ''),
                 'is_primary'      => (int)($r['is_primary'] ?? 0) === 1,
@@ -1634,7 +1634,7 @@ final class AcademicTrackingService
             $types .= 'i';
         }
         if ($q !== '') {
-            $where .= ' AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ?)';
+            $where .= ' AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ?)';
             $like = '%' . $q . '%';
             array_push($params, $like, $like, $like);
             $types .= 'sss';
@@ -1643,7 +1643,7 @@ final class AcademicTrackingService
         $total = 0;
         $stmt = $conn->prepare(
             "SELECT COUNT(*) AS total FROM class_enrollments ce
-               JOIN members m ON m.id = ce.member_id
+               JOIN students m ON m.id = ce.student_id
               WHERE $where"
         );
         if ($stmt) {
@@ -1659,9 +1659,9 @@ final class AcademicTrackingService
         $fp[] = $perPage;
         $fp[] = ($page - 1) * $perPage;
         $stmt = $conn->prepare(
-            "SELECT m.id, m.member_code, m.student_name, m.father_name, m.gender, m.status
+            "SELECT m.id, m.student_code, m.student_name, m.father_name, m.gender, m.status
                FROM class_enrollments ce
-               JOIN members m ON m.id = ce.member_id
+               JOIN students m ON m.id = ce.student_id
               WHERE $where
               ORDER BY m.student_name, m.id
               LIMIT ? OFFSET ?"
@@ -1672,8 +1672,8 @@ final class AcademicTrackingService
             $res = $stmt->get_result();
             while ($r = $res->fetch_assoc()) {
                 $rows[] = [
-                    'member_id'    => (int)$r['id'],
-                    'member_code'  => $r['member_code'] === null ? null : (string)$r['member_code'],
+                    'student_id'    => (int)$r['id'],
+                    'student_code'  => $r['student_code'] === null ? null : (string)$r['student_code'],
                     'student_name' => (string)($r['student_name'] ?? ''),
                     'father_name'  => (string)($r['father_name'] ?? ''),
                     'gender'       => (string)($r['gender'] ?? ''),
@@ -1838,11 +1838,11 @@ final class AcademicTrackingService
         $sql = "SELECT u.id, u.full_name, u.username, u.is_active,
                        ta.subject_id, ta.assignment_role, ta.is_primary,
                        ta.is_class_teacher, ta.academic_year_id,
-                       s.subject_name, m.member_code
+                       s.subject_name, m.student_code
                   FROM teacher_assignments ta
                   JOIN users u ON u.id = ta.teacher_id AND u.role = 'teacher'
              LEFT JOIN subjects s ON s.id = ta.subject_id
-             LEFT JOIN members m ON m.id = u.member_id
+             LEFT JOIN students m ON m.id = u.student_id
                  WHERE ta.class_id = ? AND ta.is_active = 1";
         $params = [$classId];
         $types = 'i';
@@ -1867,7 +1867,7 @@ final class AcademicTrackingService
                     'teacher_id'      => (int)$r['id'],
                     'full_name'       => (string)($r['full_name'] ?? ''),
                     'username'        => (string)($r['username'] ?? ''),
-                    'member_code'     => $r['member_code'] === null ? null : (string)$r['member_code'],
+                    'student_code'     => $r['student_code'] === null ? null : (string)$r['student_code'],
                     'is_active'       => (int)($r['is_active'] ?? 0) === 1,
                     'subject_id'      => $subjectId,
                     'subject_name'    => $subjectId === null ? null : (string)($r['subject_name'] ?? ''),

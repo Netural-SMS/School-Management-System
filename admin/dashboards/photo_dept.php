@@ -97,13 +97,13 @@ if (isset($conn)) {
             SUM(status != 'archived') AS total_m,
             SUM(student_photo_path IS NOT NULL AND student_photo_path != '' AND status != 'archived') AS with_p,
             SUM((student_photo_path IS NULL OR student_photo_path='') AND status != 'archived') AS no_p,
-            SUM(age_group='7_13' AND status != 'archived') AS ag7_total,
-            SUM(age_group='7_13' AND status != 'archived' AND student_photo_path IS NOT NULL AND student_photo_path!='') AS ag7_with,
-            SUM(age_group='14_17' AND status != 'archived') AS ag14_total,
-            SUM(age_group='14_17' AND status != 'archived' AND student_photo_path IS NOT NULL AND student_photo_path!='') AS ag14_with,
-            SUM(age_group='18_plus' AND status != 'archived') AS ag18_total,
-            SUM(age_group='18_plus' AND status != 'archived' AND student_photo_path IS NOT NULL AND student_photo_path!='') AS ag18_with
-         FROM members");
+            AS ag7_total,
+            AS ag7_with,
+            AS ag14_total,
+            AS ag14_with,
+            AS ag18_total,
+            AS ag18_with
+         FROM students");
     if (!empty($cov)) {
         $r = $cov[0];
         $kpi['total_members']      = (int)($r['total_m'] ?? 0);
@@ -119,7 +119,7 @@ if (isset($conn)) {
 
     // ---- Photo pipeline KPIs (only if migration 096/097 tables exist) ----
     $photoTablesReady = pd_table_exists($conn, 'photo_upload_receipts')
-                     && pd_table_exists($conn, 'member_photo_candidates')
+                     && pd_table_exists($conn, 'student_photo_candidates')
                      && pd_table_exists($conn, 'photo_import_batches')
                      && pd_table_exists($conn, 'photo_import_items');
     $devicesTableReady = pd_table_exists($conn, 'photo_device_identities');
@@ -127,7 +127,7 @@ if (isset($conn)) {
     if ($photoTablesReady) {
         // Pending review queue (cross-photographer conflicts awaiting decision)
         $pr = pd_fetch_one($conn,
-            "SELECT COUNT(*) AS c FROM member_photo_candidates
+            "SELECT COUNT(*) AS c FROM student_photo_candidates
              WHERE decision_pending = 1 AND archived = 0");
         $kpi['pending_review'] = (int)($pr['c'] ?? 0);
 
@@ -164,13 +164,13 @@ if (isset($conn)) {
 
         // Pending review candidates (top 8)
         $pendingCandidates = pd_fetch_all($conn,
-            "SELECT c.id, c.member_id, c.field, c.created_at, c.byte_size,
+            "SELECT c.id, c.student_id, c.field, c.created_at, c.byte_size,
                     u.full_name AS operator_name,
                     m.student_name, m.father_name, m.grandfather_name,
-                    m.member_code
-             FROM member_photo_candidates c
+                    m.student_code
+             FROM student_photo_candidates c
              LEFT JOIN users u ON u.id = c.operator_admin_id
-             LEFT JOIN members m ON m.id = c.member_id
+             LEFT JOIN students m ON m.id = c.student_id
              WHERE c.decision_pending = 1 AND c.archived = 0
              ORDER BY c.created_at ASC LIMIT 8");
     }
@@ -182,7 +182,7 @@ if (isset($conn)) {
         $kpi['paired_devices'] = (int)($dv['c'] ?? 0);
     }
 
-    // Missing-photos list (uses only members table — always available)
+    // Missing-photos list (uses only students table — always available)
     // Also used by "All batches" history tab.
     if ($photoTablesReady) {
         $allBatches = pd_fetch_all($conn,
@@ -401,7 +401,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5"></i>
                     <div>
                         <h3 class="text-sm font-semibold text-amber-900">Photo pipeline migrations not installed</h3>
-                        <p class="text-xs text-amber-800 mt-1">The photo upload / review / ZIP-import tables (migrations <code>096_mobile_photo_uploads.sql</code> and <code>097_photo_device_pairing.sql</code>) are missing on this server. Coverage KPIs from the <em>members</em> table are shown below; import/review/batch KPIs will appear once migrations are applied.</p>
+                        <p class="text-xs text-amber-800 mt-1">The photo upload / review / ZIP-import tables (migrations <code>096_mobile_photo_uploads.sql</code> and <code>097_photo_device_pairing.sql</code>) are missing on this server. Coverage KPIs from the <em>students</em> table are shown below; import/review/batch KPIs will appear once migrations are applied.</p>
                     </div>
                 </div>
             </div>
@@ -429,7 +429,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     </div>
                     <div class="mt-2 text-2xl sm:text-3xl font-bold"><?= $kpi['coverage_pct'] ?>%</div>
                     <div class="mt-1 text-[11px] opacity-80">
-                        <?= $kpi['members_with_photo'] ?> / <?= $kpi['total_members'] ?> members
+                        <?= $kpi['members_with_photo'] ?> / <?= $kpi['total_members'] ?> students
                     </div>
                 </div>
 
@@ -495,7 +495,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     </div>
                     <div class="flex-1">
                         <h3 class="font-bold text-slate-800">Review &amp; Resolve Conflicts</h3>
-                        <p class="text-xs text-slate-500 mt-0.5">Pick the winning shot when multiple photographers captured the same member.</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Pick the winning shot when multiple photographers captured the same student.</p>
                     </div>
                     <i class="fa-solid fa-chevron-right text-slate-400"></i>
                 </a>
@@ -505,7 +505,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     </div>
                     <div class="flex-1">
                         <h3 class="font-bold text-slate-800">View Capture Coverage</h3>
-                        <p class="text-xs text-slate-500 mt-0.5">See which sections and members are missing photos, prioritise the next visit.</p>
+                        <p class="text-xs text-slate-500 mt-0.5">See which sections and students are missing photos, prioritise the next visit.</p>
                     </div>
                     <i class="fa-solid fa-chevron-right text-slate-400"></i>
                 </button>
@@ -530,13 +530,13 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <?php else: ?>
                     <div class="overflow-x-auto">
                     <table class="pd-table">
-                        <thead><tr><th>Member</th><th>Field</th><th>Operator</th><th>When</th></tr></thead>
+                        <thead><tr><th>Student</th><th>Field</th><th>Operator</th><th>When</th></tr></thead>
                         <tbody>
                         <?php foreach ($pendingCandidates as $c): ?>
                             <tr>
                                 <td>
                                     <div class="font-semibold text-slate-800 text-xs"><?= htmlspecialchars(trim(($c['student_name'] ?? '') . ' ' . ($c['father_name'] ?? ''))) ?></div>
-                                    <div class="text-[11px] text-slate-500"><?= htmlspecialchars($c['member_code'] ?? '—') ?></div>
+                                    <div class="text-[11px] text-slate-500"><?= htmlspecialchars($c['student_code'] ?? '—') ?></div>
                                 </td>
                                 <td><span class="badge badge-amber"><?= htmlspecialchars($c['field'] === 'guardian_photo' ? 'Guardian' : 'Student') ?></span></td>
                                 <td class="text-xs text-slate-600"><?= htmlspecialchars($c['operator_name'] ?? '—') ?></td>
@@ -646,12 +646,12 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
             <div class="panel p-4 sm:p-5">
                 <h3 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
                     <span class="w-7 h-7 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                    Members Missing Photos (sample, oldest-first)
+                    Students Missing Photos (sample, oldest-first)
                 </h3>
                 <?php
                 $missing = pd_fetch_all($conn,
-                    "SELECT id, student_name, father_name, grandfather_name, member_code, age_group, gender
-                     FROM members
+                    "SELECT id, student_name, father_name, grandfather_name, student_code,  gender
+                     FROM students
                      WHERE status != 'archived'
                        AND (student_photo_path IS NULL OR student_photo_path = '')
                      ORDER BY id ASC LIMIT 30");
@@ -659,7 +659,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                 ?>
                 <div class="text-center py-8 text-emerald-600">
                     <i class="fa-solid fa-circle-check text-4xl mb-2"></i>
-                    <p class="text-sm font-semibold">Every active member has a photo — coverage is 100%!</p>
+                    <p class="text-sm font-semibold">Every active student has a photo — coverage is 100%!</p>
                 </div>
                 <?php else: ?>
                 <div class="overflow-x-auto">
@@ -667,7 +667,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     <thead><tr><th>#</th><th>Name</th><th>Code</th><th>Section</th><th>Gender</th></tr></thead>
                     <tbody>
                     <?php foreach ($missing as $i => $m):
-                        switch ($m['age_group'] ?? '') {
+                        switch ( ?? '') {
                             case '7_13':    $ageLabel = 'Children (A)'; break;
                             case '14_17':   $ageLabel = 'Youth (B)'; break;
                             case '18_plus': $ageLabel = 'Adults (C)'; break;
@@ -677,7 +677,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                         <tr>
                             <td class="text-slate-400 text-xs"><?= $i+1 ?></td>
                             <td><div class="font-semibold text-xs"><?= htmlspecialchars(trim(($m['student_name']??'').' '.($m['father_name']??'').' '.($m['grandfather_name']??''))) ?></div></td>
-                            <td class="text-xs text-slate-600"><?= htmlspecialchars($m['member_code'] ?? '—') ?></td>
+                            <td class="text-xs text-slate-600"><?= htmlspecialchars($m['student_code'] ?? '—') ?></td>
                             <td><span class="badge badge-slate"><?= htmlspecialchars($ageLabel) ?></span></td>
                             <td class="text-xs text-slate-600"><?= htmlspecialchars(ucfirst($m['gender'] ?? '—')) ?></td>
                         </tr>

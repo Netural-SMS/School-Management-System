@@ -3,7 +3,7 @@
  * ============================================================================
  * Assessment follow-ups — make-up queue (Attendance alerting — Phase 5)
  * ============================================================================
- * Opened when a member is reactivated in Education after an inactive period:
+ * Opened when a student is reactivated in Education after an inactive period:
  * every assessment that fell inside that period with no score becomes a
  * `pending` follow-up. The responsible teacher (class + subject assignment)
  * or the Education department decides: make-up required / exempt / not
@@ -37,12 +37,12 @@ $roleLabels = [
 $cfg = [
     'api' => '/admin/api_assessment_followups.php',
     'csrf' => generateCsrfToken(),
-    'memberUrl' => '/admin/info_manage_member.php?id=',
+    'studentUrl' => '/admin/info_manage_student.php?id=',
     'role' => $userRole,
     'canWrite' => \App\Services\AssessmentFollowupService::roleMayWrite($userRole),
     'initial' => [
         'decision' => (string)($_GET['decision'] ?? ''),
-        'member_id' => (int)($_GET['member_id'] ?? 0),
+        'student_id' => (int)($_GET['student_id'] ?? 0),
         'class_id' => (int)($_GET['class_id'] ?? 0),
         'id' => (int)($_GET['id'] ?? 0),
     ],
@@ -134,7 +134,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
         </select>
       </label>
       <label>Search
-        <input type="search" id="af-q" placeholder="member, code or assessment">
+        <input type="search" id="af-q" placeholder="student, code or assessment">
       </label>
       <span class="rc-muted" id="af-total"></span>
     </div>
@@ -149,7 +149,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
         <button class="rc-btn rc-btn-sm" id="af-more" type="button" hidden>Load more</button>
       </div>
     </div>
-    <p class="af-note">A follow-up is opened automatically when a member returns to Education after an inactive period. Nothing is scored automatically: choose <em>make-up required</em>, <em>exempt</em> or <em>not applicable</em>. A make-up result is stored separately — the original assessment row is never changed.</p>
+    <p class="af-note">A follow-up is opened automatically when a student returns to Education after an inactive period. Nothing is scored automatically: choose <em>make-up required</em>, <em>exempt</em> or <em>not applicable</em>. A make-up result is stored separately — the original assessment row is never changed.</p>
   </main>
 </div>
 

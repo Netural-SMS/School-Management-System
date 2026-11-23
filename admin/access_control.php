@@ -10,8 +10,8 @@
  * WHY THIS EXISTS
  * ---------------
  * Before this file, every admin script checked access on its own —
- * and several checked NOTHING. For example print_member.php and
- * info_manage_member.php could be opened by anyone on the internet,
+ * and several checked NOTHING. For example print_student.php and
+ * info_manage_student.php could be opened by anyone on the internet,
  * exposing every student's full record. Other endpoints (finance,
  * education) only checked "is the person logged in?" — so a teacher
  * could read the finance ledger or delete a class.
@@ -158,17 +158,17 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             'export_executive_report_pdf.php' => ['super_admin', 'school_admin', 'edu_dept'],
             'export_filtered_students.php' => ['super_admin', 'school_admin', 'edu_dept', 'teacher'],
 
-            // ---- Member management (Information department) ----
+            // ---- Student management (Information department) ----
             // finance_dept included: the finance dashboard fetches the student
-            // roster to assign fees (frontend/js/finance.js → members.php).
-            'hr_register_member.php'  => ['super_admin', 'hr_dept'],
-            'api_list_members.php'    => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept', 'finance_dept'],
+            // roster to assign fees (frontend/js/finance.js → students.php).
+            'hr_register_student.php'  => ['super_admin', 'hr_dept'],
+            'api_list_students.php'    => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept', 'finance_dept'],
             'api_search.php'            => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept', 'finance_dept'],
-            'members.php'             => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept', 'finance_dept'],
+            'students.php'             => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept', 'finance_dept'],
             'api_check_duplicate.php' => ['super_admin', 'school_admin', 'hr_dept'],
             'members_check.php'       => ['super_admin', 'school_admin', 'hr_dept'],
-            'info_manage_member.php'        => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'member_file.php'               => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'info_manage_student.php'        => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'student_file.php'               => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             // Photo department: ZIP airlock import and multi-photographer
             // conflict resolution. photo_dept is the primary role;
             // photo_importer is kept as a legacy alias for accounts
@@ -178,10 +178,10 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             'photo_review.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
             'photo_import.php'              => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
             'photo_dept.php'                => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'photo_dept', 'photo_importer'],
-            'info_archive_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'info_restore_member.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'info_get_archived_members.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'print_member.php'  => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept'],
+            'info_archive_student.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'info_restore_student.php'       => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'info_get_archived_students.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'print_student.php'  => ['super_admin', 'school_admin', 'info_dept', 'hr_dept', 'edu_dept'],
             'info-dept.php'     => ['super_admin', 'school_admin', 'info_dept'],
             'hr-dept.php'       => ['super_admin', 'school_admin', 'hr_dept'],
 
@@ -198,9 +198,9 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             'messages.php'      => ['super_admin', 'school_admin', 'info_dept', 'edu_dept', 'finance_dept', 'material_dept', 'mezmur_dept', 'hr_dept', 'teacher', 'attendance_taker', 'mezmur_attendance_taker', 'hr_attendance_taker', 'content_editor'],
             'groups_api.php' => ['super_admin', 'school_admin', 'hr_dept'],
 
-            // ---- Reports & exports (contain all-member data) ----
-            // Member analytics & export centre: Info + HR analyse and export
-            // member demographics (2026-10-18). Both roles already had every
+            // ---- Reports & exports (contain all-student data) ----
+            // Student analytics & export centre: Info + HR analyse and export
+            // student demographics (2026-10-18). Both roles already had every
             // export below; the page itself is read-only.
             'api_reports.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
     'api_reports_v2.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
@@ -208,8 +208,8 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
     'api_report_views.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'reports.php'     => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
             'export_pdf.php'  => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'api_export_members.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
-            'api_import_members.php' => ['super_admin', 'hr_dept'],
+            'api_export_students.php' => ['super_admin', 'school_admin', 'info_dept', 'hr_dept'],
+            'api_import_students.php' => ['super_admin', 'hr_dept'],
             'api_test_seed.php'      => ['super_admin'],
             'api_search_backfill.php'  => ['super_admin'],
 
@@ -257,7 +257,7 @@ if (!defined('ACCESS_CONTROL_LOADED')) {
             // Actions are restricted further inside api_acm.php via
             // AcmPolicy (mode-aware maker-checker by user ID) and
             // AcmOfficeService (solo designations, attestations).
-            // Member/parent login roles are NOT listed here on
+            // Student/parent login roles are NOT listed here on
             // purpose: they must never open the admin console.
             'api_acm.php'      => ['super_admin', 'accounts_office'],
             'acm_overview.php' => ['super_admin', 'accounts_office'],

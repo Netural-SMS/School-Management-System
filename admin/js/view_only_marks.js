@@ -2,13 +2,13 @@
  * FKSS View-only marks (Phase 2, 2026-10-22, owner):
  *   "add a preview only capability for the assesments so the teacher can lock
  *    it on preview only and he can crosscheck without accidentally changing or
- *    erasing the marks, and also can show the members their result in that
+ *    erasing the marks, and also can show the students their result in that
  *    screen easly"
  *
  *   FKSSViewOnly.attach({
  *     card:        element whose header gets the toggle (first .p-4 / header),
  *     tbody:       the table body with one <tr> per student,
- *     input:       '.grade-input' — the score boxes (data-member-id / data-mid),
+ *     input:       '.grade-input' — the score boxes (data-student-id / data-mid),
  *     extra:       '.remarks-input' — other boxes to lock too (optional),
  *     buttons:     ['saveGradesBtn'] — ids disabled while View only is on,
  *     assessmentId, assessmentName, maxScore
@@ -82,8 +82,8 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
-  function memberIdOf(input) {
-    return parseInt(input.getAttribute('data-member-id') || input.getAttribute('data-mid') || '0', 10) || 0;
+  function studentIdOf(input) {
+    return parseInt(input.getAttribute('data-student-id') || input.getAttribute('data-mid') || '0', 10) || 0;
   }
 
   // ── private result card ────────────────────────────────────────────────
@@ -108,7 +108,7 @@
     return '<span class="fk-rc-ne" data-fk-rc-state>Not entered yet</span>';
   }
 
-  function openCard(opts, memberId, name, code, typed) {
+  function openCard(opts, studentId, name, code, typed) {
     css();
     closeCard();
     lastFocus = document.activeElement;
@@ -133,7 +133,7 @@
     back.querySelector('[data-fk-rc-close]').focus();
 
     fetch('/admin/api_subjects.php?action=student_results&assessment_id=' + encodeURIComponent(opts.assessmentId) +
-      '&member_id=' + encodeURIComponent(memberId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      '&student_id=' + encodeURIComponent(studentId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var list = back.querySelector('[data-fk-rc-list]');
@@ -207,7 +207,7 @@
         var name = cells[1] ? cells[1].textContent.trim() : '';
         var code = cells[2] ? cells[2].textContent.trim() : '';
         if (code === '—') code = '';
-        openCard(st, memberIdOf(input), name, code, (input.value || '').trim());
+        openCard(st, studentIdOf(input), name, code, (input.value || '').trim());
       });
     }
     // New render (or another test): fresh state, same bar.

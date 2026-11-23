@@ -45,7 +45,7 @@ final class TelegramApprovalReadinessService
                     // score thresholds mirror its high>=70/medium>=45 bands as fallback.
                     $band=(string)($c['match_band']??($c['band']??($c['score_band']??'')));
                     $score=(int)($c['match_score']??0);
-                    $cid=(int)($c['member_id']??($c['id']??0));
+                    $cid=(int)($c['student_id']??($c['id']??0));
                     if($cid<1)continue;
                     if(in_array($band,['high','very_high','certain'],true)||$score>=70)$bandOf[$cid]='high';
                     elseif($band==='medium'||$score>=45)$bandOf[$cid]='medium';
@@ -55,13 +55,13 @@ final class TelegramApprovalReadinessService
             if($bandOf!==[]){
                 $in=str_repeat('?,',count($bandOf)-1).'?';
                 $types=str_repeat('i',count($bandOf));
-                $sql="SELECT candidate_member_id,decision FROM telegram_candidate_decisions WHERE session_id=? AND candidate_member_id IN ($in) ORDER BY id DESC";
+                $sql="SELECT candidate_student_id,decision FROM telegram_candidate_decisions WHERE session_id=? AND candidate_student_id IN ($in) ORDER BY id DESC";
                 $stmt=$this->conn->prepare($sql);
                 if($stmt){
                     $params=[$sessionId];foreach(array_keys($bandOf)as$cid)$params[]=(int)$cid;
                     $stmt->bind_param('i'.$types,...$params);$stmt->execute();$res=$stmt->get_result();
                     $latest=[];while($row=$res->fetch_assoc()){
-                        $mid=(int)$row['candidate_member_id'];
+                        $mid=(int)$row['candidate_student_id'];
                         if(!isset($latest[$mid]))$latest[$mid]=(string)$row['decision'];
                     }$stmt->close();
                     foreach($bandOf as $cid=>$b){
@@ -81,8 +81,8 @@ final class TelegramApprovalReadinessService
             // Escalation marker from the session itself
             if((string)($session['identity_verification_decision']??'')==='escalated')$escalated=1;
         }
-        if($same>0)$blockers[]='At least one high-confidence candidate has been marked as the same person — approve the existing member instead of creating a new one.';
-        if($sameMedium>0)$blockers[]='At least one medium-confidence candidate has been marked as the same person — approve the existing member instead of creating a new one.';
+        if($same>0)$blockers[]='At least one high-confidence candidate has been marked as the same person — approve the existing student instead of creating a new one.';
+        if($sameMedium>0)$blockers[]='At least one medium-confidence candidate has been marked as the same person — approve the existing student instead of creating a new one.';
         if($unresolvedHigh>0)$blockers[]='There are '.$unresolvedHigh.' unresolved high-confidence duplicate candidates. The operator must mark each as "same person" or "different person" before approval.';
         if($duplicate==='likely'){
             // High-candidate evidence present → v2 verdicts above already enforce the
@@ -104,7 +104,7 @@ final class TelegramApprovalReadinessService
         }
 
         $profile=(string)($session['profile_key']??'');
-        if(in_array($profile,['direct','transfer'],true))$warnings[]='Approval will create a permanent member and requires final transactional duplicate enforcement.';
+        if(in_array($profile,['direct','transfer'],true))$warnings[]='Approval will create a permanent student and requires final transactional duplicate enforcement.';
         else $warnings[]='Waiting approval will create only a temporary/waiting record.';
         return ['ready'=>$blockers===[],'blockers'=>$blockers,'warnings'=>$warnings];
     }

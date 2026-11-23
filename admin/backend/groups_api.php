@@ -266,7 +266,7 @@ if ($action === 'list_groups') {
             $total = $result ? $result->fetch_assoc()['total'] : 0;
         }
     
-    // Build leader/member count subqueries based on available columns and tables
+    // Build leader/student count subqueries based on available columns and tables
     if ($leadersTableExists) {
         $leaderCountSql = $hasLeaderIsActive 
             ? "(SELECT COUNT(*) FROM wbws_group_leaders WHERE group_id = g.id AND is_active = 1)"
@@ -296,7 +296,7 @@ if ($action === 'list_groups') {
     // Fetch groups
     $sql = "SELECT g.*, 
             $leaderCountSql as leader_count,
-            $memberCountSql as member_count
+            $memberCountSql as student_count
             FROM wbws_groups g 
             $whereClause 
             $orderBy 
@@ -433,18 +433,18 @@ if ($action === 'impact_delete_group') {
     if ($id <= 0) apiResponse(false, null, 'Invalid group ID');
     $stmt = $conn->prepare("SELECT group_name,
             (SELECT COUNT(*) FROM wbws_group_leaders WHERE group_id = g.id) AS leaders,
-            (SELECT COUNT(*) FROM wbws_group_members WHERE group_id = g.id) AS members
+            (SELECT COUNT(*) FROM wbws_group_members WHERE group_id = g.id) AS students
         FROM wbws_groups g WHERE g.id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $imp = $stmt->get_result()->fetch_assoc();
     if (!$imp) apiResponse(false, null, 'Group not found');
-    apiResponse(true, ['group_name' => $imp['group_name'], 'leaders' => (int)$imp['leaders'], 'members' => (int)$imp['members']]);
+    apiResponse(true, ['group_name' => $imp['group_name'], 'leaders' => (int)$imp['leaders'], 'students' => (int)$imp['students']]);
 }
 
 if ($action === 'delete_group' && $method === 'POST') {
     // Danger confirmation (HIGH): deletes the group with all its leaders and
-    // members; the 3-step dialog sends the typed phrase.
+    // students; the 3-step dialog sends the typed phrase.
     require_once __DIR__ . '/danger_confirm.php';
     dc_require_phrase('groups.delete_group');
     $id = cleanInt($_POST['id'] ?? 0, 1);
@@ -457,7 +457,7 @@ if ($action === 'delete_group' && $method === 'POST') {
     if (!$group) apiResponse(false, null, 'Group not found');
     $groupName = $group['group_name'] ?? 'Unknown';
 
-    // One transaction: leaders, members and the group go together or not at all.
+    // One transaction: leaders, students and the group go together or not at all.
     try {
         $conn->begin_transaction();
         // Delete leaders first (no FK constraint in older versions)
@@ -465,7 +465,7 @@ if ($action === 'delete_group' && $method === 'POST') {
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $leadersGone = $stmt->affected_rows;
-        // Delete members
+        // Delete students
         $stmt = $conn->prepare("DELETE FROM wbws_group_members WHERE group_id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
@@ -480,7 +480,7 @@ if ($action === 'delete_group' && $method === 'POST') {
         reportInternalError('Group delete failed', $e);
         apiResponse(false, null, 'Failed to delete group. Nothing was removed.');
     }
-    logAudit($conn, 'delete', 'group', $id, "Deleted group: $groupName ($leadersGone leaders, $membersGone members)");
+    logAudit($conn, 'delete', 'group', $id, "Deleted group: $groupName ($leadersGone leaders, $membersGone students)");
     apiResponse(true, null, 'Group deleted successfully');
 }
 
@@ -695,13 +695,13 @@ if ($action === 'list_members') {
     $stmt->bind_param($types, ...$params);
     $stmt->execute();
     
-    $members = [];
+    $students = [];
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
-        $members[] = $row;
+        $students[] = $row;
     }
     
-    apiResponse(true, $members, '', [
+    apiResponse(true, $students, '', [
         'total' => (int)$total,
         'page' => $page,
         'limit' => $limit,
@@ -711,15 +711,15 @@ if ($action === 'list_members') {
 
 if ($action === 'get_member') {
     $id = cleanInt($_GET['id'] ?? 0, 1);
-    if ($id <= 0) apiResponse(false, null, 'Invalid member ID');
+    if ($id <= 0) apiResponse(false, null, 'Invalid student ID');
     
     $stmt = $conn->prepare("SELECT * FROM wbws_group_members WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    $member = $stmt->get_result()->fetch_assoc();
+    $student = $stmt->get_result()->fetch_assoc();
     
-    if (!$member) apiResponse(false, null, 'Member not found');
-    apiResponse(true, $member);
+    if (!$student) apiResponse(false, null, 'Student not found');
+    apiResponse(true, $student);
 }
 
 if ($action === 'save_member' && $method === 'POST') {
@@ -745,7 +745,7 @@ if ($action === 'save_member' && $method === 'POST') {
         $status = in_array($rawStatus, ['active', 'inactive', 'suspended']) ? $rawStatus : 'active';
         $notes = cleanString($_POST['notes'] ?? '', 2000);
         
-        if (empty($name)) apiResponse(false, null, 'Member name is required');
+        if (empty($name)) apiResponse(false, null, 'Student name is required');
         if ($groupId <= 0) apiResponse(false, null, 'Group ID is required');
         
         // Verify the group actually exists
@@ -761,7 +761,7 @@ if ($action === 'save_member' && $method === 'POST') {
         $joinedDate = (!empty($joinedDate) && strtotime($joinedDate)) ? $joinedDate : null;
         
         if ($id > 0) {
-            // UPDATE existing member
+            // UPDATE existing student
             $sql = "UPDATE wbws_group_members SET 
                 full_name = ?, full_name_en = ?, baptismal_name = ?, gender = ?, phone = ?, email = ?,
                 date_of_birth = ?, city = ?, sub_city = ?, woreda = ?, house_number = ?,
@@ -769,7 +769,7 @@ if ($action === 'save_member' && $method === 'POST') {
                 WHERE id = ?";
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
-                reportInternalError('Group member update prepare failed', $conn->error);
+                reportInternalError('Group student update prepare failed', $conn->error);
                 apiResponse(false, null, 'Group storage is temporarily unavailable.');
             }
             $stmt->bind_param("sssssssssssssssssi", 
@@ -778,21 +778,21 @@ if ($action === 'save_member' && $method === 'POST') {
                 $joinedDate, $status, $notes, $username, $id);
             
             if ($stmt->execute()) {
-                logAudit($conn, 'update', 'group_member', $id, "Updated member: $name");
-                apiResponse(true, ['id' => $id], 'Member updated successfully');
+                logAudit($conn, 'update', 'group_member', $id, "Updated student: $name");
+                apiResponse(true, ['id' => $id], 'Student updated successfully');
             } else {
-                reportInternalError('Group member update failed', $stmt->error);
-                apiResponse(false, null, 'Unable to update the group member.');
+                reportInternalError('Group student update failed', $stmt->error);
+                apiResponse(false, null, 'Unable to update the group student.');
             }
         } else {
-            // INSERT new member
+            // INSERT new student
             $sql = "INSERT INTO wbws_group_members 
                 (group_id, full_name, full_name_en, baptismal_name, gender, phone, email, date_of_birth,
                  city, sub_city, woreda, house_number, education_level, occupation, joined_date, membership_status, notes, created_by) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
-                error_log('Group member insert prepare failed. Verify migration 013.');
+                error_log('Group student insert prepare failed. Verify migration 013.');
                 apiResponse(false, null, 'Group storage is temporarily unavailable.');
             }
 
@@ -803,16 +803,16 @@ if ($action === 'save_member' && $method === 'POST') {
             
             if ($stmt->execute()) {
                 $newId = $conn->insert_id;
-                logAudit($conn, 'create', 'group_member', $newId, "Added member: $name");
-                apiResponse(true, ['id' => $newId], 'Member added successfully');
+                logAudit($conn, 'create', 'group_member', $newId, "Added student: $name");
+                apiResponse(true, ['id' => $newId], 'Student added successfully');
             } else {
-                reportInternalError('Group member insert failed', $stmt->error);
-                apiResponse(false, null, 'Unable to add the group member.');
+                reportInternalError('Group student insert failed', $stmt->error);
+                apiResponse(false, null, 'Unable to add the group student.');
             }
         }
     } catch (Exception $e) {
-        reportInternalError('Group member save failed', $e);
-        apiResponse(false, null, 'Unable to save the group member.');
+        reportInternalError('Group student save failed', $e);
+        apiResponse(false, null, 'Unable to save the group student.');
     }
 }
 
@@ -820,43 +820,43 @@ if ($action === 'delete_member' && $method === 'POST') {
     $id = cleanInt($_POST['id'] ?? 0, 1);
     $permanent = ($_POST['permanent'] ?? '0') === '1';
     
-    if ($id <= 0) apiResponse(false, null, 'Invalid member ID');
+    if ($id <= 0) apiResponse(false, null, 'Invalid student ID');
     
     $stmt = $conn->prepare("SELECT full_name FROM wbws_group_members WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    $member = $stmt->get_result()->fetch_assoc();
-    $memberName = $member['full_name'] ?? 'Unknown';
+    $student = $stmt->get_result()->fetch_assoc();
+    $memberName = $student['full_name'] ?? 'Unknown';
     
     if ($permanent) {
         $stmt = $conn->prepare("DELETE FROM wbws_group_members WHERE id = ?");
         $stmt->bind_param("i", $id);
         $actionType = 'delete';
-        $message = 'Member permanently deleted';
+        $message = 'Student permanently deleted';
     } else {
         $stmt = $conn->prepare("UPDATE wbws_group_members SET membership_status = 'inactive', updated_by = ? WHERE id = ?");
         $stmt->bind_param("si", $username, $id);
         $actionType = 'deactivate';
-        $message = 'Member deactivated';
+        $message = 'Student deactivated';
     }
     
     if ($stmt->execute()) {
         logAudit($conn, $actionType, 'group_member', $id, "$message: $memberName");
         apiResponse(true, null, $message);
     } else {
-        apiResponse(false, null, 'Failed to remove member');
+        apiResponse(false, null, 'Failed to remove student');
     }
 }
 
 if ($action === 'bulk_add_members' && $method === 'POST') {
     $groupId = cleanInt($_POST['group_id'] ?? 0, 1);
-    $membersJson = $_POST['members'] ?? '[]';
+    $membersJson = $_POST['students'] ?? '[]';
     
     if ($groupId <= 0) apiResponse(false, null, 'Group is required');
     
-    $members = json_decode($membersJson, true);
-    if (!is_array($members) || empty($members)) {
-        apiResponse(false, null, 'No members provided');
+    $students = json_decode($membersJson, true);
+    if (!is_array($students) || empty($students)) {
+        apiResponse(false, null, 'No students provided');
     }
     
     $added = 0;
@@ -866,7 +866,7 @@ if ($action === 'bulk_add_members' && $method === 'POST') {
         (group_id, full_name, gender, phone, membership_status, created_by) 
         VALUES (?, ?, ?, ?, 'active', ?)");
     
-    foreach ($members as $i => $m) {
+    foreach ($students as $i => $m) {
         $name = cleanString($m['full_name'] ?? '', 200);
         $gender = in_array($m['gender'] ?? 'M', ['M', 'F']) ? $m['gender'] : 'M';
         $phone = cleanString($m['phone'] ?? '', 30);
@@ -884,10 +884,10 @@ if ($action === 'bulk_add_members' && $method === 'POST') {
         }
     }
     
-    logAudit($conn, 'bulk_add', 'group_member', $groupId, "Bulk added $added members");
+    logAudit($conn, 'bulk_add', 'group_member', $groupId, "Bulk added $added students");
     
     apiResponse(true, ['added' => $added, 'errors' => $errors], 
-        "Added $added members" . (count($errors) > 0 ? " with " . count($errors) . " errors" : ""));
+        "Added $added students" . (count($errors) > 0 ? " with " . count($errors) . " errors" : ""));
 }
 
 // ============================================================
@@ -905,7 +905,7 @@ if ($action === 'export_group') {
     
     if (!$group) apiResponse(false, null, 'Group not found');
     
-    $data = ['group' => $group, 'leaders' => [], 'members' => []];
+    $data = ['group' => $group, 'leaders' => [], 'students' => []];
     
     $stmt = $conn->prepare("SELECT * FROM wbws_group_leaders WHERE group_id = ? AND is_active = 1 ORDER BY responsibility");
     $stmt->bind_param("i", $groupId);
@@ -920,7 +920,7 @@ if ($action === 'export_group') {
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
-        $data['members'][] = $row;
+        $data['students'][] = $row;
     }
     
     apiResponse(true, $data);
@@ -929,7 +929,7 @@ if ($action === 'export_group') {
 if ($action === 'export_all_groups') {
     $sql = "SELECT g.*, 
             (SELECT COUNT(*) FROM wbws_group_leaders WHERE group_id = g.id AND is_active = 1) as leader_count,
-            (SELECT COUNT(*) FROM wbws_group_members WHERE group_id = g.id AND membership_status = 'active') as member_count
+            (SELECT COUNT(*) FROM wbws_group_members WHERE group_id = g.id AND membership_status = 'active') as student_count
             FROM wbws_groups g 
             WHERE g.status = 'active'
             ORDER BY g.group_name";
@@ -1016,7 +1016,7 @@ if ($action === 'get_analytics') {
         usort($growthSorted, function($a, $b) { return $b['growth_rate'] <=> $a['growth_rate']; });
         $analytics['fastest_growing'] = array_slice($growthSorted, 0, 5);
         
-        // 6. Recently added members
+        // 6. Recently added students
         $r = safeQuery($conn, "SELECT m.full_name, m.gender, m.created_at, g.group_name 
             FROM wbws_group_members m 
             JOIN wbws_groups g ON m.group_id = g.id 
@@ -1029,8 +1029,8 @@ if ($action === 'get_analytics') {
             }
         }
         
-        // 7. Members per group for chart
-        $analytics['member_chart_data'] = array_map(function($g) {
+        // 7. Students per group for chart
+        $analytics['student_chart_data'] = array_map(function($g) {
             return [
                 'name' => mb_substr($g['group_name'], 0, 20),
                 'male' => (int)$g['current_male'],
@@ -1079,16 +1079,16 @@ if ($action === 'export_group_pdf') {
         $stmt = $conn->prepare("SELECT * FROM wbws_group_members WHERE group_id = ? AND membership_status = 'active' ORDER BY full_name");
         $stmt->bind_param("i", $groupId);
         $stmt->execute();
-        $data['members'] = [];
+        $data['students'] = [];
         $result = $stmt->get_result();
-        while ($row = $result->fetch_assoc()) $data['members'][] = $row;
+        while ($row = $result->fetch_assoc()) $data['students'][] = $row;
         
-        // Member stats
+        // Student stats
         if ($includeStats) {
-            $data['member_stats'] = [
-                'total' => count($data['members']),
-                'male' => count(array_filter($data['members'], fn($m) => $m['gender'] === 'M')),
-                'female' => count(array_filter($data['members'], fn($m) => $m['gender'] === 'F')),
+            $data['student_stats'] = [
+                'total' => count($data['students']),
+                'male' => count(array_filter($data['students'], fn($m) => $m['gender'] === 'M')),
+                'female' => count(array_filter($data['students'], fn($m) => $m['gender'] === 'F')),
             ];
         }
     }

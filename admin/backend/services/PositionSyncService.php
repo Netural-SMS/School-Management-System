@@ -1,11 +1,11 @@
 <?php
 /**
- * Single source of truth for member ⇄ position assignments (format v2).
+ * Single source of truth for student ⇄ position assignments (format v2).
  *
- * Every writer that changes a member's responsibilities — the
- * registration form, the member edit form, the Super Admin hub — goes
+ * Every writer that changes a student's responsibilities — the
+ * registration form, the student edit form, the Super Admin hub — goes
  * through applyPositions(): it replaces the assignment rows, re-codes
- * the member through IdentityCodeService (v2 composition), derives the
+ * the student through IdentityCodeService (v2 composition), derives the
  * legacy flag columns from staff_positions.legacy_flag (strangler
  * pattern) and refreshes the QR. Legacy entry points (Education dept
  * teacher assignment, approvals) call syncPositionFromFlag() so flags,
@@ -20,12 +20,12 @@ namespace App\Services;
 use RuntimeException;
 
 require_once __DIR__ . '/IdentityCodeService.php';
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 require_once __DIR__ . '/SecurityAuditService.php';
 
 final class PositionSyncService
 {
-    /** Legacy member columns a position may drive (sql/020 mapping). */
+    /** Legacy student columns a position may drive (sql/020 mapping). */
     public const LEGACY_FLAGS = ['is_teacher', 'is_staff', 'is_committee', 'is_volunteer'];
 
     /**
@@ -92,15 +92,15 @@ final class PositionSyncService
     }
 
     /**
-     * Replace a member's position assignments and re-code.
+     * Replace a student's position assignments and re-code.
      *
      * @param list<int|numeric-string> $positionIds
-     * @return array{status:string,message?:string,member_code?:string}
+     * @return array{status:string,message?:string,student_code?:string}
      */
-    public static function applyPositions(\mysqli $conn, int $memberId, array $positionIds, int $actorId = 0): array
+    public static function applyPositions(\mysqli $conn, int $studentId, array $positionIds, int $actorId = 0): array
     {
-        if ($memberId <= 0) {
-            return ['status' => 'error', 'message' => 'Invalid member.'];
+        if ($studentId <= 0) {
+            return ['status' => 'error', 'message' => 'Invalid student.'];
         }
         $ids = [];
         foreach ($positionIds as $raw) {
@@ -131,67 +131,67 @@ final class PositionSyncService
                 }
             }
 
-            $stmt = $conn->prepare('SELECT member_code, age_group FROM members WHERE id = ? FOR UPDATE');
-            $stmt->bind_param('i', $memberId);
+            $stmt = $conn->prepare('SELECT student_code, age_group FROM students WHERE id = ? FOR UPDATE');
+            $stmt->bind_param('i', $studentId);
             $stmt->execute();
-            $member = $stmt->get_result()->fetch_assoc();
+            $student = $stmt->get_result()->fetch_assoc();
             $stmt->close();
-            if (!$member) {
-                throw new RuntimeException('Member not found.');
+            if (!$student) {
+                throw new RuntimeException('Student not found.');
             }
-            $oldCode = (string)($member['member_code'] ?? '');
+            $oldCode = (string)($student['student_code'] ?? '');
 
-            $clear = $conn->prepare('DELETE FROM member_staff_positions WHERE member_id = ?');
-            $clear->bind_param('i', $memberId);
+            $clear = $conn->prepare('DELETE FROM student_staff_positions WHERE student_id = ?');
+            $clear->bind_param('i', $studentId);
             $clear->execute();
             $clear->close();
 
             if ($ids !== []) {
                 $insert = $conn->prepare(
-                    'INSERT IGNORE INTO member_staff_positions (member_id, position_id, assigned_by) VALUES (?, ?, ?)'
+                    'INSERT IGNORE INTO student_staff_positions (student_id, position_id, assigned_by) VALUES (?, ?, ?)'
                 );
                 foreach ($ids as $id) {
-                    $insert->bind_param('iii', $memberId, $id, $actorId);
+                    $insert->bind_param('iii', $studentId, $id, $actorId);
                     $insert->execute();
                 }
                 $insert->close();
             }
 
-            $newCode = self::computeCode($conn, $memberId, (string)($member['age_group'] ?? ''));
+            $newCode = self::computeCode($conn, $studentId, (string)($student['age_group'] ?? ''));
 
-            $update = $conn->prepare('UPDATE members SET member_code = ? WHERE id = ?');
-            $update->bind_param('si', $newCode, $memberId);
+            $update = $conn->prepare('UPDATE students SET student_code = ? WHERE id = ?');
+            $update->bind_param('si', $newCode, $studentId);
             $update->execute();
             $update->close();
 
             if ($newCode !== $oldCode && $oldCode !== '') {
-                $legacy = $conn->prepare('UPDATE members SET legacy_member_code = ? WHERE id = ?');
-                $legacy->bind_param('si', $oldCode, $memberId);
+                $legacy = $conn->prepare('UPDATE students SET legacy_student_code = ? WHERE id = ?');
+                $legacy->bind_param('si', $oldCode, $studentId);
                 $legacy->execute();
                 $legacy->close();
 
                 $log = $conn->prepare(
-                    'INSERT INTO member_code_migrations (member_id, old_code, new_code, reason)
+                    'INSERT INTO student_code_migrations (student_id, old_code, new_code, reason)
                      VALUES (?, ?, ?, ?)
                      ON DUPLICATE KEY UPDATE old_code = VALUES(old_code), new_code = VALUES(new_code), reason = VALUES(reason)'
                 );
                 $reason = 'position_sync';
-                $log->bind_param('isss', $memberId, $oldCode, $newCode, $reason);
+                $log->bind_param('isss', $studentId, $oldCode, $newCode, $reason);
                 $log->execute();
                 $log->close();
             }
 
-            self::deriveFlags($conn, $memberId);
+            self::deriveFlags($conn, $studentId);
 
-            // Member type is manually selected, independent of positions
+            // Student type is manually selected, independent of positions
             // and their derived flags. Do not reclassify it here.
 
             SecurityAuditService::record(
                 $conn,
-                'Member Positions Synced',
+                'Student Positions Synced',
                 ['position_ids' => $ids, 'old_code' => $oldCode, 'new_code' => $newCode],
-                'member',
-                $memberId
+                'student',
+                $studentId
             );
 
             $conn->commit();
@@ -203,24 +203,24 @@ final class PositionSyncService
         // QR outside the transaction: best-effort, never blocks the write.
         require_once __DIR__ . '/../../id_cards/libs/qr_loader.php';
         if (class_exists('QRcode')) {
-            IdentityCodeService::regenerateQr($conn, $memberId);
+            IdentityCodeService::regenerateQr($conn, $studentId);
         }
 
-        return ['status' => 'success', 'member_code' => $newCode];
+        return ['status' => 'success', 'student_code' => $newCode];
     }
 
     /**
-     * Compute the v2 code for a member from their CURRENT assignments:
+     * Compute the v2 code for a student from their CURRENT assignments:
      * staff composition when positions exist, category letter otherwise,
      * null (pending) when the category is unresolvable — never guessed.
      */
-    public static function computeCode(\mysqli $conn, int $memberId, string $ageGroup): ?string
+    public static function computeCode(\mysqli $conn, int $studentId, string $ageGroup): ?string
     {
-        $segments = IdentityCodeService::resolveStaffSegments($conn, $memberId);
+        $segments = IdentityCodeService::resolveStaffSegments($conn, $studentId);
         if ($segments !== null && $segments !== []) {
             return IdentityCodeService::allocateStaff($conn, $segments);
         }
-        $letter = MemberCategory::letterFor($ageGroup);
+        $letter = StudentCategory::letterFor($ageGroup);
         if ($letter === null) {
             return null;
         }
@@ -228,11 +228,11 @@ final class PositionSyncService
     }
 
     /**
-     * Rewrite the legacy flag columns from the member's held positions
+     * Rewrite the legacy flag columns from the student's held positions
      * (staff_positions.legacy_flag). Keeps every pre-v2 consumer
      * (Teacher dashboard, Education stats, workflow) working unchanged.
      */
-    public static function deriveFlags(\mysqli $conn, int $memberId): void
+    public static function deriveFlags(\mysqli $conn, int $studentId): void
     {
         if (!self::hasLegacyFlag($conn)) {
             return; // pre-sql/020 deployment: nothing to derive yet
@@ -240,11 +240,11 @@ final class PositionSyncService
         $held = [];
         $stmt = $conn->prepare(
             "SELECT DISTINCT sp.legacy_flag AS flag
-             FROM member_staff_positions msp
+             FROM student_staff_positions msp
              JOIN staff_positions sp ON sp.id = msp.position_id
-            WHERE msp.member_id = ? AND sp.is_active = 1 AND sp.legacy_flag IS NOT NULL"
+            WHERE msp.student_id = ? AND sp.is_active = 1 AND sp.legacy_flag IS NOT NULL"
         );
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $res = $stmt->get_result();
         while ($row = $res->fetch_assoc()) {
@@ -258,8 +258,8 @@ final class PositionSyncService
             $sets[] = "$flag = ?";
             $values[] = isset($held[$flag]) ? 1 : 0;
         }
-        $values[] = $memberId;
-        $update = $conn->prepare('UPDATE members SET ' . implode(', ', $sets) . ' WHERE id = ?');
+        $values[] = $studentId;
+        $update = $conn->prepare('UPDATE students SET ' . implode(', ', $sets) . ' WHERE id = ?');
         $types = str_repeat('i', count($values));
         $update->bind_param($types, ...$values);
         $update->execute();
@@ -272,9 +272,9 @@ final class PositionSyncService
      * re-code so flags, positions and codes never diverge. No-op when
      * the school has not defined a mapped position yet.
      */
-    public static function syncPositionFromFlag(\mysqli $conn, int $memberId, string $flag, bool $held, int $actorId = 0): void
+    public static function syncPositionFromFlag(\mysqli $conn, int $studentId, string $flag, bool $held, int $actorId = 0): void
     {
-        if (!in_array($flag, self::LEGACY_FLAGS, true) || $memberId <= 0) {
+        if (!in_array($flag, self::LEGACY_FLAGS, true) || $studentId <= 0) {
             return;
         }
         if (!self::hasLegacyFlag($conn)) {
@@ -292,28 +292,28 @@ final class PositionSyncService
         }
         $positionId = (int)$row['id'];
 
-        $check = $conn->prepare('SELECT 1 FROM member_staff_positions WHERE member_id = ? AND position_id = ?');
-        $check->bind_param('ii', $memberId, $positionId);
+        $check = $conn->prepare('SELECT 1 FROM student_staff_positions WHERE student_id = ? AND position_id = ?');
+        $check->bind_param('ii', $studentId, $positionId);
         $check->execute();
         $has = (bool)$check->get_result()->fetch_row();
         $check->close();
 
         if ($held && !$has) {
-            $current = self::currentPositionIds($conn, $memberId);
+            $current = self::currentPositionIds($conn, $studentId);
             $current[] = $positionId;
-            self::applyPositions($conn, $memberId, $current, $actorId);
+            self::applyPositions($conn, $studentId, $current, $actorId);
         } elseif (!$held && $has) {
-            $current = array_values(array_diff(self::currentPositionIds($conn, $memberId), [$positionId]));
-            self::applyPositions($conn, $memberId, $current, $actorId);
+            $current = array_values(array_diff(self::currentPositionIds($conn, $studentId), [$positionId]));
+            self::applyPositions($conn, $studentId, $current, $actorId);
         }
     }
 
     /** @return list<int> */
-    public static function currentPositionIds(\mysqli $conn, int $memberId): array
+    public static function currentPositionIds(\mysqli $conn, int $studentId): array
     {
         $ids = [];
-        $stmt = $conn->prepare('SELECT position_id FROM member_staff_positions WHERE member_id = ?');
-        $stmt->bind_param('i', $memberId);
+        $stmt = $conn->prepare('SELECT position_id FROM student_staff_positions WHERE student_id = ?');
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $res = $stmt->get_result();
         while ($row = $res->fetch_assoc()) {

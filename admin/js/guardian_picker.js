@@ -32,7 +32,7 @@
                 return;
               }
               listEl.innerHTML = d.guardians.map(function (g) {
-                var kids = (g.children || []).map(function (k) { return esc(k.student_name) + (k.current_section ? ' (' + esc(k.current_section) + ')' : ''); }).join(', ');
+                var kids = (g.children || []).map(function (k) { return esc(k.student_name) + (k ? ' (' + esc(k) + ')' : ''); }).join(', ');
                 return '<button type="button" data-gid="' + (int_guard(g.id)) + '" class="gp-item" style="display:block;width:100%;text-align:left;padding:.5rem .75rem;border:0;background:transparent;cursor:pointer;border-bottom:1px solid #f1f5f9">' +
                   '<div style="font-weight:700;font-size:.76rem;color:#0f172a">' + esc(g.display_name) + (g.aliases && g.aliases.length ? ' <span style="font-weight:400;color:#94a3b8">aka ' + esc(g.aliases.join(', ')) + '</span>' : '') + '</div>' +
                   '<div style="font-size:.68rem;color:#64748b">' + esc(g.phone_primary || 'no phone') + (kids ? ' · children: ' + kids : ' · no linked children yet') + '</div>' +

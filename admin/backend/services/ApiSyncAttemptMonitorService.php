@@ -39,7 +39,7 @@ final class ApiSyncAttemptMonitorService
     public static function entityReference(array $payload): ?string
     {
         $allowed = [
-            'id', 'class_id', 'assessment_id', 'member_id', 'record_id',
+            'id', 'class_id', 'assessment_id', 'student_id', 'record_id',
             'hymn_id', 'category_id', 'zemarian_id', 'submission_id',
             'date', 'section', 'kind', 'program_type',
         ];

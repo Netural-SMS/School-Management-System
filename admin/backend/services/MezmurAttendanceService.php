@@ -9,14 +9,14 @@
  * Domain rules (same contract as class attendance, separate
  * dataset):
  *
- *   - One attendance sheet per DATE; roster = ALL active members
+ *   - One attendance sheet per DATE; roster = ALL active students
  *     grouped by section.
- *   - A save is COMPLETE and EXPLICIT: submitted member set must
+ *   - A save is COMPLETE and EXPLICIT: submitted student set must
  *     exactly equal the live roster (DomainException otherwise).
  *   - Saves are transactional replaces; UNIQUE
- *     (attendance_date, member_id) makes resubmits idempotent.
+ *     (attendance_date, student_id) makes resubmits idempotent.
  *   - Every mutation writes an audit row — these records drive
- *     member selection for የዝማሬ/service programs.
+ *     student selection for የዝማሬ/service programs.
  *   - Analytics aggregate SERVER-side, date-bounded (2-year hard
  *     cap), sort columns whitelisted; raw marks never leave here.
  *
@@ -25,7 +25,7 @@
 
 namespace App\Services;
 
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 require_once __DIR__ . '/DepartmentStatusService.php';
 
 final class MezmurAttendanceService
@@ -38,7 +38,7 @@ final class MezmurAttendanceService
 
     private const SORTABLE = [
         'name'          => 'm.student_name',
-        'section'       => 'm.current_section',
+        'section'       => '',
         'attended'      => 'attended',
         'present'       => 'present',
         'late'          => 'late',
@@ -97,7 +97,7 @@ final class MezmurAttendanceService
     // ── roster ──────────────────────────────────────────────────
 
     /**
-     * Deployments disagree on the members photo column: newer schemas
+     * Deployments disagree on the students photo column: newer schemas
      * have `photo_url`, this production has `student_photo_path`, and a
      * minimal schema may have neither. Detect once per request and build
      * a SELECT expression that always yields the `photo_url` key, so a
@@ -112,7 +112,7 @@ final class MezmurAttendanceService
             $col = '';
             foreach (['photo_url', 'student_photo_path'] as $candidate) {
                 try {
-                    $r = $conn->query("SHOW COLUMNS FROM members LIKE '" . $candidate . "'");
+                    $r = $conn->query("SHOW COLUMNS FROM students LIKE '" . $candidate . "'");
                     if ($r && $r->fetch_assoc()) { $col = $candidate; $r->close(); break; }
                     if ($r) { $r->close(); }
                 } catch (\Throwable $e) {
@@ -126,17 +126,17 @@ final class MezmurAttendanceService
             : 'NULL AS photo_url';
     }
 
-    /** All active members grouped by section. */
+    /** All active students grouped by section. */
     public static function rosterGroupedBySection(\mysqli $conn, ?string $onDate = null): array
     {
         $photo = self::photoSelectExpr($conn);
-        $secExpr = MemberCategory::sqlSectionExpr('members', 'current_section', 'age_group');
-        // Attendance alerting §11: members inactive in Mezmur on the sheet date are not on the sheet.
-        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'members.id', $onDate);
+        $secExpr = StudentCategory::sqlSectionExpr('students', 'current_section', 'age_group');
+        // Attendance alerting §11: students inactive in Mezmur on the sheet date are not on the sheet.
+        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'students.id', $onDate);
         $res = $conn->query(
-            "SELECT id, member_code, student_name, father_name, full_name_am, $photo,
+            "SELECT id, student_code, student_name, father_name, full_name_am, $photo,
                     $secExpr AS section
-             FROM members
+             FROM students
              WHERE status = 'active'{$excl}
              ORDER BY section, student_name, father_name"
         );
@@ -155,8 +155,8 @@ final class MezmurAttendanceService
     private static function rosterIds(\mysqli $conn, ?string $onDate = null): array
     {
         $ids = [];
-        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'members.id', $onDate);
-        $res = $conn->query("SELECT id FROM members WHERE status = 'active'{$excl}");
+        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'students.id', $onDate);
+        $res = $conn->query("SELECT id FROM students WHERE status = 'active'{$excl}");
         if ($res) {
             while ($row = $res->fetch_assoc()) $ids[] = (int)$row['id'];
         }
@@ -243,20 +243,20 @@ final class MezmurAttendanceService
         $day = self::ensureDay($conn, $date, 'rehearsal', null, null, $userId);
 
         $marks = [];
-        $stmt = $conn->prepare("SELECT member_id, status FROM mezmur_attendance WHERE attendance_date = ?");
+        $stmt = $conn->prepare("SELECT student_id, status FROM mezmur_attendance WHERE attendance_date = ?");
         $stmt->bind_param('s', $date);
         $stmt->execute();
         $res = $stmt->get_result();
-        while ($r = $res->fetch_assoc()) $marks[(int)$r['member_id']] = $r['status'];
+        while ($r = $res->fetch_assoc()) $marks[(int)$r['student_id']] = $r['status'];
         $stmt->close();
 
         $sections = [];
-        foreach (self::rosterGroupedBySection($conn, $date) as $section => $members) {
-            foreach ($members as &$m) {
+        foreach (self::rosterGroupedBySection($conn, $date) as $section => $students) {
+            foreach ($students as &$m) {
                 $m['mark'] = $marks[$m['id']] ?? null;
             }
             unset($m);
-            $sections[$section] = $members;
+            $sections[$section] = $students;
         }
         return ['day' => $day, 'sections' => $sections];
     }
@@ -265,7 +265,7 @@ final class MezmurAttendanceService
      * Complete-sheet save (transactional replace by date) — LEGACY
      * full-roster path kept for older clients; new clients use
      * saveSectionSheet() with submission packets.
-     * @param list<array{member_id:int|string,status:string,notes?:string}> $records
+     * @param list<array{student_id:int|string,status:string,notes?:string}> $records
      * @return array{marked:int,present:int,late:int,absent:int,excused:int}
      */
     public static function saveSheet(\mysqli $conn, string $date, array $records, int $userId): array
@@ -281,12 +281,12 @@ final class MezmurAttendanceService
         $submitted = [];
         $notesByMember = [];
         foreach ($records as $rec) {
-            $mid = (int)($rec['member_id'] ?? 0);
+            $mid = (int)($rec['student_id'] ?? 0);
             $status = (string)($rec['status'] ?? '');
             if ($mid <= 0 || !in_array($status, self::STATUSES, true)) {
                 throw new \DomainException('Sheet contains an invalid record.');
             }
-            if (isset($submitted[$mid])) throw new \DomainException('Duplicate member in sheet.');
+            if (isset($submitted[$mid])) throw new \DomainException('Duplicate student in sheet.');
             $submitted[$mid] = $status;
             $note = trim((string)($rec['notes'] ?? $rec['note'] ?? ''));
             if ($note !== '') {
@@ -328,21 +328,21 @@ final class MezmurAttendanceService
      * Bulk-insert attendance rows for one date (caller owns the
      * transaction and the DELETE). Notes bind as SQL NULL when absent.
      *
-     * @param array<int,string>          $submitted memberId => status
-     * @param array<int,string>          $notesByMember memberId => note
+     * @param array<int,string>          $submitted studentId => status
+     * @param array<int,string>          $notesByMember studentId => note
      */
     private static function insertRows(\mysqli $conn, string $date, array $submitted, array $notesByMember, int $userId): void
     {
-        $sql = "INSERT INTO mezmur_attendance (session_id, attendance_date, member_id, status, marked_by, notes)
+        $sql = "INSERT INTO mezmur_attendance (session_id, attendance_date, student_id, status, marked_by, notes)
                 VALUES (NULL,?,?,?,?,?)";
         $ins = $conn->prepare($sql);
         if (!$ins) {
             throw new \RuntimeException('Could not write attendance.');
         }
         $batch = 0;
-        foreach ($submitted as $memberId => $status) {
-            $note = $notesByMember[$memberId] ?? null;
-            $ins->bind_param('sisis', $date, $memberId, $status, $userId, $note);
+        foreach ($submitted as $studentId => $status) {
+            $note = $notesByMember[$studentId] ?? null;
+            $ins->bind_param('sisis', $date, $studentId, $status, $userId, $note);
             $ins->execute();
             // Recycle the statement periodically on very large rosters.
             if (++$batch % 500 === 0) {
@@ -357,13 +357,13 @@ final class MezmurAttendanceService
     }
 
     /**
-     * Draft-merge write: upsert one row per submitted member on the
+     * Draft-merge write: upsert one row per submitted student on the
      * uq_mezmur_attendance_date_member unique key (migration 023). Rows the
      * payload did not mention keep their existing marks.
      */
     private static function upsertRows(\mysqli $conn, string $date, array $submitted, array $notesByMember, int $userId): void
     {
-        $sql = "INSERT INTO mezmur_attendance (session_id, attendance_date, member_id, status, marked_by, notes)
+        $sql = "INSERT INTO mezmur_attendance (session_id, attendance_date, student_id, status, marked_by, notes)
                 VALUES (NULL,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
                     status = VALUES(status),
@@ -374,9 +374,9 @@ final class MezmurAttendanceService
             throw new \RuntimeException('Could not write attendance.');
         }
         $batch = 0;
-        foreach ($submitted as $memberId => $status) {
-            $note = $notesByMember[$memberId] ?? null;
-            $ins->bind_param('sisis', $date, $memberId, $status, $userId, $note);
+        foreach ($submitted as $studentId => $status) {
+            $note = $notesByMember[$studentId] ?? null;
+            $ins->bind_param('sisis', $date, $studentId, $status, $userId, $note);
             $ins->execute();
             // Recycle the statement periodically on very large rosters.
             if (++$batch % 500 === 0) {
@@ -399,13 +399,13 @@ final class MezmurAttendanceService
         if ($section === '' || mb_strlen($section) > self::SECTION_MAX) {
             throw new \DomainException('A valid section is required.');
         }
-        $canonical = MemberCategory::canonicalizeSection($section);
+        $canonical = StudentCategory::canonicalizeSection($section);
         $photo = self::photoSelectExpr($conn);
-        $secExpr = MemberCategory::sqlSectionExpr('members', 'current_section', 'age_group');
-        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'members.id', $onDate);
+        $secExpr = StudentCategory::sqlSectionExpr('students', 'current_section', 'age_group');
+        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'students.id', $onDate);
         $stmt = $conn->prepare(
-            "SELECT id, member_code, student_name, father_name, $photo
-             FROM members
+            "SELECT id, student_code, student_name, father_name, $photo
+             FROM students
              WHERE status = 'active'{$excl}
                AND ($secExpr = ? OR current_section = ?)
              ORDER BY student_name, father_name"
@@ -425,20 +425,20 @@ final class MezmurAttendanceService
         return $rows;
     }
 
-    /** Distinct sections with member counts (for [Section ▾]). */
+    /** Distinct sections with student counts (for [Section ▾]). */
     public static function sectionListWithCounts(\mysqli $conn): array
     {
         $out = [];
-        $secExpr = MemberCategory::sqlSectionExpr('members', 'current_section', 'age_group');
-        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'members.id', null);
+        $secExpr = StudentCategory::sqlSectionExpr('students', 'current_section', 'age_group');
+        $excl = DepartmentStatusService::exclusionSql($conn, 'mezmur', 'students.id', null);
         $res = $conn->query(
-            "SELECT $secExpr AS section, COUNT(*) AS members
-             FROM members WHERE status = 'active'{$excl}
+            "SELECT $secExpr AS section, COUNT(*) AS students
+             FROM students WHERE status = 'active'{$excl}
              GROUP BY section ORDER BY section LIMIT 200"
         );
         if ($res) {
             while ($r = $res->fetch_assoc()) {
-                $out[] = ['section' => $r['section'], 'members' => (int)$r['members']];
+                $out[] = ['section' => $r['section'], 'students' => (int)$r['students']];
             }
         }
         return $out;
@@ -457,24 +457,24 @@ final class MezmurAttendanceService
         if ($section === '' || mb_strlen($section) > self::SECTION_MAX) {
             throw new \DomainException('A valid section is required.');
         }
-        $canonical = MemberCategory::canonicalizeSection($section);
+        $canonical = StudentCategory::canonicalizeSection($section);
 
         $marks = [];
-        $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+        $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
         try {
             $stmt = $conn->prepare(
-                "SELECT a.member_id, a.status, a.notes
+                "SELECT a.student_id, a.status, a.notes
                  FROM mezmur_attendance a
-                 JOIN members m ON m.id = a.member_id
+                 JOIN students m ON m.id = a.student_id
                  WHERE a.attendance_date = ?
-                   AND ($secExpr = ? OR m.current_section = ?)"
+                   AND ($secExpr = ? OR  = ?)"
             );
             if ($stmt) {
                 $stmt->bind_param('sss', $date, $canonical, $section);
                 $stmt->execute();
                 $r = $stmt->get_result();
                 while ($row = $r->fetch_assoc()) {
-                    $marks[(int)$row['member_id']] = [
+                    $marks[(int)$row['student_id']] = [
                         'status' => $row['status'],
                         'notes' => (string)($row['notes'] ?? ''),
                     ];
@@ -499,13 +499,13 @@ final class MezmurAttendanceService
                 $openWarnings = [];
             }
         }
-        $members = [];
+        $students = [];
         foreach ($roster as $m) {
             $mark = $marks[$m['id']] ?? null;
             $m['mark'] = $mark['status'] ?? null;
             $m['notes'] = $mark['notes'] ?? '';
             $m['warning'] = $openWarnings[(int)$m['id']] ?? null;
-            $members[] = $m;
+            $students[] = $m;
         }
 
         $packetStatus = MezmurSubmissionService::resolvedStatus($conn, $date, $canonical);
@@ -518,8 +518,8 @@ final class MezmurAttendanceService
         return [
             'date' => $date,
             'section' => $canonical,
-            'members' => $members,
-            'count' => count($members),
+            'students' => $students,
+            'count' => count($students),
             'submission_status' => $packetStatus,
             'locked' => $locked,
             'review_notes' => $review['review_notes'] ?? null,
@@ -529,16 +529,16 @@ final class MezmurAttendanceService
     }
 
     /**
-     * Section-sheet save (transactional, section's members on that date).
-     * With $requireComplete = true (default) the submitted member set must
+     * Section-sheet save (transactional, section's students on that date).
+     * With $requireComplete = true (default) the submitted student set must
      * exactly equal the live section roster and the save REPLACES the
      * section's marks. With false (draft saves) a PARTIAL sheet is accepted:
      * only submitted rows are upserted (merge, never deletes) — the mobile
      * app's instant autosave deliberately persists partial drafts, and a
      * taker pausing mid-marking is a normal workflow state, not a sync
-     * error. Members not on the section roster are rejected in both modes.
+     * error. Students not on the section roster are rejected in both modes.
      *
-     * @param list<array{member_id:int|string,status:string,notes?:string}> $records
+     * @param list<array{student_id:int|string,status:string,notes?:string}> $records
      * @param bool $ownTransaction false when the caller already opened a
      *                             transaction (e.g. to commit the packet
      *                             upsert atomically with the rows).
@@ -558,28 +558,28 @@ final class MezmurAttendanceService
         if ($section === '' || mb_strlen($section) > self::SECTION_MAX) {
             throw new \DomainException('A valid section is required.');
         }
-        $canonical = MemberCategory::canonicalizeSection($section);
+        $canonical = StudentCategory::canonicalizeSection($section);
 
         $roster = array_map(static fn($m) => (int)$m['id'], self::sectionRoster($conn, $section, $date));
         $submitted = [];
         $notesByMember = [];
         foreach ($records as $rec) {
-            $mid = (int)($rec['member_id'] ?? 0);
+            $mid = (int)($rec['student_id'] ?? 0);
             $status = (string)($rec['status'] ?? '');
             if ($mid <= 0 || !in_array($status, self::STATUSES, true)) {
                 throw new \DomainException('Sheet contains an invalid record.');
             }
-            if (isset($submitted[$mid])) throw new \DomainException('Duplicate member in sheet.');
+            if (isset($submitted[$mid])) throw new \DomainException('Duplicate student in sheet.');
             $submitted[$mid] = $status;
             $note = trim((string)($rec['notes'] ?? $rec['note'] ?? ''));
             if ($note !== '') {
                 $notesByMember[$mid] = mb_substr($note, 0, 500);
             }
         }
-        // A submitted member who is not on the section roster is always a
+        // A submitted student who is not on the section roster is always a
         // mismatch — drafts and submits alike.
         if (array_diff(array_keys($submitted), $roster) !== []) {
-            throw new \DomainException('Some members are not on this section roster. Reload and try again.');
+            throw new \DomainException('Some students are not on this section roster. Reload and try again.');
         }
         if ($requireComplete
             && (count($submitted) !== count($roster) || array_diff($roster, array_keys($submitted)) !== [])) {
@@ -601,12 +601,12 @@ final class MezmurAttendanceService
             if ($requireComplete) {
                 // Complete sheet = the authority: delete only this section's
                 // rows for the date, then insert.
-                $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+                $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
                 $del = $conn->prepare(
                     "DELETE a FROM mezmur_attendance a
-                     JOIN members m ON m.id = a.member_id
+                     JOIN students m ON m.id = a.student_id
                      WHERE a.attendance_date = ?
-                       AND ($secExpr = ? OR m.current_section = ?)"
+                       AND ($secExpr = ? OR  = ?)"
                 );
                 $del->bind_param('sss', $date, $canonical, $section);
                 $del->execute();
@@ -615,7 +615,7 @@ final class MezmurAttendanceService
                 self::insertRows($conn, $date, $submitted, $notesByMember, $userId);
             } else {
                 // Draft merge: upsert only the submitted rows on the
-                // (attendance_date, member_id) unique key (migration 023);
+                // (attendance_date, student_id) unique key (migration 023);
                 // marks the payload did not mention are never deleted.
                 self::upsertRows($conn, $date, $submitted, $notesByMember, $userId);
             }
@@ -660,7 +660,7 @@ final class MezmurAttendanceService
     }
 
     /**
-     * Per-member aggregates — every count paired with percentages.
+     * Per-student aggregates — every count paired with percentages.
      * Filters: section, program_type, search, min_rate, min_attended.
      */
     public static function analyticsMembers(\mysqli $conn, array $filters): array
@@ -678,19 +678,19 @@ final class MezmurAttendanceService
         $perPage = self::clampPerPage((int)($filters['per_page'] ?? 25));
 
         $held = self::daysHeld($conn, $w, $programType);
-        $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+        $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
 
         $where = ["m.status = 'active'"];
         $types = '';
         $params = [];
         if ($section !== '') {
-            $canonical = MemberCategory::canonicalizeSection($section);
-            $where[] = "($secExpr = ? OR m.current_section = ?)";
+            $canonical = StudentCategory::canonicalizeSection($section);
+            $where[] = "($secExpr = ? OR  = ?)";
             $types .= 'ss'; $params[] = $canonical; $params[] = $section;
         }
         if ($search !== '') {
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], mb_substr($search, 0, 100)) . '%';
-            $where[] = "(m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ?)";
+            $where[] = "(m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ?)";
             $types .= 'sss'; $params[] = $like; $params[] = $like; $params[] = $like;
         }
         $whereSql = implode(' AND ', $where);
@@ -699,7 +699,7 @@ final class MezmurAttendanceService
         $photoExpr = self::photoSelectExpr($conn);
 
         $sql = "
-            SELECT m.id, m.member_code, m.student_name, m.father_name, m.full_name_am, $photoExpr,
+            SELECT m.id, m.student_code, m.student_name, m.father_name, m.full_name_am, $photoExpr,
                    $secExpr AS section,
                    $held AS sessions_held,
                    COALESCE(agg.present, 0) AS present,
@@ -710,9 +710,9 @@ final class MezmurAttendanceService
                         THEN ROUND((COALESCE(agg.present,0) + COALESCE(agg.late,0)) * 100.0 / $held, 1)
                         ELSE NULL END AS rate,
                    agg.last_attended
-            FROM members m
+            FROM students m
             LEFT JOIN (
-                SELECT a.member_id,
+                SELECT a.student_id,
                        SUM(a.status = 'present') AS present,
                        SUM(a.status = 'late')    AS late,
                        SUM(a.status = 'absent')  AS absent,
@@ -720,8 +720,8 @@ final class MezmurAttendanceService
                 FROM mezmur_attendance a
                 $pJoin
                 WHERE a.attendance_date BETWEEN ? AND ?
-                GROUP BY a.member_id
-            ) agg ON agg.member_id = m.id
+                GROUP BY a.student_id
+            ) agg ON agg.student_id = m.id
             WHERE $whereSql";
 
         $subTypes = $pType . 'ss';
@@ -779,22 +779,22 @@ final class MezmurAttendanceService
         $held = self::daysHeld($conn, $w, $programType);
 
         [$pJoin, $pType] = self::programJoinFilter($programType);
-        $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+        $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
 
         $sql = "
             SELECT $secExpr AS section,
-                   COUNT(DISTINCT m.id) AS members,
+                   COUNT(DISTINCT m.id) AS students,
                    COALESCE(SUM(a.status = 'present'), 0) AS present,
                    COALESCE(SUM(a.status = 'late'), 0)    AS late,
                    COALESCE(SUM(a.status = 'absent'), 0)  AS absent
-            FROM members m
-            LEFT JOIN mezmur_attendance a ON a.member_id = m.id AND a.attendance_date BETWEEN ? AND ?"
+            FROM students m
+            LEFT JOIN mezmur_attendance a ON a.student_id = m.id AND a.attendance_date BETWEEN ? AND ?"
             . ($programType !== ''
                 ? " AND EXISTS (SELECT 1 FROM mezmur_days d WHERE d.attendance_date = a.attendance_date AND d.program_type = ?)"
                 : '') . "
             WHERE m.status = 'active'
             GROUP BY section
-            ORDER BY members DESC";
+            ORDER BY students DESC";
 
         $stmt = $conn->prepare($sql);
         $types = 'ss' . ($programType !== '' ? 's' : '');
@@ -804,10 +804,10 @@ final class MezmurAttendanceService
         $res = $stmt->get_result();
         $items = [];
         while ($r = $res->fetch_assoc()) {
-            $members = (int)$r['members'];
-            $capacity = $held * $members;
+            $students = (int)$r['students'];
+            $capacity = $held * $students;
             $attended = (int)$r['present'] + (int)$r['late'];
-            $r['members'] = $members;
+            $r['students'] = $students;
             $r['sessions_held'] = $held;
             $r['attended'] = $attended;
             $r['present_pct'] = $capacity > 0 ? round(((int)$r['present']) * 100.0 / $capacity, 1) : null;
@@ -863,8 +863,8 @@ final class MezmurAttendanceService
     public static function sectionList(\mysqli $conn): array
     {
         $out = [];
-        $secExpr = MemberCategory::sqlSectionExpr('', 'current_section', 'age_group');
-        $res = $conn->query("SELECT DISTINCT $secExpr AS section FROM members WHERE status = 'active' ORDER BY section LIMIT 200");
+        $secExpr = StudentCategory::sqlSectionExpr('', 'current_section', 'age_group');
+        $res = $conn->query("SELECT DISTINCT $secExpr AS section FROM students WHERE status = 'active' ORDER BY section LIMIT 200");
         if ($res) {
             while ($r = $res->fetch_assoc()) $out[] = $r['section'];
         }
@@ -880,9 +880,9 @@ final class MezmurAttendanceService
         // departments). Legacy shared takers live with super admin.
         $res = $conn->query(
             "SELECT u.id, u.username, u.full_name, u.is_active, u.created_at,
-                    m.student_name, m.member_code
+                    m.student_name, m.student_code
              FROM users u
-             LEFT JOIN members m ON u.member_id = m.id
+             LEFT JOIN students m ON u.student_id = m.id
              WHERE u.role = 'mezmur_attendance_taker'
              ORDER BY u.full_name
              LIMIT 500"

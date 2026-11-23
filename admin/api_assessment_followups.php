@@ -3,10 +3,10 @@
  * ============================================================
  * Assessment follow-ups API (Attendance alerting — Phase 5, req §11–§12)
  * ============================================================
- *   GET  ?action=list[&decision=&open=1&class_id=&subject_id=&member_id=&q=&limit=&offset=]
- *   GET  ?action=counts[&class_id=&subject_id=&member_id=]
+ *   GET  ?action=list[&decision=&open=1&class_id=&subject_id=&student_id=&q=&limit=&offset=]
+ *   GET  ?action=counts[&class_id=&subject_id=&student_id=]
  *   GET  ?action=detail&id=N                 → follow-up + make-up attempts
- *   GET  ?action=member&member_id=N          → the member's follow-ups (profile drill-down)
+ *   GET  ?action=student&student_id=N          → the student's follow-ups (profile drill-down)
  *   POST action=decide   {id, decision, note?, csrf_token}
  *   POST action=attempt  {id, score, max_score?, remarks?, csrf_token}
  *
@@ -63,7 +63,7 @@ if ($method === 'POST' && stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'app
     }
 }
 
-$readActions = ['list', 'counts', 'detail', 'member'];
+$readActions = ['list', 'counts', 'detail', 'student'];
 $writeActions = ['decide', 'attempt'];
 if (!in_array($action, array_merge($readActions, $writeActions), true)) {
     $fail(400, 'Unknown action');
@@ -119,7 +119,7 @@ switch ($action) {
             'open_only' => (string)($_GET['open'] ?? '') === '1',
             'class_id' => (int)($_GET['class_id'] ?? 0),
             'subject_id' => (int)($_GET['subject_id'] ?? 0),
-            'member_id' => (int)($_GET['member_id'] ?? 0),
+            'student_id' => (int)($_GET['student_id'] ?? 0),
             'q' => (string)($_GET['q'] ?? ''),
             'limit' => (int)($_GET['limit'] ?? 50),
             'offset' => (int)($_GET['offset'] ?? 0),
@@ -133,7 +133,7 @@ switch ($action) {
         $f = $scope([
             'class_id' => (int)($_GET['class_id'] ?? 0),
             'subject_id' => (int)($_GET['subject_id'] ?? 0),
-            'member_id' => (int)($_GET['member_id'] ?? 0),
+            'student_id' => (int)($_GET['student_id'] ?? 0),
         ]);
         $ok($meta + ['counts' => AssessmentFollowupService::counts($conn, $f)]);
 
@@ -151,15 +151,15 @@ switch ($action) {
         }
         $ok($meta + ['item' => $item]);
 
-    case 'member':
+    case 'student':
         if (!$available) {
             $ok($meta + ['items' => [], 'total' => 0]);
         }
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
-        $ok($meta + AssessmentFollowupService::listQueue($conn, $scope(['member_id' => $memberId, 'limit' => 200])));
+        $ok($meta + AssessmentFollowupService::listQueue($conn, $scope(['student_id' => $studentId, 'limit' => 200])));
 
     case 'decide':
         if (!$available) {

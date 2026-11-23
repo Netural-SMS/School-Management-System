@@ -14,18 +14,18 @@
  * The hr_* tables stay in the database as a silent archive only.
  *
  * Product rules enforced here (2026-08-28):
- *   • READ-ONLY: this service exposes no member writes, no packet
+ *   • READ-ONLY: this service exposes no student writes, no packet
  *     writes, no status changes. The only write is refreshRollup()
  *     against attendance_rollup — the hub's OWN read model.
  *   • Sources are compared, never merged: every figure keeps its
- *     source label; there is no combined member identity.
+ *     source label; there is no combined student identity.
  *   • Scale: the hub reads pre-aggregated attendance_rollup rows
  *     (O(days × groups)), never full raw-table scans.
  */
 
 namespace App\Services;
 
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 
 class InfoAnalyticsService
 {
@@ -109,10 +109,10 @@ class InfoAnalyticsService
 
             // ── Mezmur: section sheets from its own tables (HR source removed 2026-10-18) ──
             // Mezmur rows carry no section snapshot — the department
-            // derives it from COALESCE(NULLIF(TRIM(mb.current_section), ''), '—') / mb.age_group
-            // (its canonical expression via MemberCategory::sqlSectionExpr).
-            $mezmurSecExpr = MemberCategory::sqlSectionExpr('mb', 'current_section', 'age_group');
-            $subSecExpr = MemberCategory::sqlSectionExpr('s', 'section', 'section');
+            // derives it from COALESCE(NULLIF(TRIM(mb), ''), '—') / mb
+            // (its canonical expression via StudentCategory::sqlSectionExpr).
+            $mezmurSecExpr = StudentCategory::sqlSectionExpr('mb', 'current_section', 'age_group');
+            $subSecExpr = StudentCategory::sqlSectionExpr('s', 'section', 'section');
 
             foreach ([['mezmur', 'mezmur_attendance', 'mezmur_submissions',
                        "SELECT ?, m.attendance_date,
@@ -125,7 +125,7 @@ class InfoAnalyticsService
                                COALESCE(SUM(m.status = 'excused'), 0),
                                0
                         FROM `mezmur_attendance` m
-                        LEFT JOIN members mb ON mb.id = m.member_id
+                        LEFT JOIN students mb ON mb.id = m.student_id
                         GROUP BY m.attendance_date, $mezmurSecExpr"]] as [$source, $attTable, $subTable, $selectSql]) {
                 $stmt = $conn->prepare(
                     "INSERT INTO attendance_rollup
@@ -371,7 +371,7 @@ class InfoAnalyticsService
     /**
      * Cross-department comparison — side-by-side per-source metrics.
      * The sources stay separate rows; the hub never joins their
-     * member data together.
+     * student data together.
      */
     public static function comparison(\mysqli $conn, ?string $from = null, ?string $to = null): array
     {

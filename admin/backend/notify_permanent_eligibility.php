@@ -1,6 +1,6 @@
 <?php
 /**
- * CLI cron: notify HR when temporary members reach the 6-month eligibility
+ * CLI cron: notify HR when temporary students reach the 6-month eligibility
  * for promotion to permanent. Idempotent — uses permanent_eligibility_notified_at.
  *
  * Usage (cron, daily):
@@ -24,9 +24,9 @@ if (!($conn instanceof mysqli) || $conn->connect_error) {
 
 $conn->set_charset('utf8mb4');
 
-// Find eligible, not-yet-notified temporary members.
-$sql = "SELECT id, student_name, father_name, member_code
-        FROM members
+// Find eligible, not-yet-notified temporary students.
+$sql = "SELECT id, student_name, father_name, student_code
+        FROM students
         WHERE membership_tier = 'temporary'
           AND status != 'archived'
           AND registered_at <= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
@@ -39,41 +39,41 @@ if (!$res) {
 
 $count = 0;
 while ($row = $res->fetch_assoc()) {
-    $memberId = (int)$row['id'];
+    $studentId = (int)$row['id'];
     $name = trim($row['student_name'] . ' ' . $row['father_name']);
 
     // Create a department task for HR (fires task_assigned notification to hr_dept).
     if (function_exists('createDepartmentTask')) {
-        createDepartmentTask($conn, "Promote eligible member to permanent: $name", [
-            'description' => "Member $name has completed 6 months as a temporary member and is eligible for promotion to permanent. Please review and promote.",
+        createDepartmentTask($conn, "Promote eligible student to permanent: $name", [
+            'description' => "Student $name has completed 6 months as a temporary student and is eligible for promotion to permanent. Please review and promote.",
             'task_type' => 'action',
             'priority' => 'normal',
             'to_dept' => 'hr_dept',
-            'related_member_id' => $memberId,
+            'related_student_id' => $studentId,
         ]);
     }
 
     // Fire the dedicated eligibility notification (hr_dept + super_admin + school_admin).
     if (function_exists('sendNotification')) {
-        sendNotification($conn, 'member_eligible_permanent',
-            "Member Eligible for Permanent Promotion",
+        sendNotification($conn, 'student_eligible_permanent',
+            "Student Eligible for Permanent Promotion",
             "$name has completed 6 months and is eligible for promotion to permanent.",
             [
-                'data' => ['member_id' => $memberId, 'member_code' => $row['member_code']],
+                'data' => ['student_id' => $studentId, 'student_code' => $row['student_code']],
             ]
         );
     }
 
     // Mark notified (dedup).
-    $stmt = $conn->prepare("UPDATE members SET permanent_eligibility_notified_at = NOW() WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE students SET permanent_eligibility_notified_at = NOW() WHERE id = ?");
     if ($stmt) {
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $stmt->close();
     }
 
     $count++;
-    fwrite(STDOUT, "Notified member #$memberId ($name)\n");
+    fwrite(STDOUT, "Notified student #$studentId ($name)\n");
 }
 
-fwrite(STDOUT, "Done. $count member(s) notified.\n");
+fwrite(STDOUT, "Done. $count student(s) notified.\n");

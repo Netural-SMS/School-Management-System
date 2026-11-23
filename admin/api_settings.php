@@ -11,7 +11,7 @@
  *   dept_save          - Save department settings
  *   system_info        - System statistics
  *   clear_cache        - Clear upload cache
- *   member_code_format - Get/set member code format
+ *   student_code_format - Get/set student code format
  * ============================================================
  */
 header('Content-Type: application/json; charset=utf-8');
@@ -66,7 +66,7 @@ requireCsrfForPost();
 
 // Audit 2026-10-20 (A11): department-level settings and server maintenance
 // are not profile actions. Only the roles whose dashboards expose them may
-// change registration defaults / member-code format or read server details.
+// change registration defaults / student-code format or read server details.
 $settingsPrivilegedActions = ['dept_save', 'system_info', 'clear_cache'];
 if (in_array($action, $settingsPrivilegedActions, true)
     && !in_array($adminRole, ['super_admin', 'school_admin', 'info_dept', 'hr_dept'], true)) {
@@ -571,13 +571,11 @@ try {
                 'dept_name_am' => 'ማብራሪያ ክፍል',
                 'church_name_en' => SCHOOL_TRANSLATION_EN . ' ' . SCHOOL_TYPE,
                 'church_name_am' => SCHOOL_NAME_SHORT_AM . ' የ' . SCHOOL_TYPE_AM,
-                'dept_description' => 'Manages member registration, ID cards, and member information.',
-                'member_code_prefix' => '',
-                'member_code_digits' => '4',
+                'dept_description' => 'Manages student registration, ID cards, and student information.',
+                'student_code_prefix' => '',
+                'student_code_digits' => '4',
                 'auto_generate_code' => '1',
-                'default_age_group' => '',
-                'default_member_type' => 'regular',
-                'default_registration_type' => 'direct',
+                '''default_registration_type' => 'direct',
                 'id_card_auto_generate' => '0',
                 'phone_required' => '0',
                 'guardian_required_under' => '14',
@@ -616,9 +614,8 @@ try {
 
             $allowed = [
                 'dept_name_en', 'dept_name_am', 'church_name_en', 'church_name_am',
-                'dept_description', 'member_code_prefix', 'member_code_digits',
-                'auto_generate_code', 'default_age_group', 'default_member_type',
-                'default_registration_type', 'id_card_auto_generate', 'phone_required',
+                'dept_description', 'student_code_prefix', 'student_code_digits',
+                'auto_generate_code', '''default_registration_type', 'id_card_auto_generate', 'phone_required',
                 'guardian_required_under'
             ];
 
@@ -643,12 +640,12 @@ try {
         // ============================================================
             $info = [];
 
-            // Member counts
+            // Student counts
             $r = $conn->query("SELECT COUNT(*) as total, 
                 COALESCE(SUM(status='active'),0) as active,
                 COALESCE(SUM(status='archived'),0) as archived
-                FROM members");
-            $info['members'] = $r ? $r->fetch_assoc() : ['total' => 0, 'active' => 0, 'archived' => 0];
+                FROM students");
+            $info['students'] = $r ? $r->fetch_assoc() : ['total' => 0, 'active' => 0, 'archived' => 0];
 
             // User accounts
             $r = $conn->query("SELECT COUNT(*) as total, COALESCE(SUM(is_active=1),0) as active FROM users");
@@ -677,7 +674,7 @@ try {
             $info['cache'] = ['files' => $cacheFiles, 'size_kb' => round($cacheSize / 1024, 1)];
 
             // Photos count
-            $photoDir = __DIR__ . '/uploads/members/photos';
+            $photoDir = __DIR__ . '/uploads/students/photos';
             $photoCount = 0;
             if (is_dir($photoDir)) {
                 $photoCount = count(glob($photoDir . '/*.*'));

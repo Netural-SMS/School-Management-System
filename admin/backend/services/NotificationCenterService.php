@@ -13,7 +13,7 @@
  *   message_threads/messages — two-way messaging (dept ↔ teachers …)
  *   department_tasks         — cross-department tasks (unchanged)
  *
- * Doctrine (same as MemberCategory in P71): every role list, label
+ * Doctrine (same as StudentCategory in P71): every role list, label
  * and permission matrix lives HERE — no dashboard, API route or app
  * screen may hardcode them. Unknown/forbidden targets are rejected,
  * never guessed. All methods take ($conn, $userId, $role) params —
@@ -221,22 +221,22 @@ final class NotificationCenterService
     /**
      * P1 (mobile UX audit C1) — routing target for a feed row: what
      * the alert is about, derived from type + data payload. Today's
-     * producers all carry either member_id (member_registered /
-     * member_archived / role_changed / class_enrolled /
+     * producers all carry either student_id (student_registered /
+     * student_archived / role_changed / class_enrolled /
      * attendance_alert / attendance_issue) or task_id +
-     * related_member_id (task_assigned — mobile has no tasks surface
-     * by scope, so a task routes to the member it references when
+     * related_student_id (task_assigned — mobile has no tasks surface
+     * by scope, so a task routes to the student it references when
      * one exists). Rows without a usable reference get null —
      * clients simply mark those read, as before. No schema change.
      */
     private static function targetFor(array $row): ?array
     {
         $data = is_array($row['data'] ?? null) ? $row['data'] : [];
-        $memberId = isset($data['member_id']) ? (int)$data['member_id'] : 0;
-        if ($memberId > 0) {
-            $target = ['kind' => 'member', 'id' => $memberId];
+        $studentId = isset($data['student_id']) ? (int)$data['student_id'] : 0;
+        if ($studentId > 0) {
+            $target = ['kind' => 'student', 'id' => $studentId];
             // Attendance alerting Phase 2: additive deep-link to the warning.
-            // Kind stays 'member' so older apps keep routing to the profile.
+            // Kind stays 'student' so older apps keep routing to the profile.
             $warningId = isset($data['warning_id']) ? (int)$data['warning_id'] : 0;
             if ($warningId > 0) {
                 $target['warning_id'] = $warningId;
@@ -244,9 +244,9 @@ final class NotificationCenterService
             }
             return $target;
         }
-        $relatedId = isset($data['related_member_id']) ? (int)$data['related_member_id'] : 0;
+        $relatedId = isset($data['related_student_id']) ? (int)$data['related_student_id'] : 0;
         if ($relatedId > 0) {
-            return ['kind' => 'member', 'id' => $relatedId];
+            return ['kind' => 'student', 'id' => $relatedId];
         }
         // Attendance alerting Phase 3 (Q-2): a returned / reopened / rejected
         // sheet routes the teacher or taker back to that sheet. Older apps

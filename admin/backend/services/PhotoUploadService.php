@@ -2,10 +2,10 @@
 /**
  * Offline photo upload ingestion (P3).
  *
- * Accepts multipart POST /api/v1/members/{id}/photo from the mobile app
+ * Accepts multipart POST /api/v1/students/{id}/photo from the mobile app
  * (and later from the web review screen), validates auth, MIME, size,
- * sha256, and idempotency, stores the file through MemberFileService,
- * writes a receipt + candidate row, and either auto-sets the member's
+ * sha256, and idempotency, stores the file through StudentFileService,
+ * writes a receipt + candidate row, and either auto-sets the student's
  * current photo or flags it for admin conflict review.
  *
  * Multi-photographer conflict rule (OFFLINE_PHOTO_SYNC_DESIGN §5.1.1):
@@ -43,7 +43,7 @@ final class PhotoUploadService
      */
     public static function ingest(mysqli $conn, array $opts): array
     {
-        $memberId       = (int)($opts['member_id'] ?? 0);
+        $studentId       = (int)($opts['student_id'] ?? 0);
         $operatorId     = (int)($opts['operator_admin_id'] ?? 0);
         $deviceId       = (string)($opts['device_id'] ?? '');
         $clientOpId     = (string)($opts['client_op_id'] ?? '');
@@ -56,8 +56,8 @@ final class PhotoUploadService
         $fileField      = (string)($opts['file_field'] ?? 'photo');
 
         // ---------- Validation ----------
-        if ($memberId <= 0) {
-            return self::err(400, 'invalid_member', 'Member id is required.');
+        if ($studentId <= 0) {
+            return self::err(400, 'invalid_member', 'Student id is required.');
         }
         if ($operatorId <= 0) {
             return self::err(401, 'auth_required', 'You must be logged in.');
@@ -85,19 +85,19 @@ final class PhotoUploadService
             }
         }
 
-        // ---------- Member exists and is not archived ----------
+        // ---------- Student exists and is not archived ----------
         $stmt = $conn->prepare(
-            'SELECT id, status, student_photo_path FROM members WHERE id = ? LIMIT 1'
+            'SELECT id, status, student_photo_path FROM students WHERE id = ? LIMIT 1'
         );
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc();
+        $student = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!$member) {
-            return self::err(404, 'member_not_found', 'Member does not exist.');
+        if (!$student) {
+            return self::err(404, 'student_not_found', 'Student does not exist.');
         }
-        if (($member['status'] ?? '') === 'archived') {
-            return self::err(410, 'member_archived', 'Member is archived; photos cannot be updated.');
+        if (($student['status'] ?? '') === 'archived') {
+            return self::err(410, 'student_archived', 'Student is archived; photos cannot be updated.');
         }
 
         // ---------- Idempotency: exact client_op_id replay ----------
@@ -163,7 +163,7 @@ final class PhotoUploadService
         // ---------- Store ----------
         // We move/copy into a private area first, then flip it into the
         // public photos directory inside the transaction. Using
-        // MemberFileService::storeRequestUpload would re-encode and
+        // StudentFileService::storeRequestUpload would re-encode and
         // randomize the name; we use the same underlying logic but pass
         // through our own filename so sha256 remains stable.
         $randomName = bin2hex(random_bytes(16)) . '.' . $ext;
@@ -176,7 +176,7 @@ final class PhotoUploadService
             return self::err(500, 'storage_failed', 'Could not save the uploaded photo.');
         }
         @chmod($targetPath, 0644);
-        $webPath = 'uploads/members/photos/' . $randomName;
+        $webPath = 'uploads/students/photos/' . $randomName;
 
         // ---------- Transaction ----------
         // Always open our own transaction. The route does not wrap us in
@@ -191,14 +191,14 @@ final class PhotoUploadService
             $takenAtStr = $takenAt ? $takenAt->format('Y-m-d H:i:s') : null;
             $stmt = $conn->prepare(
                 'INSERT INTO photo_upload_receipts
-                   (client_op_id, import_item_id, member_id, field,
+                   (client_op_id, import_item_id, student_id, field,
                     operator_admin_id, device_id, sha256, stored_path, mime,
                     byte_size, width, height, taken_at, created_at)
                  VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
             );
             $stmt->bind_param(
                 'sisssssssiis',
-                $clientOpId, $memberId, $field,
+                $clientOpId, $studentId, $field,
                 $operatorId, $deviceId, $claimedSha256, $webPath, $mime,
                 $size, $width, $height,
                 $takenAtStr
@@ -210,12 +210,12 @@ final class PhotoUploadService
             $stmt->close();
 
             // Decide conflict policy.
-            $current = self::findCurrentCandidate($conn, $memberId, $field);
+            $current = self::findCurrentCandidate($conn, $studentId, $field);
             $isConflict = false;
             $shouldBecomeCurrent = false;
 
             if ($current === null) {
-                // First photo for this member — auto-win.
+                // First photo for this student — auto-win.
                 $shouldBecomeCurrent = true;
             } else {
                 $currentOperator = (int)$current['operator_admin_id'];
@@ -234,8 +234,8 @@ final class PhotoUploadService
 
             // Insert candidate.
             $stmt = $conn->prepare(
-                'INSERT INTO member_photo_candidates
-                   (member_id, field, receipt_id, operator_admin_id, device_id,
+                'INSERT INTO student_photo_candidates
+                   (student_id, field, receipt_id, operator_admin_id, device_id,
                     sha256, stored_path, mime, byte_size, width, height, taken_at,
                     is_current, decision_pending, archived,
                     created_at, decided_at, decided_by_admin_id)
@@ -245,7 +245,7 @@ final class PhotoUploadService
             $pendingInt  = $isConflict ? 1 : 0;
             $stmt->bind_param(
                 'isiissssiiisii',
-                $memberId, $field, $receiptId, $operatorId, $deviceId,
+                $studentId, $field, $receiptId, $operatorId, $deviceId,
                 $claimedSha256, $webPath, $mime, $size, $width, $height,
                 $takenAtStr,
                 $isCurrentInt, $pendingInt
@@ -260,20 +260,20 @@ final class PhotoUploadService
                 // De-throne previous current candidates (if any) — there
                 // should be at most one, but UPDATE handles 0..n safely.
                 $conn->query(
-                    "UPDATE member_photo_candidates
+                    "UPDATE student_photo_candidates
                         SET is_current = 0
-                      WHERE member_id = $memberId
+                      WHERE student_id = $studentId
                         AND field = '" . $conn->real_escape_string($field) . "'
                         AND is_current = 1
                         AND id <> $candidateId"
                 );
                 // Defensive: make sure our winner is current.
-                $conn->query("UPDATE member_photo_candidates SET is_current = 1 WHERE id = $candidateId");
+                $conn->query("UPDATE student_photo_candidates SET is_current = 1 WHERE id = $candidateId");
 
-                // Update members.student_photo_path denormalized cache.
+                // Update students.student_photo_path denormalized cache.
                 $col = $field === 'guardian_photo' ? 'guardian_photo_path' : 'student_photo_path';
-                $u = $conn->prepare("UPDATE members SET $col = ? WHERE id = ?");
-                $u->bind_param('si', $webPath, $memberId);
+                $u = $conn->prepare("UPDATE students SET $col = ? WHERE id = ?");
+                $u->bind_param('si', $webPath, $studentId);
                 $u->execute();
                 $u->close();
             }
@@ -307,7 +307,7 @@ final class PhotoUploadService
      */
     public static function ingestFromFile(mysqli $conn, array $opts): array
     {
-        $memberId     = (int)($opts['member_id'] ?? 0);
+        $studentId     = (int)($opts['student_id'] ?? 0);
         $operatorId   = (int)($opts['operator_admin_id'] ?? 0);
         $deviceId     = (string)($opts['device_id'] ?? '');
         $clientOpId   = (string)($opts['client_op_id'] ?? '');
@@ -319,7 +319,7 @@ final class PhotoUploadService
         $height       = (int)($opts['height'] ?? 0);
         $srcPath      = (string)($opts['source_path'] ?? '');
 
-        if ($memberId <= 0) return self::err(400,'invalid_member','Member id is required.');
+        if ($studentId <= 0) return self::err(400,'invalid_member','Student id is required.');
         if ($operatorId <= 0) return self::err(401,'auth_required','You must be logged in.');
         if ($field !== 'student_photo' && $field !== 'guardian_photo') {
             return self::err(400,'invalid_field','Field must be student_photo or guardian_photo.');
@@ -340,15 +340,15 @@ final class PhotoUploadService
             catch (\Throwable $e) { return self::err(400,'invalid_taken_at','Invalid taken_at timestamp.'); }
         }
 
-        // Member exists / not archived.
-        $stmt = $conn->prepare('SELECT id, status FROM members WHERE id = ? LIMIT 1');
-        $stmt->bind_param('i', $memberId);
+        // Student exists / not archived.
+        $stmt = $conn->prepare('SELECT id, status FROM students WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc();
+        $student = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!$member) return self::err(404,'member_not_found','Member does not exist.');
-        if (($member['status'] ?? '') === 'archived') {
-            return self::err(410,'member_archived','Member is archived; photos cannot be updated.');
+        if (!$student) return self::err(404,'student_not_found','Student does not exist.');
+        if (($student['status'] ?? '') === 'archived') {
+            return self::err(410,'student_archived','Student is archived; photos cannot be updated.');
         }
 
         // Idempotency: same client_op_id (when present) → replay.
@@ -392,7 +392,7 @@ final class PhotoUploadService
             return self::err(500,'storage_failed','Could not save the photo.');
         }
         @chmod($targetPath, 0644);
-        $webPath = 'uploads/members/photos/' . $randomName;
+        $webPath = 'uploads/students/photos/' . $randomName;
 
         $conn->begin_transaction();
         try {
@@ -401,14 +401,14 @@ final class PhotoUploadService
             $takenAtStr = $takenAt ? $takenAt->format('Y-m-d H:i:s') : null;
             $stmt = $conn->prepare(
                 'INSERT INTO photo_upload_receipts
-                   (client_op_id, import_item_id, member_id, field,
+                   (client_op_id, import_item_id, student_id, field,
                     operator_admin_id, device_id, sha256, stored_path, mime,
                     byte_size, width, height, taken_at, created_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
             );
             $stmt->bind_param(
                 'siisssssssiis',
-                $clientOpId, $importItemId, $memberId, $field,
+                $clientOpId, $importItemId, $studentId, $field,
                 $operatorId, $deviceId, $claimedSha256, $webPath, $mime,
                 $size, $width, $height,
                 $takenAtStr
@@ -418,7 +418,7 @@ final class PhotoUploadService
             $stmt->close();
 
             // Conflict decision — same as ingest().
-            $current = self::findCurrentCandidate($conn, $memberId, $field);
+            $current = self::findCurrentCandidate($conn, $studentId, $field);
             $isConflict = false; $shouldBecomeCurrent = false;
             if ($current === null) {
                 $shouldBecomeCurrent = true;
@@ -434,8 +434,8 @@ final class PhotoUploadService
             }
 
             $stmt = $conn->prepare(
-                'INSERT INTO member_photo_candidates
-                   (member_id, field, receipt_id, operator_admin_id, device_id,
+                'INSERT INTO student_photo_candidates
+                   (student_id, field, receipt_id, operator_admin_id, device_id,
                     sha256, stored_path, mime, byte_size, width, height, taken_at,
                     is_current, decision_pending, archived,
                     created_at, decided_at, decided_by_admin_id)
@@ -445,7 +445,7 @@ final class PhotoUploadService
             $pendingInt = $isConflict ? 1 : 0;
             $stmt->bind_param(
                 'isiissssiiisii',
-                $memberId, $field, $receiptId, $operatorId, $deviceId,
+                $studentId, $field, $receiptId, $operatorId, $deviceId,
                 $claimedSha256, $webPath, $mime, $size, $width, $height,
                 $takenAtStr,
                 $isCurrentInt, $pendingInt
@@ -456,14 +456,14 @@ final class PhotoUploadService
 
             if ($shouldBecomeCurrent) {
                 $conn->query(
-                    "UPDATE member_photo_candidates SET is_current = 0
-                      WHERE member_id = $memberId AND field = '" . $conn->real_escape_string($field) . "'
+                    "UPDATE student_photo_candidates SET is_current = 0
+                      WHERE student_id = $studentId AND field = '" . $conn->real_escape_string($field) . "'
                         AND is_current = 1 AND id <> $candidateId"
                 );
-                $conn->query("UPDATE member_photo_candidates SET is_current = 1 WHERE id = $candidateId");
+                $conn->query("UPDATE student_photo_candidates SET is_current = 1 WHERE id = $candidateId");
                 $col = $field === 'guardian_photo' ? 'guardian_photo_path' : 'student_photo_path';
-                $u = $conn->prepare("UPDATE members SET $col = ? WHERE id = ?");
-                $u->bind_param('si', $webPath, $memberId);
+                $u = $conn->prepare("UPDATE students SET $col = ? WHERE id = ?");
+                $u->bind_param('si', $webPath, $studentId);
                 $u->execute(); $u->close();
             }
 
@@ -480,15 +480,15 @@ final class PhotoUploadService
     // ---------- Helpers ----------
 
     /** @return array{id:int,operator_admin_id:int,taken_at:?string}|null */
-    private static function findCurrentCandidate(mysqli $conn, int $memberId, string $field): ?array
+    private static function findCurrentCandidate(mysqli $conn, int $studentId, string $field): ?array
     {
         $stmt = $conn->prepare(
             'SELECT id, operator_admin_id, taken_at
-               FROM member_photo_candidates
-              WHERE member_id = ? AND field = ? AND is_current = 1 AND archived = 0
+               FROM student_photo_candidates
+              WHERE student_id = ? AND field = ? AND is_current = 1 AND archived = 0
               LIMIT 1'
         );
-        $stmt->bind_param('is', $memberId, $field);
+        $stmt->bind_param('is', $studentId, $field);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -529,7 +529,7 @@ final class PhotoUploadService
 
     private static function isValidImage(string $path, string $mime): bool
     {
-        if (!extension_loaded('gd')) return true; // fail open; GD re-encode in MemberFileService can defend
+        if (!extension_loaded('gd')) return true; // fail open; GD re-encode in StudentFileService can defend
         switch ($mime) {
             case 'image/jpeg':
                 return function_exists('imagecreatefromjpeg') && (@imagecreatefromjpeg($path) !== false);
@@ -542,9 +542,9 @@ final class PhotoUploadService
     private static function publicPhotoRoot(): string
     {
         if (defined('ADMIN_PATH')) {
-            $base = ADMIN_PATH . '/uploads/members/photos';
+            $base = ADMIN_PATH . '/uploads/students/photos';
         } else {
-            $base = dirname(__DIR__, 2) . '/admin/uploads/members/photos';
+            $base = dirname(__DIR__, 2) . '/admin/uploads/students/photos';
         }
         return $base;
     }

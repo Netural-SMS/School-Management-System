@@ -515,7 +515,7 @@ class EducationAnalyticsService
                     'student_name' => (string)$s['student_name'],
                     'father_name' => (string)$s['father_name'],
                     'christian_name' => (string)($s['christian_name'] ?? ''),
-                    'member_code' => (string)($s['member_code'] ?? ''),
+                    'student_code' => (string)($s['student_code'] ?? ''),
                     'class_id' => (int)$s['class_id'],
                     'class_name' => (string)$s['class_name'],
                     'gender' => (string)$s['gender'],
@@ -869,7 +869,7 @@ table.rpt-tbl tr:nth-child(even){background:#fafafa}
       <tr>
         <td><?= $idx++ ?></td>
         <td><strong><?= htmlspecialchars($tr['student_name'] . ' ' . $tr['father_name']) ?></strong></td>
-        <td><code><?= htmlspecialchars($tr['member_code']) ?></code></td>
+        <td><code><?= htmlspecialchars($tr['student_code']) ?></code></td>
         <td class="amh"><?= htmlspecialchars($tr['class_name']) ?></td>
         <td><strong><?= $tr['overall_average'] !== null ? number_format($tr['overall_average'], 1).'%' : '—' ?></strong></td>
         <td><?= $tr['attendance_rate'] !== null ? number_format($tr['attendance_rate'], 1).'%' : '—' ?></td>
@@ -996,7 +996,7 @@ table.rpt-tbl tr:nth-child(even){background:#fafafa}
         $s3 = $spreadsheet->createSheet();
         $s3->setTitle('Student Performance');
 
-        $headers3 = ['#', 'Student Name', 'Father Name', 'Christian Name', 'Member Code', 'Class', 'Gender', 'Grade Average (%)', 'Letter Grade', 'Total Obtained', 'Total Max', 'Attendance Rate (%)', 'Present', 'Absent', 'Late', 'Excused', 'Total Days'];
+        $headers3 = ['#', 'Student Name', 'Father Name', 'Christian Name', 'Student Code', 'Class', 'Gender', 'Grade Average (%)', 'Letter Grade', 'Total Obtained', 'Total Max', 'Attendance Rate (%)', 'Present', 'Absent', 'Late', 'Excused', 'Total Days'];
         foreach ($headers3 as $idx => $h) {
             $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
             $s3->setCellValue($colLetter . '1', $h);
@@ -1011,7 +1011,7 @@ table.rpt-tbl tr:nth-child(even){background:#fafafa}
             $s3->setCellValue('B' . $r3, $st['student_name'] ?? '');
             $s3->setCellValue('C' . $r3, $st['father_name'] ?? '');
             $s3->setCellValue('D' . $r3, $st['christian_name'] ?? '');
-            $s3->setCellValue('E' . $r3, $st['member_code'] ?? '');
+            $s3->setCellValue('E' . $r3, $st['student_code'] ?? '');
             $s3->setCellValue('F' . $r3, $st['class_name'] ?? '');
             $s3->setCellValue('G' . $r3, strtoupper((string)($st['gender'] ?? '')));
             $s3->setCellValue('H' . $r3, $st['overall_average'] !== null ? $st['overall_average'] : '');
@@ -1034,7 +1034,7 @@ table.rpt-tbl tr:nth-child(even){background:#fafafa}
         $s4 = $spreadsheet->createSheet();
         $s4->setTitle('Priority Triage Roster');
 
-        $headers4 = ['#', 'Student Name', 'Father Name', 'Member Code', 'Class', 'Gender', 'Grade Average (%)', 'Attendance Rate (%)', 'Severity Level', 'Identified Risk Factors'];
+        $headers4 = ['#', 'Student Name', 'Father Name', 'Student Code', 'Class', 'Gender', 'Grade Average (%)', 'Attendance Rate (%)', 'Severity Level', 'Identified Risk Factors'];
         foreach ($headers4 as $idx => $h) {
             $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($idx + 1);
             $s4->setCellValue($colLetter . '1', $h);
@@ -1048,7 +1048,7 @@ table.rpt-tbl tr:nth-child(even){background:#fafafa}
             $s4->setCellValue('A' . $r4, $tIdx++);
             $s4->setCellValue('B' . $r4, $tr['student_name']);
             $s4->setCellValue('C' . $r4, $tr['father_name']);
-            $s4->setCellValue('D' . $r4, $tr['member_code']);
+            $s4->setCellValue('D' . $r4, $tr['student_code']);
             $s4->setCellValue('E' . $r4, $tr['class_name']);
             $s4->setCellValue('F' . $r4, strtoupper((string)($tr['gender'] ?? '')));
             $s4->setCellValue('G' . $r4, $tr['overall_average'] !== null ? $tr['overall_average'] : '');

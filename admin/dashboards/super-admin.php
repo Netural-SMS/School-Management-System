@@ -28,8 +28,8 @@ $testSeedEnabled = defined('ENABLE_TEST_DATA_TOOLS') && ENABLE_TEST_DATA_TOOLS =
 $testSeedInfo = ['loaded' => 0, 'expected' => 224, 'by_grade' => [], 'auto' => null];
 if ($testSeedEnabled) {
     try {
-        require_once __DIR__ . '/../backend/services/TestMemberSeed.php';
-        $testSeedInfo = \App\Services\TestMemberSeed::status($conn);
+        require_once __DIR__ . '/../backend/services/TestStudentSeed.php';
+        $testSeedInfo = \App\Services\TestStudentSeed::status($conn);
     } catch (Throwable $e) {
         error_log('test seed status: ' . $e->getMessage());
     }
@@ -80,7 +80,7 @@ if (isset($conn)) {
     $r = $conn->query("SELECT COUNT(*) as cnt FROM users");
     if ($r) $totalUsers = (int)$r->fetch_assoc()['cnt'];
     
-    $r = $conn->query("SELECT COUNT(*) as total, SUM(status='active') as active, SUM(registration_type='waiting') as pending FROM members WHERE status != 'archived'");
+    $r = $conn->query("SELECT COUNT(*) as total, SUM(status='active') as active, SUM(registration_type='waiting') as pending FROM students WHERE status != 'archived'");
     if ($r) {
         $row = $r->fetch_assoc();
         $totalMembers = (int)($row['total'] ?? 0);
@@ -275,9 +275,9 @@ if ($saNeedHealth && isset($conn) && !$conn->connect_error) {
         if ($r) while ($row = $r->fetch_assoc()) $tableStats[] = $row;
     } catch (Exception $e) {}
 
-    // Member growth (last 6 months)
+    // Student growth (last 6 months)
     try {
-        $r = $conn->query("SELECT DATE_FORMAT(created_at,'%Y-%m') as month, COUNT(*) as cnt FROM members WHERE created_at >= DATE_SUB(NOW(),INTERVAL 6 MONTH) GROUP BY DATE_FORMAT(created_at,'%Y-%m') ORDER BY month ASC");
+        $r = $conn->query("SELECT DATE_FORMAT(created_at,'%Y-%m') as month, COUNT(*) as cnt FROM students WHERE created_at >= DATE_SUB(NOW(),INTERVAL 6 MONTH) GROUP BY DATE_FORMAT(created_at,'%Y-%m') ORDER BY month ASC");
         if ($r) while ($row = $r->fetch_assoc()) $memberGrowth[] = $row;
     } catch (Exception $e) {}
 
@@ -391,7 +391,7 @@ $apiFiles = [
     'Subjects API' => ADMIN_PATH . '/api_subjects.php',
     'Attendance API' => ADMIN_PATH . '/api_attendance.php',
     'Notifications API' => ADMIN_PATH . '/api_notifications.php',
-    'Members List API' => ADMIN_PATH . '/api_list_members.php',
+    'Students List API' => ADMIN_PATH . '/api_list_students.php',
     'Duplicate Check API' => ADMIN_PATH . '/api_check_duplicate.php',
 ];
 foreach ($apiFiles as $name => $path) {
@@ -428,9 +428,9 @@ $orphanedRecords = [];
 if (isset($conn) && !$conn->connect_error) {
     // Check key table relationships
     $integrityChecks = [
-        ['name' => 'Members with valid status', 'sql' => "SELECT COUNT(*) as c FROM members WHERE status IN ('active','inactive','archived','waiting')"],
+        ['name' => 'Students with valid status', 'sql' => "SELECT COUNT(*) as c FROM students WHERE status IN ('active','inactive','archived','waiting')"],
         ['name' => 'Users with valid roles', 'sql' => "SELECT COUNT(*) as c FROM users WHERE role IN ('super_admin','school_admin','hr_dept','info_dept','photo_dept','photo_importer','edu_dept','finance_dept','material_dept','mezmur_dept','teacher','attendance_taker','content_editor','accounts_office','mezmur_attendance_taker','hr_attendance_taker')"],
-        ['name' => 'Group members with valid groups', 'sql' => "SELECT COUNT(*) as c FROM wbws_group_members gm LEFT JOIN wbws_groups g ON gm.group_id=g.id WHERE g.id IS NOT NULL", 'total_sql' => "SELECT COUNT(*) as c FROM wbws_group_members"],
+        ['name' => 'Group students with valid groups', 'sql' => "SELECT COUNT(*) as c FROM wbws_group_members gm LEFT JOIN wbws_groups g ON gm.group_id=g.id WHERE g.id IS NOT NULL", 'total_sql' => "SELECT COUNT(*) as c FROM wbws_group_members"],
         ['name' => 'Group leaders with valid groups', 'sql' => "SELECT COUNT(*) as c FROM wbws_group_leaders gl LEFT JOIN wbws_groups g ON gl.group_id=g.id WHERE g.id IS NOT NULL", 'total_sql' => "SELECT COUNT(*) as c FROM wbws_group_leaders"],
     ];
     foreach ($integrityChecks as $ic) {
@@ -448,7 +448,7 @@ if (isset($conn) && !$conn->connect_error) {
         }
     }
 
-    // Check for orphaned group members
+    // Check for orphaned group students
     try {
         $r = $conn->query("SELECT COUNT(*) as c FROM wbws_group_members gm LEFT JOIN wbws_groups g ON gm.group_id=g.id WHERE g.id IS NULL");
         $orphanedMembers = $r ? (int)$r->fetch_assoc()['c'] : 0;
@@ -468,7 +468,7 @@ if (isset($conn) && !$conn->connect_error) {
     } catch (Exception $e) {}
 }
 
-// 4. Member Demographics & Data Quality
+// 4. Student Demographics & Data Quality
 $memberQuality = ['total' => 0, 'with_phone' => 0, 'with_photo' => 0, 'with_email' => 0, 'male' => 0, 'female' => 0, 'missing_gender' => 0, 'duplicates' => 0];
 if (isset($conn) && !$conn->connect_error) {
     try {
@@ -478,11 +478,11 @@ if (isset($conn) && !$conn->connect_error) {
             SUM(student_photo_path IS NOT NULL AND student_photo_path!='') as wph, 
             SUM(gender='male' OR gender='M') as m, 
             SUM(gender='female' OR gender='F') as f 
-        FROM members WHERE status!='archived'");
+        FROM students WHERE status!='archived'");
         if ($r) { $mq = $r->fetch_assoc(); $memberQuality['total'] = (int)($mq['t']??0); $memberQuality['with_phone'] = (int)($mq['wp']??0); $memberQuality['with_photo'] = (int)($mq['wph']??0); $memberQuality['male'] = (int)($mq['m']??0); $memberQuality['female'] = (int)($mq['f']??0); }
     } catch (Exception $e) {}
     try {
-        $r = $conn->query("SELECT student_name, father_name, COUNT(*) as c FROM members WHERE status!='archived' GROUP BY student_name, father_name HAVING c > 1 LIMIT 10");
+        $r = $conn->query("SELECT student_name, father_name, COUNT(*) as c FROM students WHERE status!='archived' GROUP BY student_name, father_name HAVING c > 1 LIMIT 10");
         if ($r) $memberQuality['duplicates'] = $r->num_rows;
     } catch (Exception $e) {}
 }
@@ -492,7 +492,7 @@ $perfStart = microtime(true);
 $benchmarks = [];
 if (isset($conn) && !$conn->connect_error) {
     // DB read speed
-    $t1 = microtime(true); try { $conn->query("SELECT COUNT(*) FROM members"); } catch(Exception $e){} $benchmarks['db_read'] = round((microtime(true) - $t1) * 1000, 2);
+    $t1 = microtime(true); try { $conn->query("SELECT COUNT(*) FROM students"); } catch(Exception $e){} $benchmarks['db_read'] = round((microtime(true) - $t1) * 1000, 2);
     // DB write speed (safe test)  
     $t1 = microtime(true); try { $conn->query("SELECT 1+1"); } catch(Exception $e){} $benchmarks['db_ping'] = round((microtime(true) - $t1) * 1000, 2);
 }
@@ -701,17 +701,17 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                 <div class="sec-header"><h2 class="sec-title"><i class="fa-solid fa-gauge-high"></i> Overview</h2><p class="sec-desc">System statistics and quick actions</p></div>
                 <div class="grid-4" style="margin-bottom:1rem">
                     <div class="stat-card"><div class="stat-header"><div class="stat-title">Users</div><div class="stat-icon" style="background:rgba(34,197,94,.15);color:#4ade80"><i class="fa-solid fa-user-shield"></i></div></div><div class="stat-value"><?= $totalUsers ?></div><div class="stat-label">Admin accounts</div></div>
-                    <div class="stat-card"><div class="stat-header"><div class="stat-title">Members</div><div class="stat-icon" style="background:rgba(59,130,246,.15);color:#60a5fa"><i class="fa-solid fa-users"></i></div></div><div class="stat-value"><?= $totalMembers ?></div><div class="stat-label">Students</div></div>
+                    <div class="stat-card"><div class="stat-header"><div class="stat-title">Students</div><div class="stat-icon" style="background:rgba(59,130,246,.15);color:#60a5fa"><i class="fa-solid fa-users"></i></div></div><div class="stat-value"><?= $totalMembers ?></div><div class="stat-label">Students</div></div>
                     <div class="stat-card"><div class="stat-header"><div class="stat-title">Active</div><div class="stat-icon" style="background:rgba(16,185,129,.15);color:#34d399"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-value"><?= $activeMembers ?></div><div class="stat-label">Active now</div></div>
                     <div class="stat-card"><div class="stat-header"><div class="stat-title">Pending</div><div class="stat-icon" style="background:rgba(245,158,11,.15);color:#fbbf24"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-value"><?= $pendingRegistrations ?></div><div class="stat-label">Waiting</div></div>
                 </div>
                 <?php if ($testSeedEnabled): ?>
                 <div class="card" id="testSeedCard" style="margin-bottom:1rem;border:1px solid rgba(240,192,0,.35);background:rgba(96,0,0,.18)">
-                    <h3 class="card-title"><i class="fa-solid fa-vial" style="color:#F0C000"></i> Practice members (full system test)</h3>
+                    <h3 class="card-title"><i class="fa-solid fa-vial" style="color:#F0C000"></i> Practice students (full system test)</h3>
                     <p style="font-size:.8rem;color:#cbd5e1;margin:.35rem 0 .75rem">
                         <?= (int)($testSeedInfo['loaded'] ?? 0) ?> of <?= (int)($testSeedInfo['expected'] ?? 224) ?> practice children are on the website.
                         They are marked <strong>TEST-FKSS</strong> so we can delete only them when you finish.
-                        Real members (including 32779 and 69711) stay.
+                        Real students (including 32779 and 69711) stay.
                     </p>
                     <?php if (!empty($testSeedInfo['auto']['message'])): ?>
                     <p style="font-size:.78rem;color:#86efac;margin:0 0 .75rem"><?= e($testSeedInfo['auto']['message']) ?></p>
@@ -719,7 +719,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                     <div id="testSeedMsg" style="font-size:.78rem;color:#F0C000;margin:0 0 .75rem;min-height:1.1em"></div>
                     <div style="display:flex;flex-wrap:wrap;gap:.6rem">
                         <button type="button" class="btn btn-primary" id="testSeedLoadBtn" onclick="dcTestSeed('load')"><i class="fa-solid fa-cloud-arrow-up"></i> Load all 224 now</button>
-                        <button type="button" class="btn btn-outline" id="testSeedClearBtn" onclick="dcTestSeed('clear')"><i class="fa-solid fa-trash"></i> Remove practice members</button>
+                        <button type="button" class="btn btn-outline" id="testSeedClearBtn" onclick="dcTestSeed('clear')"><i class="fa-solid fa-trash"></i> Remove practice students</button>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -891,7 +891,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                             <?php endforeach; ?>
                         </div>
                         <div class="card">
-                            <h3 class="card-title"><i class="fa-solid fa-chart-line"></i> Member Registration Trend</h3>
+                            <h3 class="card-title"><i class="fa-solid fa-chart-line"></i> Student Registration Trend</h3>
                             <?php if (!empty($memberGrowth)): $maxG = max(array_column($memberGrowth,'cnt')); ?>
                             <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:1rem">
                                 <?php foreach ($memberGrowth as $mg): $h = $maxG > 0 ? max(round($mg['cnt']/$maxG*120), 4) : 4; ?>
@@ -1022,7 +1022,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                             <?php
                             $dirs = [
                                 'uploads/' => UPLOADS_PATH,
-                                'uploads/members/' => UPLOADS_PATH.'/members',
+                                'uploads/students/' => UPLOADS_PATH.'/students',
                                 'uploads/cache/' => UPLOADS_PATH.'/cache',
                                 'uploads/backups/' => __DIR__.'/../uploads/backups',
                             ];
@@ -1298,7 +1298,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                         <div class="card">
                             <h3 class="card-title"><i class="fa-solid fa-broom"></i> Orphaned Records</h3>
                             <div class="health-item">
-                                <span class="health-name"><i class="fa-solid fa-users" style="color:#60a5fa;margin-right:.4rem"></i>Orphaned Group Members</span>
+                                <span class="health-name"><i class="fa-solid fa-users" style="color:#60a5fa;margin-right:.4rem"></i>Orphaned Group Students</span>
                                 <span class="health-badge health-<?=($orphanedMembers??0)==0?'good':'warning'?>"><?=$orphanedMembers??0?></span>
                             </div>
                             <div class="health-item">
@@ -1330,7 +1330,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                 <div class="sys-panel" id="stab-quality">
                     <div class="grid-2">
                         <div class="card">
-                            <h3 class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Member Data Completeness</h3>
+                            <h3 class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Student Data Completeness</h3>
                             <?php $mqt = max($memberQuality['total'], 1);
                             $fields = [
                                 ['name' => 'Has Phone Number', 'val' => $memberQuality['with_phone'], 'icon' => 'fa-phone', 'color' => '#4ade80'],
@@ -1419,8 +1419,8 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                             if (!$sHealth['https']) $recommendations[] = ['icon'=>'fa-lock','color'=>'#f87171','text'=>'Enable HTTPS/SSL for secure connections'];
                             if ($sHealth['memory_percent'] > 80) $recommendations[] = ['icon'=>'fa-memory','color'=>'#fbbf24','text'=>'Memory usage is high. Consider increasing memory_limit'];
                             if ($errorLogSize > 2*1024*1024) $recommendations[] = ['icon'=>'fa-file-lines','color'=>'#fbbf24','text'=>'Error log is large ('.round($errorLogSize/1024/1024,1).'MB). Clear or rotate it'];
-                            if (($orphanedMembers??0) > 0) $recommendations[] = ['icon'=>'fa-broom','color'=>'#fbbf24','text'=>'Clean up '.$orphanedMembers.' orphaned group member records'];
-                            if ($memberQuality['duplicates'] > 0) $recommendations[] = ['icon'=>'fa-clone','color'=>'#fbbf24','text'=>'Review '.$memberQuality['duplicates'].' potential duplicate member names'];
+                            if (($orphanedMembers??0) > 0) $recommendations[] = ['icon'=>'fa-broom','color'=>'#fbbf24','text'=>'Clean up '.$orphanedMembers.' orphaned group student records'];
+                            if ($memberQuality['duplicates'] > 0) $recommendations[] = ['icon'=>'fa-clone','color'=>'#fbbf24','text'=>'Review '.$memberQuality['duplicates'].' potential duplicate student names'];
                             if (empty($backupFiles)) $recommendations[] = ['icon'=>'fa-database','color'=>'#f87171','text'=>'No backups found! Create a database backup now'];
                             if (count(array_filter($apiEndpoints,fn($a)=>!$a['has_csrf'])) > 0) $recommendations[] = ['icon'=>'fa-shield-halved','color'=>'#fbbf24','text'=>'Some API endpoints lack CSRF protection'];
                             if (empty($recommendations)) $recommendations[] = ['icon'=>'fa-circle-check','color'=>'#4ade80','text'=>'Everything looks great! No actions needed.'];
@@ -1766,12 +1766,12 @@ require __DIR__ . '/../components/bottom_nav.php';
         function dcAsk(o){if(window.DangerConfirm&&window.DangerConfirm.ask)return window.DangerConfirm.ask(o);dcFail();return Promise.resolve(false);}
         async function dcTestSeed(action){
             const dc=await dcAsk(action==='clear'
-                ?{tier:'high',title:'Remove all practice members?',object:'TEST-FKSS',summary:'Every member marked TEST-FKSS is deleted from the database.',intent:'I want to remove the practice members',
-                  consequences:['All TEST-FKSS practice members are deleted, with their enrolments, attendance, marks and family links.','Reports and counts change right away.'],
-                  keeps:['Real members are not touched.'],irreversible:true,phrase:'REMOVE PRACTICE MEMBERS',confirmLabel:'Remove practice members'}
-                :{tier:'medium',title:'Load the 224 practice members?',object:'TEST-FKSS',summary:'224 practice children are added so the whole system can be tested.',intent:'I want to load practice members',
-                  consequences:['224 members marked TEST-FKSS are added and enrolled in classes.','They appear in lists, attendance, marks and reports until you remove them.'],
-                  keeps:['Real members are not changed.','You can remove them later with Remove practice members.'],phrase:'LOAD PRACTICE MEMBERS',confirmLabel:'Load practice members'});
+                ?{tier:'high',title:'Remove all practice students?',object:'TEST-FKSS',summary:'Every student marked TEST-FKSS is deleted from the database.',intent:'I want to remove the practice students',
+                  consequences:['All TEST-FKSS practice students are deleted, with their enrolments, attendance, marks and family links.','Reports and counts change right away.'],
+                  keeps:['Real students are not touched.'],irreversible:true,phrase:'REMOVE PRACTICE MEMBERS',confirmLabel:'Remove practice students'}
+                :{tier:'medium',title:'Load the 224 practice students?',object:'TEST-FKSS',summary:'224 practice children are added so the whole system can be tested.',intent:'I want to load practice students',
+                  consequences:['224 students marked TEST-FKSS are added and enrolled in classes.','They appear in lists, attendance, marks and reports until you remove them.'],
+                  keeps:['Real students are not changed.','You can remove them later with Remove practice students.'],phrase:'LOAD PRACTICE MEMBERS',confirmLabel:'Load practice students'});
             if(!dc)return;
             runTestSeed(action,dc.phrase);
         }
@@ -1786,7 +1786,7 @@ require __DIR__ . '/../components/bottom_nav.php';
             const msg=document.getElementById('testSeedMsg');
             const loadBtn=document.getElementById('testSeedLoadBtn');
             const clearBtn=document.getElementById('testSeedClearBtn');
-            if(msg)msg.textContent=action==='load'?'Loading 224 children… this can take up to a minute.':'Removing practice members…';
+            if(msg)msg.textContent=action==='load'?'Loading 224 children… this can take up to a minute.':'Removing practice students…';
             if(loadBtn)loadBtn.disabled=true;
             if(clearBtn)clearBtn.disabled=true;
             try{

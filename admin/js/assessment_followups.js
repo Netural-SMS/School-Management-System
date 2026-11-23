@@ -66,7 +66,7 @@
       decision: (d === '' || d === 'all') ? '' : d,
       open: d === '' ? 1 : '',
       q: els.q.value.trim(),
-      member_id: cfg.initial && cfg.initial.member_id ? cfg.initial.member_id : '',
+      student_id: cfg.initial && cfg.initial.student_id ? cfg.initial.student_id : '',
       class_id: cfg.initial && cfg.initial.class_id ? cfg.initial.class_id : '',
       limit: state.limit, offset: state.offset + (state.appendFrom || 0)
     };
@@ -104,7 +104,7 @@
           ? pill('score', num(it.latest_score) + ' / ' + num(it.latest_max_score) + (it.latest_percentage != null ? ' (' + it.latest_percentage + '%)' : ''))
           : (it.original_score != null ? '<span class="rc-muted">orig. ' + num(it.original_score) + '</span>' : '<span class="rc-muted">—</span>');
         return '<tr data-id="' + it.id + '">' +
-          '<td><a href="' + esc(cfg.memberUrl + it.member_id) + '" target="_blank" rel="noopener">' + esc(it.member_name) + '</a><br><span class="rc-muted">' + esc(it.member_code) + '</span></td>' +
+          '<td><a href="' + esc(cfg.studentUrl + it.student_id) + '" target="_blank" rel="noopener">' + esc(it.student_name) + '</a><br><span class="rc-muted">' + esc(it.student_code) + '</span></td>' +
           '<td>' + esc(it.assessment_name) + '<br><span class="rc-muted">' + esc(it.subject_name || it.subject_name_en) + ' · ' + esc(it.class_name) + '</span></td>' +
           '<td class="opt">' + esc(it.due_date_ec || '—') + '</td>' +
           '<td class="opt">' + esc((it.inactive_from_ec || '') + ' – ' + (it.inactive_to_ec || '')) + '</td>' +
@@ -113,7 +113,7 @@
           '<td><button class="rc-btn rc-btn-ghost rc-btn-sm" type="button" data-open="' + it.id + '">' + (state.canWrite ? 'Decide' : 'View') + '</button></td>' +
           '</tr>';
       }).join('');
-      els.list.innerHTML = '<table class="af-table"><thead><tr><th>Member</th><th>Assessment</th><th class="opt">Due (EC)</th><th class="opt">Inactive period (EC)</th><th>Decision</th><th>Make-up result</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      els.list.innerHTML = '<table class="af-table"><thead><tr><th>Student</th><th>Assessment</th><th class="opt">Due (EC)</th><th class="opt">Inactive period (EC)</th><th>Decision</th><th>Make-up result</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
       Array.prototype.forEach.call(els.list.querySelectorAll('[data-open]'), function (b) {
         b.addEventListener('click', function () { openDetail(parseInt(b.getAttribute('data-open'), 10)); });
       });
@@ -140,7 +140,7 @@
     state.appendFrom = 0;
     Promise.all([
       get(f),
-      get({ action: 'counts', member_id: f.member_id, class_id: f.class_id })
+      get({ action: 'counts', student_id: f.student_id, class_id: f.class_id })
     ]).then(function (res) {
       var list = res[0], counts = res[1];
       state.loading = false;
@@ -189,10 +189,10 @@
       ) : '';
       els.modalRoot.innerHTML =
         '<div class="af-modal" id="af-modal"><div class="af-dialog" role="dialog" aria-modal="true">' +
-        '<h2>' + esc(it.assessment_name) + ' · ' + esc(it.member_name) + '</h2>' +
+        '<h2>' + esc(it.assessment_name) + ' · ' + esc(it.student_name) + '</h2>' +
         '<div class="rc-subtitle">' + esc(it.subject_name || it.subject_name_en) + ' · ' + esc(it.class_name) + ' · ' + pill(it.decision, label(it.decision)) + '</div>' +
         '<div class="af-grid">' +
-        '<div><b>Member code</b>' + esc(it.member_code) + '</div>' +
+        '<div><b>Student code</b>' + esc(it.student_code) + '</div>' +
         '<div><b>Due date (EC)</b>' + esc(it.due_date_ec || '—') + '</div>' +
         '<div><b>Inactive period (EC)</b>' + esc((it.inactive_from_ec || '') + ' – ' + (it.inactive_to_ec || '')) + '</div>' +
         '<div><b>Max score</b>' + esc(num(it.assessment_max_score)) + '</div>' +

@@ -2,9 +2,9 @@
 /**
  * Search-index build endpoint (P0, super_admin only).
  *
- * POST action=backfill (default): index the next bounded batch of members.
+ * POST action=backfill (default): index the next bounded batch of students.
  *   Params: after_id (cursor), limit (1–500). Resume with next_cursor until
- *   done=true. Safe to call repeatedly; idempotent per member.
+ *   done=true. Safe to call repeatedly; idempotent per student.
  * POST action=rebuild: WIPE the index and start over from 0. Requires
  *   confirm=rebuild-index. The first backfill batch runs in the same call.
  * GET (no writes): engine diagnostics (availability, index stats).
@@ -15,9 +15,9 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/backend/services/MemberSearchService.php';
+require_once __DIR__ . '/backend/services/StudentSearchService.php';
 
-use App\Services\MemberSearchService;
+use App\Services\StudentSearchService;
 
 if (empty($_SESSION['admin_id'])) {
     http_response_code(401);
@@ -32,9 +32,9 @@ if ((string)($_SESSION['admin_role'] ?? '') !== 'super_admin') {
 
 $diagnostics = static function (): array {
     return [
-        'available' => MemberSearchService::available(),
-        'index' => MemberSearchService::stats(),
-        'index_version' => MemberSearchService::VERSION,
+        'available' => StudentSearchService::available(),
+        'index' => StudentSearchService::stats(),
+        'index_version' => StudentSearchService::VERSION,
     ];
 };
 
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-    // Fail-closed CSRF like api_import_members.php (form field or header).
+    // Fail-closed CSRF like api_import_students.php (form field or header).
     $csrf = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!function_exists('validateCsrf') || !validateCsrf($csrf)) {
         http_response_code(403);
@@ -68,8 +68,8 @@ try {
             echo json_encode(['status' => 'error', 'message' => 'Rebuild needs confirm=rebuild-index.'] + $diagnostics());
             exit;
         }
-        MemberSearchService::rebuildStart();
-        $result = MemberSearchService::backfill($conn, 0, (int)($_POST['limit'] ?? 100));
+        StudentSearchService::rebuildStart();
+        $result = StudentSearchService::backfill($conn, 0, (int)($_POST['limit'] ?? 100));
         echo json_encode(['status' => 'success', 'action' => 'rebuild'] + $result + $diagnostics(), JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -78,7 +78,7 @@ try {
         echo json_encode(['status' => 'error', 'message' => 'Unknown action.'] + $diagnostics());
         exit;
     }
-    $result = MemberSearchService::backfill(
+    $result = StudentSearchService::backfill(
         $conn,
         (int)($_POST['after_id'] ?? 0),
         (int)($_POST['limit'] ?? 100)

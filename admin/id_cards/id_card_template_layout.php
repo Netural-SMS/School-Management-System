@@ -1,12 +1,12 @@
 <!-- FILE: /admin/id_cards/id_card_template_layout.php -->
 <?php
-require_once __DIR__ . '/../backend/services/MemberCodeFormat.php';
+require_once __DIR__ . '/../backend/services/StudentCodeFormat.php';
 if (empty($idCardBg)) {
     $idCardBg = defined('ID_CARD_BACKGROUND') ? ID_CARD_BACKGROUND : '/admin/id_cards/assets/backgrounds/id_card_bg.jpg';
 }
 $idCardBgEsc = htmlspecialchars((string)$idCardBg, ENT_QUOTES, 'UTF-8');
 $genderLabel = '--';
-$g = strtolower(trim((string)($member['gender'] ?? '')));
+$g = strtolower(trim((string)($student['gender'] ?? '')));
 if ($g === 'male' || $g === 'm' || $g === 'ወንድ') {
     $genderLabel = 'ወንድ';
 } elseif ($g === 'female' || $g === 'f' || $g === 'ሴት') {
@@ -45,8 +45,8 @@ $footBackText = $idCardTxt('foot_back_text', defined('ID_CARD_DISCLAIMER_AM') ? 
     <div class="id-bar" data-idc="bar_front"></div>
     <div class="id-body">
         <div class="id-photo" data-idc="photo">
-            <?php if (!empty($member['student_photo_path'])): ?>
-            <div style="width:100%;height:100%;background-image:url('<?php echo htmlspecialchars($member['student_photo_path'], ENT_QUOTES, 'UTF-8'); ?>');background-size:cover;background-position:center top;background-repeat:no-repeat;"></div>
+            <?php if (!empty($student['student_photo_path'])): ?>
+            <div style="width:100%;height:100%;background-image:url('<?php echo htmlspecialchars($student['student_photo_path'], ENT_QUOTES, 'UTF-8'); ?>');background-size:cover;background-position:center top;background-repeat:no-repeat;"></div>
             <?php endif; ?>
         </div>
         <div class="id-fields">
@@ -56,7 +56,7 @@ $footBackText = $idCardTxt('foot_back_text', defined('ID_CARD_DISCLAIMER_AM') ? 
                 <div class="id-el-gender" data-idc="gender"><span class="id-lbl">ጾታ</span><span class="id-val"><?php echo htmlspecialchars($genderLabel); ?></span></div>
                 <div class="id-el-age" data-idc="age"><span class="id-lbl">ዕድሜ</span><span class="id-val"><?php echo htmlspecialchars((string)$age); ?></span></div>
             </div>
-            <div class="id-row id-el-code" data-idc="code"><span class="id-lbl">የመታወቂያ ቁ.</span><span class="id-val id-code"><?php echo \App\Services\MemberCodeFormat::html((string)($member['member_code'] ?? '')); ?></span></div>
+            <div class="id-row id-el-code" data-idc="code"><span class="id-lbl">የመታወቂያ ቁ.</span><span class="id-val id-code"><?php echo \App\Services\StudentCodeFormat::html((string)($student['student_code'] ?? '')); ?></span></div>
             <div class="id-signs">
                 <div data-idc="sig_head">
                     <div class="id-sign-img"><?php if (!empty($CONFIG['sig_head'])): ?><img class="id-sign-head" src="<?php echo htmlspecialchars($CONFIG['sig_head'], ENT_QUOTES, 'UTF-8'); ?>" alt="" onerror="this.style.display='none'"><?php endif; ?></div>
@@ -92,11 +92,11 @@ $footBackText = $idCardTxt('foot_back_text', defined('ID_CARD_DISCLAIMER_AM') ? 
     <div class="id-bar id-bar-label" data-idc="bar_back" data-idc-text="bar_back_text"><?php echo htmlspecialchars($barBackText); ?></div>
     <div class="id-body id-body-back">
         <div class="id-fields">
-            <div class="id-row id-el-phone" data-idc="phone"><span class="id-lbl">ስልክ ቁጥር</span><span class="id-val"><?php echo htmlspecialchars((string)($member['phone_number'] ?? '')); ?></span></div>
-            <div class="id-row id-el-address" data-idc="address"><span class="id-lbl">የመኖሪያ አድራሻ</span><span class="id-val"><?php echo htmlspecialchars((string)($member['address'] ?? '')); ?></span></div>
+            <div class="id-row id-el-phone" data-idc="phone"><span class="id-lbl">ስልክ ቁጥር</span><span class="id-val"><?php echo htmlspecialchars((string)($student['phone_number'] ?? '')); ?></span></div>
+            <div class="id-row id-el-address" data-idc="address"><span class="id-lbl">የመኖሪያ አድራሻ</span><span class="id-val"><?php echo htmlspecialchars((string)($student['address'] ?? '')); ?></span></div>
             <h4 class="id-subhead" data-idc="em_head" data-idc-text="em_head_text"><?php echo htmlspecialchars($emHeadText); ?></h4>
-            <div class="id-row id-el-em-name" data-idc="em_name"><span class="id-lbl">ሙሉ ስም</span><span class="id-val"><?php echo htmlspecialchars((string)$member['emergency_name']); ?></span></div>
-            <div class="id-row id-el-em-phone" data-idc="em_phone"><span class="id-lbl">ስልክ ቁጥር</span><span class="id-val"><?php echo htmlspecialchars((string)$member['emergency_phone']); ?></span></div>
+            <div class="id-row id-el-em-name" data-idc="em_name"><span class="id-lbl">ሙሉ ስም</span><span class="id-val"><?php echo htmlspecialchars((string)$student['emergency_name']); ?></span></div>
+            <div class="id-row id-el-em-phone" data-idc="em_phone"><span class="id-lbl">ስልክ ቁጥር</span><span class="id-val"><?php echo htmlspecialchars((string)$student['emergency_phone']); ?></span></div>
             <div class="id-row id-row-split">
                 <div class="id-el-issue" data-idc="issue"><span class="id-lbl">የተሰጠበት ቀን</span><span class="id-val"><?php echo htmlspecialchars($issueDateEth); ?></span></div>
                 <div class="id-el-expiry" data-idc="expiry"><span class="id-lbl">የሚያበቃበት ቀን</span><span class="id-val"><?php echo htmlspecialchars($expiryDateEth); ?></span></div>
@@ -104,8 +104,8 @@ $footBackText = $idCardTxt('foot_back_text', defined('ID_CARD_DISCLAIMER_AM') ? 
         </div>
         <div class="id-qr-wrap" data-idc="qr">
             <div class="id-qr">
-                <?php if (!empty($member['qr_code_path'])): ?>
-                    <img src="<?php echo htmlspecialchars($member['qr_code_path'], ENT_QUOTES, 'UTF-8'); ?>"
+                <?php if (!empty($student['qr_code_path'])): ?>
+                    <img src="<?php echo htmlspecialchars($student['qr_code_path'], ENT_QUOTES, 'UTF-8'); ?>"
                          crossOrigin="anonymous"
                          alt=""
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">

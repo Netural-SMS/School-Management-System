@@ -47,7 +47,7 @@ final class AttendanceRecordService
      *
      * @param array<int,mixed> $records
      * @param array<int,mixed> $roster
-     * @return array<int,array{member_id:int,status:string,note:string}>
+     * @return array<int,array{student_id:int,status:string,note:string}>
      * @throws AttendanceSheetInvalid|\DomainException
      */
     public static function normalizeCompleteSheet(array $records, array $roster): array
@@ -66,7 +66,7 @@ final class AttendanceRecordService
      *
      * @param array<int,mixed> $records
      * @param array<int,mixed> $roster
-     * @return array<int,array{member_id:int,status:string,note:string}>
+     * @return array<int,array{student_id:int,status:string,note:string}>
      * @throws AttendanceSheetInvalid|\DomainException
      */
     public static function normalizeSheet(array $records, array $roster, bool $requireComplete): array
@@ -87,18 +87,18 @@ final class AttendanceRecordService
                 throw new \DomainException('Every attendance record must be an object.');
             }
 
-            $memberValue = $record['member_id'] ?? null;
+            $memberValue = $record['student_id'] ?? null;
             if (!is_int($memberValue) && !is_string($memberValue)) {
                 throw new \DomainException('Every attendance record must identify a student.');
             }
-            $memberId = filter_var($memberValue, FILTER_VALIDATE_INT, [
+            $studentId = filter_var($memberValue, FILTER_VALIDATE_INT, [
                 'options' => ['min_range' => 1],
             ]);
-            if ($memberId === false) {
+            if ($studentId === false) {
                 throw new \DomainException('Every attendance record must identify a student.');
             }
-            $memberId = (int)$memberId;
-            if (isset($submittedIds[$memberId])) {
+            $studentId = (int)$studentId;
+            if (isset($submittedIds[$studentId])) {
                 throw new \DomainException('The attendance sheet contains a duplicate student.');
             }
 
@@ -123,9 +123,9 @@ final class AttendanceRecordService
                 );
             }
 
-            $submittedIds[$memberId] = true;
+            $submittedIds[$studentId] = true;
             $normalized[] = [
-                'member_id' => $memberId,
+                'student_id' => $studentId,
                 'status' => $status,
                 'note' => $note,
             ];
@@ -136,9 +136,9 @@ final class AttendanceRecordService
             if (!is_array($student)) {
                 continue;
             }
-            $memberId = (int)($student['member_id'] ?? $student['id'] ?? 0);
-            if ($memberId > 0) {
-                $rosterIds[$memberId] = true;
+            $studentId = (int)($student['student_id'] ?? $student['id'] ?? 0);
+            if ($studentId > 0) {
+                $rosterIds[$studentId] = true;
             }
         }
 
@@ -174,12 +174,12 @@ final class AttendanceRecordService
     /**
      * Merge one (possibly partial) class/day sheet — draft semantics. Upserts
      * only the submitted rows on the existing unique key
-     * (member_id, class_id, attendance_date) and NEVER deletes rows the
+     * (student_id, class_id, attendance_date) and NEVER deletes rows the
      * payload did not mention, so a partial autosave draft can never erase
      * previously saved marks. The caller MUST own the database transaction
      * so attendance and its workflow packet can commit together.
      *
-     * @param array<int,array{member_id:int,status:string,note:string}> $records
+     * @param array<int,array{student_id:int,status:string,note:string}> $records
      */
     public static function mergeSheet(
         \mysqli $conn,
@@ -195,7 +195,7 @@ final class AttendanceRecordService
 
         $upsert = $conn->prepare(
             'INSERT INTO attendance
-                (member_id, class_id, academic_year_id, attendance_date, status, notes, recorded_by)
+                (student_id, class_id, academic_year_id, attendance_date, status, notes, recorded_by)
              VALUES (?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
@@ -210,7 +210,7 @@ final class AttendanceRecordService
         $saved = 0;
         try {
             foreach ($records as $record) {
-                $memberId = (int)$record['member_id'];
+                $studentId = (int)$record['student_id'];
                 $status = (string)$record['status'];
                 $note = (string)$record['note'];
                 if (!in_array($status, self::VALID_STATUSES, true)) {
@@ -218,7 +218,7 @@ final class AttendanceRecordService
                 }
                 $upsert->bind_param(
                     'iiisssi',
-                    $memberId,
+                    $studentId,
                     $classId,
                     $academicYearId,
                     $date,
@@ -242,7 +242,7 @@ final class AttendanceRecordService
      * Replace one complete class/day sheet. The caller MUST own the database
      * transaction so attendance and its workflow packet can commit together.
      *
-     * @param array<int,array{member_id:int,status:string,note:string}> $records
+     * @param array<int,array{student_id:int,status:string,note:string}> $records
      */
     public static function replaceSheet(
         \mysqli $conn,
@@ -271,7 +271,7 @@ final class AttendanceRecordService
 
         $insert = $conn->prepare(
             'INSERT INTO attendance
-                (member_id, class_id, academic_year_id, attendance_date, status, notes, recorded_by)
+                (student_id, class_id, academic_year_id, attendance_date, status, notes, recorded_by)
              VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$insert) {
@@ -281,7 +281,7 @@ final class AttendanceRecordService
         $saved = 0;
         try {
             foreach ($records as $record) {
-                $memberId = (int)$record['member_id'];
+                $studentId = (int)$record['student_id'];
                 $status = (string)$record['status'];
                 $note = (string)$record['note'];
                 if (!in_array($status, self::VALID_STATUSES, true)) {
@@ -289,7 +289,7 @@ final class AttendanceRecordService
                 }
                 $insert->bind_param(
                     'iiisssi',
-                    $memberId,
+                    $studentId,
                     $classId,
                     $academicYearId,
                     $date,

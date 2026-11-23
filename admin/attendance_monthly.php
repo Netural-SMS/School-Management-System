@@ -6,7 +6,7 @@
  * One report for Education, Mezmur, HR and Information (department-scoped on
  * the server by admin/api_attendance_monthly.php; HR and Information see both
  * departments, School Admin / Super Admin read-only like everyone else).
- * Shows every member's attendance for one ETHIOPIAN month from the derived
+ * Shows every student's attendance for one ETHIOPIAN month from the derived
  * table attendance_month_rollup (shared risk formula: present + excused +
  * 0.5 × late over eligible sessions; bands 90/75/50; policy threshold).
  * Ethiopian calendar only: every month label / date comes from the API.
@@ -37,7 +37,7 @@ $reqDept = (string)($_GET['department'] ?? '');
 $cfg = [
     'api' => '/admin/api_attendance_monthly.php',
     'warningsUrl' => '/admin/attendance_warnings.php',
-    'memberUrl' => '/admin/info_manage_member.php?id=',
+    'studentUrl' => '/admin/info_manage_student.php?id=',
     'role' => $userRole,
     'departments' => $departments,
     'initial' => [
@@ -45,7 +45,7 @@ $cfg = [
         'ec_year' => (int)($_GET['ec_year'] ?? 0),
         'ec_month' => (int)($_GET['ec_month'] ?? 0),
         'below' => (string)($_GET['below'] ?? '') === '1',
-        'member_id' => (int)($_GET['member_id'] ?? 0),
+        'student_id' => (int)($_GET['student_id'] ?? 0),
     ],
 ];
 $assetVer = '20261022p';

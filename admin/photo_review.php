@@ -3,7 +3,7 @@
  * Photo Review — multi-photographer conflict resolution dashboard.
  *
  * Lists every candidate photo flagged `decision_pending=1` (different
- * operators uploaded photos for the same member). Admin picks Accept
+ * operators uploaded photos for the same student). Admin picks Accept
  * (set as current) or Reject (archive) for each. Self-contained page
  * (no include of header/footer since admin shell doesn't expose those
  * as standalone partials) — maroon/gold on-brand with the v2 redesign.
@@ -120,7 +120,7 @@ body {
   <div class="hero">
     <div>
       <h1><i class="fa-solid fa-camera-retro"></i> Photo Review</h1>
-      <p>Resolve photos where more than one photographer captured a member. Pick the better shot.</p>
+      <p>Resolve photos where more than one photographer captured a student. Pick the better shot.</p>
     </div>
     <div style="display:flex;gap:8px;">
       <a class="btn btn-primary" href="/admin/photo_import.php"><i class="fa-solid fa-file-zipper"></i> Import ZIP</a>
@@ -172,8 +172,8 @@ function render(items) {
         '<div class="thumb-label">Current</div>' +
         '<div class="badge-cur">No photo yet</div>';
     return '<div class="card" data-id="'+it.id+'">' +
-      '<div><h3>'+esc(it.member_name)+' '+esc(it.father_name||'')+'</h3>' +
-        '<div class="meta"><span class="code-badge">'+esc(it.member_code||'—')+'</span>'+(it.field==='guardian_photo'?'Guardian photo':'Student photo')+'</div>' +
+      '<div><h3>'+esc(it.student_name)+' '+esc(it.father_name||'')+'</h3>' +
+        '<div class="meta"><span class="code-badge">'+esc(it.student_code||'—')+'</span>'+(it.field==='guardian_photo'?'Guardian photo':'Student photo')+'</div>' +
         '<div class="sub">New shot: '+esc(it.taken_at||'unknown')+'</div></div>' +
       '<div>'+curThumb+'</div>' +
       '<div>'+newThumb+'</div>' +

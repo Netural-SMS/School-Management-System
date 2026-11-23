@@ -3,12 +3,12 @@
  * Single source of truth for year-scoped class enrollment.
  *
  * Used by HR registration, Excel import, and Education APIs.
- * One member may have only one *active* enrollment per academic year.
+ * One student may have only one *active* enrollment per academic year.
  */
 
 namespace App\Services;
 
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 require_once __DIR__ . '/IdentityCodeService.php';
 require_once __DIR__ . '/DepartmentStatusService.php';
 
@@ -60,33 +60,33 @@ class EnrollmentService
         }
     }
 
-    private static function lockMember(\mysqli $conn, int $memberId): void
+    private static function lockMember(\mysqli $conn, int $studentId): void
     {
-        // A per-member lock serializes new enrollments as well as transfers;
+        // A per-student lock serializes new enrollments as well as transfers;
         // locking only existing enrollments cannot protect a first enrollment.
-        $stmt = $conn->prepare('SELECT id, status FROM members WHERE id=? FOR UPDATE');
-        $stmt->bind_param('i', $memberId); $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc(); $stmt->close();
-        if (!$member || $member['status'] === 'archived') throw new \DomainException('Member not found or archived.');
+        $stmt = $conn->prepare('SELECT id, status FROM students WHERE id=? FOR UPDATE');
+        $stmt->bind_param('i', $studentId); $stmt->execute();
+        $student = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if (!$student || $student['status'] === 'archived') throw new \DomainException('Student not found or archived.');
     }
 
-    public static function enroll(\mysqli $conn, int $memberId, int $classId, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
+    public static function enroll(\mysqli $conn, int $studentId, int $classId, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
     {
-        if ($memberId <= 0 || $classId <= 0) return ['status'=>'error','message'=>'Member and class are required.'];
-        return self::transactionScope($conn, $withinTransaction, static function () use ($conn, $memberId, $classId, $yearId, $enrolledBy): array {
-            self::lockMember($conn, $memberId);
-            return self::enrollInScope($conn, $memberId, $classId, $yearId, $enrolledBy);
+        if ($studentId <= 0 || $classId <= 0) return ['status'=>'error','message'=>'Student and class are required.'];
+        return self::transactionScope($conn, $withinTransaction, static function () use ($conn, $studentId, $classId, $yearId, $enrolledBy): array {
+            self::lockMember($conn, $studentId);
+            return self::enrollInScope($conn, $studentId, $classId, $yearId, $enrolledBy);
         });
     }
 
     public static function transferByEnrollment(\mysqli $conn, int $enrollmentId, int $toClassId, int $yearId, int $enrolledBy, string $reason = '', bool $withinTransaction = false): array
     {
         return self::transactionScope($conn, $withinTransaction, static function () use ($conn, $enrollmentId, $toClassId, $yearId, $enrolledBy, $reason): array {
-            $find = $conn->prepare('SELECT member_id FROM class_enrollments WHERE id=?');
+            $find = $conn->prepare('SELECT student_id FROM class_enrollments WHERE id=?');
             $find->bind_param('i', $enrollmentId); $find->execute();
             $source = $find->get_result()->fetch_assoc(); $find->close();
             if (!$source) return ['status'=>'error','message'=>'Enrollment not found.'];
-            self::lockMember($conn, (int)$source['member_id']);
+            self::lockMember($conn, (int)$source['student_id']);
             return self::transferInScope($conn, $enrollmentId, $toClassId, $yearId, $enrolledBy, $reason);
         });
     }
@@ -218,24 +218,24 @@ class EnrollmentService
     /**
      * Enroll using a dropdown name, class_code, or numeric class id.
      */
-    public static function enrollByLabel(\mysqli $conn, int $memberId, string $label, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
+    public static function enrollByLabel(\mysqli $conn, int $studentId, string $label, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
     {
         $class = self::resolveClass($conn, $label);
         if (!$class) {
             return ['status' => 'error', 'message' => 'Unknown class: ' . $label];
         }
-        return self::enroll($conn, $memberId, (int)$class['id'], $yearId, $enrolledBy, $withinTransaction);
+        return self::enroll($conn, $studentId, (int)$class['id'], $yearId, $enrolledBy, $withinTransaction);
     }
 
     /**
-     * Enroll a member in a class for the active (or given) year.
+     * Enroll a student in a class for the active (or given) year.
      *
      * @return array{status:string,message:string,enrollment_id?:int,skipped?:bool,transferred?:bool}
      */
-    private static function enrollInScope(\mysqli $conn, int $memberId, int $classId, ?int $yearId = null, ?int $enrolledBy = null): array
+    private static function enrollInScope(\mysqli $conn, int $studentId, int $classId, ?int $yearId = null, ?int $enrolledBy = null): array
     {
-        if ($memberId <= 0 || $classId <= 0) {
-            return ['status' => 'error', 'message' => 'Member and class are required.'];
+        if ($studentId <= 0 || $classId <= 0) {
+            return ['status' => 'error', 'message' => 'Student and class are required.'];
         }
 
         $class = self::resolveClass($conn, $classId);
@@ -258,13 +258,13 @@ class EnrollmentService
             $year = self::activeYear($conn);
         }
         if (!$year) {
-            return ['status' => 'error', 'message' => 'No active academic year. Member saved without a class.'];
+            return ['status' => 'error', 'message' => 'No active academic year. Student saved without a class.'];
         }
         $yearId = (int)$year['id'];
         $enrolledBy = $enrolledBy ?: (int)($_SESSION['admin_id'] ?? 0);
         $today = date('Y-m-d');
 
-        $existing = self::activeEnrollment($conn, $memberId, $yearId);
+        $existing = self::activeEnrollment($conn, $studentId, $yearId);
         if ($existing) {
             if ((int)$existing['class_id'] === (int)$class['id']) {
                 return [
@@ -283,14 +283,14 @@ class EnrollmentService
 
         $stmt = $conn->prepare(
             "INSERT INTO class_enrollments
-                (member_id, class_id, academic_year_id, enrolled_at, status, enrolled_by)
+                (student_id, class_id, academic_year_id, enrolled_at, status, enrolled_by)
              VALUES (?, ?, ?, ?, 'active', ?)
              ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), status='active', enrolled_by=VALUES(enrolled_by), enrolled_at=VALUES(enrolled_at)"
         );
         if (!$stmt) {
             return ['status' => 'error', 'message' => 'Could not prepare enrollment.'];
         }
-        $stmt->bind_param('iiisi', $memberId, $class['id'], $yearId, $today, $enrolledBy);
+        $stmt->bind_param('iiisi', $studentId, $class['id'], $yearId, $today, $enrolledBy);
         if (!$stmt->execute()) {
             $error = $stmt->error;
             $stmt->close();
@@ -303,7 +303,7 @@ class EnrollmentService
         $stmt->close();
 
         if (function_exists('autoUpdateMemberClass')) {
-            if (!autoUpdateMemberClass($conn, $memberId, (int)$class['id'], $yearId)) throw new \RuntimeException('Could not update member class.');
+            if (!autoUpdateMemberClass($conn, $studentId, (int)$class['id'], $yearId)) throw new \RuntimeException('Could not update student class.');
         }
 
         return [
@@ -313,13 +313,13 @@ class EnrollmentService
         ];
     }
 
-    public static function enrollByCode(\mysqli $conn, int $memberId, string $classCode, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
+    public static function enrollByCode(\mysqli $conn, int $studentId, string $classCode, ?int $yearId = null, ?int $enrolledBy = null, bool $withinTransaction = false): array
     {
         $class = self::resolveClass($conn, $classCode);
         if (!$class) {
             return ['status' => 'error', 'message' => 'Unknown class code: ' . $classCode];
         }
-        return self::enroll($conn, $memberId, (int)$class['id'], $yearId, $enrolledBy, $withinTransaction);
+        return self::enroll($conn, $studentId, (int)$class['id'], $yearId, $enrolledBy, $withinTransaction);
     }
 
     private static function transferInScope(\mysqli $conn, int $enrollmentId, int $toClassId, int $yearId, int $enrolledBy, string $reason = ''): array
@@ -344,7 +344,7 @@ class EnrollmentService
         if ((int)$enr['academic_year_id'] !== $yearId || $enr['status'] !== 'active') {
             return ['status'=>'error','message'=>'The source enrollment is not active in this academic year.'];
         }
-        $memberId = (int)$enr['member_id'];
+        $studentId = (int)$enr['student_id'];
         $fromClass = (int)$enr['class_id'];
         if ($fromClass === (int)$toClass['id']) {
             return ['status' => 'success', 'message' => 'Already in target class.', 'skipped' => true];
@@ -362,14 +362,14 @@ class EnrollmentService
 
         $ins = $conn->prepare(
             "INSERT INTO class_enrollments
-                (member_id, class_id, academic_year_id, enrolled_at, status, notes, promoted_from, enrolled_by)
+                (student_id, class_id, academic_year_id, enrolled_at, status, notes, promoted_from, enrolled_by)
              VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
              ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), status='active', notes=VALUES(notes), enrolled_by=VALUES(enrolled_by)"
         );
         if (!$ins) {
             throw new \RuntimeException('Could not create transfer enrollment.');
         }
-        $ins->bind_param('iiissii', $memberId, $toClass['id'], $yearId, $today, $note, $fromClass, $enrolledBy);
+        $ins->bind_param('iiissii', $studentId, $toClass['id'], $yearId, $today, $note, $fromClass, $enrolledBy);
         if (!$ins->execute()) {
             $err = $ins->error;
             $ins->close();
@@ -379,7 +379,7 @@ class EnrollmentService
         $ins->close();
 
         if (function_exists('autoUpdateMemberClass')) {
-            if (!autoUpdateMemberClass($conn, $memberId, (int)$toClass['id'], $yearId)) throw new \RuntimeException('Could not update member class.');
+            if (!autoUpdateMemberClass($conn, $studentId, (int)$toClass['id'], $yearId)) throw new \RuntimeException('Could not update student class.');
         }
 
 
@@ -403,26 +403,26 @@ class EnrollmentService
      */
     public static function generateMemberCode(\mysqli $conn, ?string $ageGroup = null): ?string
     {
-        require_once __DIR__ . '/MemberCategory.php';
+        require_once __DIR__ . '/StudentCategory.php';
         require_once __DIR__ . '/IdentityCodeService.php';
-        $letter = MemberCategory::letterFor($ageGroup);
+        $letter = StudentCategory::letterFor($ageGroup);
         if ($letter === null) {
             return null;
         }
         return IdentityCodeService::allocateStudent($conn, $letter);
     }
 
-    private static function activeEnrollment(\mysqli $conn, int $memberId, int $yearId): ?array
+    private static function activeEnrollment(\mysqli $conn, int $studentId, int $yearId): ?array
     {
         $stmt = $conn->prepare(
             "SELECT * FROM class_enrollments
-             WHERE member_id = ? AND academic_year_id = ? AND status = 'active'
+             WHERE student_id = ? AND academic_year_id = ? AND status = 'active'
              ORDER BY id DESC LIMIT 1"
         );
         if (!$stmt) {
             return null;
         }
-        $stmt->bind_param('ii', $memberId, $yearId);
+        $stmt->bind_param('ii', $studentId, $yearId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -497,12 +497,12 @@ class EnrollmentService
     }
 
     /**
-     * Only attendance UI/QR identity fields, no broader member/HR data.
+     * Only attendance UI/QR identity fields, no broader student/HR data.
      * $rosterYearId is server-resolved, NEVER the original attendance write year.
      * Existing enrollment and dated Education eligibility rules are unchanged.
-     * @return list<array{member_id:int,student_name:string,father_name:string,member_code:string}>
+     * @return list<array{student_id:int,student_name:string,father_name:string,student_code:string}>
      */
-    // Silent roster sanitization — never abort whole preparation for one bad name/code; old APKs need non-empty fallback '—' (see Phase 2 evidence: members.member_code DEFAULT NULL, father_name legacy '')
+    // Silent roster sanitization — never abort whole preparation for one bad name/code; old APKs need non-empty fallback '—' (see Phase 2 evidence: students.student_code DEFAULT NULL, father_name legacy '')
     private static function sanitizePrepString(?string $v, int $max = 200): string {
         if ($v === null) return '';
         $v = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $v) ?? '';
@@ -517,23 +517,23 @@ class EnrollmentService
         self::requirePreparationIds($classId, $rosterYearId);
         $exclusion = DepartmentStatusService::exclusionSql($conn, 'edu', 'm.id', $date, true);
         $rows = self::preparationRows($conn,
-            "SELECT m.id AS member_id, m.student_name, m.father_name, m.member_code
-             FROM class_enrollments ce LEFT JOIN members m ON ce.member_id = m.id
+            "SELECT m.id AS student_id, m.student_name, m.father_name, m.student_code
+             FROM class_enrollments ce LEFT JOIN students m ON ce.student_id = m.id
              WHERE ce.class_id = ? AND ce.status = 'active'
                AND (ce.academic_year_id = ? OR ce.academic_year_id IS NULL OR ce.academic_year_id = 0)"
                 . $exclusion . ' ORDER BY m.student_name, m.id',
             'ii', [$classId, $rosterYearId]);
         $seen = [];
         foreach ($rows as &$row) {
-            $id = (int)$row['member_id'];
+            $id = (int)$row['student_id'];
             if ($id <= 0 || $id > 9007199254740991 || isset($seen[$id])) {
                 throw new \RuntimeException('Preparation roster contains an invalid or duplicate identity.');
             }
             $seen[$id] = true;
-            $row = ['member_id' => $id,
+            $row = ['student_id' => $id,
                 'student_name' => self::sanitizePrepString((string)$row['student_name'], 200) ?: '—',
                 'father_name' => self::sanitizePrepString((string)$row['father_name'], 200) ?: '—',
-                'member_code' => self::sanitizePrepString((string)$row['member_code'], 100) ?: '—',];
+                'student_code' => self::sanitizePrepString((string)$row['student_code'], 100) ?: '—',];
         }
         unset($row);
         return $rows;
@@ -543,7 +543,7 @@ class EnrollmentService
      * Normalized strict multi-date roster, SAME year/eligibility/name ordering
      * as fetchPreparationRoster, without per-date SQL/probe round trips.
      * Caller owns authorization, explicit server scope and coherent snapshot.
-     * @return array{members:array,dates:array}
+     * @return array{students:array,dates:array}
      */
     public static function fetchPreparationRosterDates(\mysqli $conn, int $classId, int $rosterYearId, array $dates): array
     {
@@ -556,45 +556,45 @@ class EnrollmentService
         $parts = []; $params = []; $types = '';
         foreach ($exclusions as $date => $exclusion) {
             $literal = $conn->real_escape_string($date); // Already exact valid Gregorian date.
-            $parts[] = "SELECT '{$literal}' AS on_date, m.id AS member_id
-                FROM class_enrollments ce LEFT JOIN members m ON ce.member_id=m.id
+            $parts[] = "SELECT '{$literal}' AS on_date, m.id AS student_id
+                FROM class_enrollments ce LEFT JOIN students m ON ce.student_id=m.id
                 WHERE ce.class_id=? AND ce.status='active'
                   AND (ce.academic_year_id=? OR ce.academic_year_id IS NULL OR ce.academic_year_id=0)" . $exclusion;
             array_push($params, $classId, $rosterYearId); $types .= 'ii';
         }
         $rows = self::preparationRows($conn,
-            'SELECT eligible.on_date, eligible.member_id FROM (' . implode(' UNION ALL ', $parts) . ') eligible
-             LEFT JOIN members ordered_member ON eligible.member_id=ordered_member.id
-             ORDER BY eligible.on_date, ordered_member.student_name, eligible.member_id', $types, $params);
+            'SELECT eligible.on_date, eligible.student_id FROM (' . implode(' UNION ALL ', $parts) . ') eligible
+             LEFT JOIN students ordered_member ON eligible.student_id=ordered_member.id
+             ORDER BY eligible.on_date, ordered_member.student_name, eligible.student_id', $types, $params);
         $byDate = array_fill_keys($dates, []); $seen = []; $ids = [];
         foreach ($rows as $row) {
-            $date = $row['on_date']; $id = (int)$row['member_id'];
+            $date = $row['on_date']; $id = (int)$row['student_id'];
             if (!is_string($date) || !array_key_exists($date, $byDate)
                 || $id <= 0 || $id > 9007199254740991 || isset($seen[$date][$id])) {
                 throw new \RuntimeException('Preparation roster date/identity coverage is invalid or duplicated.');
             }
             $seen[$date][$id] = true; $ids[$id] = true; $byDate[$date][] = $id;
         }
-        $members = []; $memberSeen = [];
+        $students = []; $memberSeen = [];
         if ($ids !== []) {
             // Only validated positive integer identities, never client SQL.
             $idSql = implode(',', array_keys($ids));
             $identities = self::preparationRows($conn,
-                'SELECT id AS member_id, student_name, father_name, member_code FROM members WHERE id IN (' . $idSql . ') ORDER BY id', '', []);
+                'SELECT id AS student_id, student_name, father_name, student_code FROM students WHERE id IN (' . $idSql . ') ORDER BY id', '', []);
             foreach ($identities as $row) {
-                $id = (int)$row['member_id'];
+                $id = (int)$row['student_id'];
                 if (!isset($ids[$id]) || isset($memberSeen[$id])) {
-                    throw new \RuntimeException('Preparation member identities are incomplete or duplicated.');
+                    throw new \RuntimeException('Preparation student identities are incomplete or duplicated.');
                 }
                 $memberSeen[$id] = true;
-                $members[] = ['member_id'=>$id, 'student_name'=>self::sanitizePrepString((string)$row['student_name'], 200) ?: '—',
-                    'father_name'=>self::sanitizePrepString((string)$row['father_name'], 200) ?: '—', 'member_code'=>self::sanitizePrepString((string)$row['member_code'], 100) ?: '—',];
+                $students[] = ['student_id'=>$id, 'student_name'=>self::sanitizePrepString((string)$row['student_name'], 200) ?: '—',
+                    'father_name'=>self::sanitizePrepString((string)$row['father_name'], 200) ?: '—', 'student_code'=>self::sanitizePrepString((string)$row['student_code'], 100) ?: '—',];
             }
-            if (count($memberSeen) !== count($ids)) throw new \RuntimeException('Preparation member coverage is incomplete.');
+            if (count($memberSeen) !== count($ids)) throw new \RuntimeException('Preparation student coverage is incomplete.');
         }
         $dateRows = [];
-        foreach ($dates as $date) $dateRows[] = ['date'=>$date, 'member_ids'=>$byDate[$date]];
-        return ['members'=>$members, 'dates'=>$dateRows];
+        foreach ($dates as $date) $dateRows[] = ['date'=>$date, 'student_ids'=>$byDate[$date]];
+        return ['students'=>$students, 'dates'=>$dateRows];
     }
 
     private static function requirePreparationIds(int $classId, int $yearId): void
@@ -748,7 +748,7 @@ class EnrollmentService
     /**
      * Active students in a class for a resolved roster year.
      *
-     * @param array{search?:string,gender?:string,member_type?:string,sort?:string,include_null_year?:bool} $opts
+     * @param array{search?:string,gender?:string,student_type?:string,sort?:string,include_null_year?:bool} $opts
      * @return list<array<string,mixed>>
      */
     public static function fetchRoster(\mysqli $conn, int $classId, ?int $yearId, array $opts = []): array
@@ -759,12 +759,12 @@ class EnrollmentService
 
         $search = trim((string)($opts['search'] ?? ''));
         $gender = trim((string)($opts['gender'] ?? ''));
-        $memberType = trim((string)($opts['member_type'] ?? ''));
+        $ = trim((string)($opts['student_type'] ?? ''));
         $sort = trim((string)($opts['sort'] ?? 'name'));
         $includeNull = array_key_exists('include_null_year', $opts)
             ? (bool)$opts['include_null_year']
             : true;
-        // Attendance alerting §11: members inactive in Education (per-department
+        // Attendance alerting §11: students inactive in Education (per-department
         // status, Phase 1) are excluded from rosters/sheets/grades on the sheet
         // date ('on_date', default today). History screens that must still
         // list them pass 'include_dept_inactive' => true. No-op until
@@ -775,13 +775,13 @@ class EnrollmentService
 
         $sql = "SELECT ce.id AS enrollment_id, ce.enrolled_at, ce.status AS enrollment_status,
                        ce.notes AS enrollment_notes, ce.academic_year_id,
-                       m.id AS member_id, m.id, m.student_name, m.father_name, m.grandfather_name,
-                       m.member_code, m.gender, m.age_group, m.date_of_birth, m.age,
-                       m.baptismal_name, m.education_level, m.member_type,
+                       m.id AS student_id, m.id, m.student_name, m.father_name, m.grandfather_name,
+                       m.student_code, m.gender, , m.date_of_birth, m.age,
+                       m.baptismal_name, m.education_level, m,
                        m.is_teacher, m.is_staff, m.is_committee, m.is_volunteer,
-                       m.student_photo_path, m.status, m.current_section
+                       m.student_photo_path, m.status, 
                 FROM class_enrollments ce
-                JOIN members m ON ce.member_id = m.id
+                JOIN students m ON ce.student_id = m.id
                 WHERE ce.class_id = ? AND ce.status = 'active'";
         $params = [$classId];
         $types = 'i';
@@ -799,7 +799,7 @@ class EnrollmentService
         $sql .= $deptExclusion;
 
         if ($search !== '') {
-            $sql .= " AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ? OR m.baptismal_name LIKE ?)";
+            $sql .= " AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ? OR m.baptismal_name LIKE ?)";
             $st = '%' . $search . '%';
             array_push($params, $st, $st, $st, $st);
             $types .= 'ssss';
@@ -809,15 +809,15 @@ class EnrollmentService
             $params[] = $gender;
             $types .= 's';
         }
-        if ($memberType !== '' && in_array($memberType, ['regular', 'special_regular', 'honorary'], true)) {
-            $sql .= " AND m.member_type = ?";
-            $params[] = $memberType;
+        if ($ !== '' && in_array($, ['regular', 'special_regular', 'honorary'], true)) {
+            $sql .= " AND m = ?";
+            $params[] = $;
             $types .= 's';
         }
 
         $order = 'm.student_name';
         if ($sort === 'code') {
-            $order = 'm.member_code';
+            $order = 'm.student_code';
         } elseif ($sort === 'date') {
             $order = 'ce.enrolled_at DESC';
         } elseif ($sort === 'gender') {
@@ -827,12 +827,12 @@ class EnrollmentService
 
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            // Slimmer query if a newer member column is missing on this database.
+            // Slimmer query if a newer student column is missing on this database.
             $sql = "SELECT ce.id AS enrollment_id, ce.enrolled_at, ce.status AS enrollment_status,
-                           ce.academic_year_id, m.id AS member_id, m.id, m.student_name,
-                           m.father_name, m.member_code, m.gender
+                           ce.academic_year_id, m.id AS student_id, m.id, m.student_name,
+                           m.father_name, m.student_code, m.gender
                     FROM class_enrollments ce
-                    JOIN members m ON ce.member_id = m.id
+                    JOIN students m ON ce.student_id = m.id
                     WHERE ce.class_id = ? AND ce.status = 'active'";
             $params = [$classId];
             $types = 'i';
@@ -860,8 +860,8 @@ class EnrollmentService
         $rows = [];
         $r = $stmt->get_result();
         while ($row = $r->fetch_assoc()) {
-            $row['member_id'] = (int)$row['member_id'];
-            $row['id'] = (int)$row['member_id'];
+            $row['student_id'] = (int)$row['student_id'];
+            $row['id'] = (int)$row['student_id'];
             $rows[] = $row;
         }
         $stmt->close();

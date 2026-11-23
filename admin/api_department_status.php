@@ -3,10 +3,10 @@
  * ============================================================
  * Department status API (Attendance alerting — Phase 1)
  * ============================================================
- *   GET  ?action=status&member_id=N            → both department statuses
- *   GET  ?action=history&member_id=N[&department=edu|mezmur]
+ *   GET  ?action=status&student_id=N            → both department statuses
+ *   GET  ?action=history&student_id=N[&department=edu|mezmur]
  *   GET  ?action=summary                       → inactive counts per department
- *   POST action=set {member_id, department, status(active|inactive), reason}
+ *   POST action=set {student_id, department, status(active|inactive), reason}
  *        hr_dept / info_dept ONLY (requirements §2, §7). Reason required.
  *
  * Reads: HR, Information, Education, Mezmur, School Admin, Super Admin.
@@ -93,28 +93,28 @@ foreach (DepartmentStatusService::DEPARTMENTS as $d) {
 
 switch ($action) {
     case 'status': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
         $ok([
             'available' => $available,
             'can_change' => $available && in_array($role, DS_WRITE_ROLES, true),
-            'member_id' => $memberId,
+            'student_id' => $studentId,
             'departments' => $departments,
-            'statuses' => DepartmentStatusService::statuses($conn, $memberId),
+            'statuses' => DepartmentStatusService::statuses($conn, $studentId),
         ]);
     }
     case 'history': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
         $dept = (string)($_GET['department'] ?? '');
         $ok([
             'available' => $available,
-            'member_id' => $memberId,
-            'history' => DepartmentStatusService::history($conn, $memberId, $dept !== '' ? $dept : null, 200),
+            'student_id' => $studentId,
+            'history' => DepartmentStatusService::history($conn, $studentId, $dept !== '' ? $dept : null, 200),
         ]);
     }
     case 'summary': {
@@ -129,12 +129,12 @@ switch ($action) {
             $ok(['available' => false, 'changed' => false,
                  'message' => 'Department status is not available yet (feature disabled or sql/071 not applied).']);
         }
-        $memberId = (int)($input['member_id'] ?? 0);
+        $studentId = (int)($input['student_id'] ?? 0);
         $dept = is_string($input['department'] ?? null) ? trim($input['department']) : '';
         $status = is_string($input['status'] ?? null) ? strtolower(trim($input['status'])) : '';
         $reason = is_string($input['reason'] ?? null) ? trim($input['reason']) : '';
-        if ($memberId <= 0) {
-            $fail(400, 'member_id is required.');
+        if ($studentId <= 0) {
+            $fail(400, 'student_id is required.');
         }
         if (!DepartmentStatusService::isDepartment($dept)) {
             $fail(400, 'department must be edu or mezmur.');
@@ -152,7 +152,7 @@ switch ($action) {
                 'admin',
                 $_SERVER
             );
-            $result = DepartmentStatusService::setStatus($conn, $memberId, $dept, $status, $adminId, $reason, 'manual', null, $actor);
+            $result = DepartmentStatusService::setStatus($conn, $studentId, $dept, $status, $adminId, $reason, 'manual', null, $actor);
         } catch (\DomainException $e) {
             $fail(422, $e->getMessage());
         } catch (\Throwable $e) {
@@ -162,7 +162,7 @@ switch ($action) {
         if (!empty($result['changed']) && $status === 'active') {
             // Phase 2: reactivation starts a fresh period — re-evaluate so stale
             // streak data is cleared (flag-gated, never fails the change).
-            \App\Services\AttendanceWarningService::safeEvaluate($conn, $dept, $memberId, ['actor' => $adminId]);
+            \App\Services\AttendanceWarningService::safeEvaluate($conn, $dept, $studentId, ['actor' => $adminId]);
         }
         $ok([
             'available' => true,
@@ -170,7 +170,7 @@ switch ($action) {
             'message' => $result['changed']
                 ? DepartmentStatusService::LABELS[$dept] . ' status set to ' . $status . '.'
                 : ($result['message'] ?? 'No change.'),
-            'statuses' => DepartmentStatusService::statuses($conn, $memberId),
+            'statuses' => DepartmentStatusService::statuses($conn, $studentId),
         ]);
     }
 }

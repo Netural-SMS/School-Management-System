@@ -120,14 +120,14 @@ switch ($action) {
 
         $attByMember = [];
         $attStmt = $conn->prepare(
-            "SELECT id, member_id, status, notes FROM attendance WHERE class_id = ? AND attendance_date = ?"
+            "SELECT id, student_id, status, notes FROM attendance WHERE class_id = ? AND attendance_date = ?"
         );
         if ($attStmt) {
             $attStmt->bind_param('is', $classId, $date);
             $attStmt->execute();
             $ar = $attStmt->get_result();
             while ($row = $ar->fetch_assoc()) {
-                $attByMember[(int)$row['member_id']] = $row;
+                $attByMember[(int)$row['student_id']] = $row;
             }
             $attStmt->close();
         }
@@ -136,7 +136,7 @@ switch ($action) {
         $openWarnings = [];
         try {
             $openWarnings = \App\Services\AttendanceWarningService::openByMembers(
-                $conn, 'edu', array_map(static fn($r) => (int)($r['member_id'] ?? $r['id'] ?? 0), $roster)
+                $conn, 'edu', array_map(static fn($r) => (int)($r['student_id'] ?? $r['id'] ?? 0), $roster)
             );
         } catch (\Throwable $e) {
             $openWarnings = [];
@@ -144,14 +144,14 @@ switch ($action) {
 
         $students = [];
         foreach ($roster as $row) {
-            $mid = (int)($row['member_id'] ?? $row['id'] ?? 0);
+            $mid = (int)($row['student_id'] ?? $row['id'] ?? 0);
             if ($mid <= 0) continue;
             $att = $attByMember[$mid] ?? null;
             $students[] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'student_name' => $row['student_name'] ?? '',
                 'father_name' => $row['father_name'] ?? '',
-                'member_code' => $row['member_code'] ?? '',
+                'student_code' => $row['student_code'] ?? '',
                 'gender' => $row['gender'] ?? '',
                 'attendance_id' => $att && !empty($att['id']) ? (int)$att['id'] : null,
                 'status' => $att['status'] ?? null,
@@ -276,7 +276,7 @@ switch ($action) {
             \App\Services\AttendanceWarningService::safeEvaluateMany(
                 $conn,
                 'edu',
-                \App\Services\AttendanceWarningService::memberIdsFromRecords($records),
+                \App\Services\AttendanceWarningService::studentIdsFromRecords($records),
                 $date,
                 (int)$userId
             );
@@ -290,32 +290,32 @@ switch ($action) {
         break;
         
     case 'scan_member':
-        $memberCode = trim($_POST['member_code'] ?? '');
+        $memberCode = trim($_POST['student_code'] ?? '');
         $classId = (int)($_POST['class_id'] ?? 0);
         $date = validateDate($_POST['date'] ?? '', date('Y-m-d'));
         
         if (empty($memberCode) || !$classId) {
-            echo json_encode(['status' => 'error', 'message' => 'Member Code and Class ID required.']);
+            echo json_encode(['status' => 'error', 'message' => 'Student Code and Class ID required.']);
             exit;
         }
 
-        // Find the member by code and ensure they are enrolled in this class
+        // Find the student by code and ensure they are enrolled in this class
         $stmt = $conn->prepare("
-            SELECT m.id, m.student_name, m.father_name, m.status as member_status, ce.status as enrollment_status 
-            FROM members m 
-            JOIN class_enrollments ce ON m.id = ce.member_id 
-            WHERE m.member_code = ? AND ce.class_id = ? AND ce.status = 'active'
+            SELECT m.id, m.student_name, m.father_name, m.status as student_status, ce.status as enrollment_status 
+            FROM students m 
+            JOIN class_enrollments ce ON m.id = ce.student_id 
+            WHERE m.student_code = ? AND ce.class_id = ? AND ce.status = 'active'
         ");
         $stmt->bind_param("si", $memberCode, $classId);
         $stmt->execute();
         $memberResult = $stmt->get_result()->fetch_assoc();
         
         if (!$memberResult) {
-            echo json_encode(['status' => 'error', 'message' => "Member code '$memberCode' not found or not enrolled in this class."]);
+            echo json_encode(['status' => 'error', 'message' => "Student code '$memberCode' not found or not enrolled in this class."]);
             exit;
         }
         
-        $memberId = $memberResult['id'];
+        $studentId = $memberResult['id'];
         $memberName = $memberResult['student_name'] . ' ' . $memberResult['father_name'];
         $academicYearId = $currentYear ? $currentYear['id'] : null;
         $refuseFutureDate($date);
@@ -329,7 +329,7 @@ switch ($action) {
         
         // Insert or update attendance using ON DUPLICATE KEY UPDATE
         $stmt = $conn->prepare("
-            INSERT INTO attendance (member_id, class_id, academic_year_id, attendance_date, status, check_in_time, recorded_by)
+            INSERT INTO attendance (student_id, class_id, academic_year_id, attendance_date, status, check_in_time, recorded_by)
             VALUES (?, ?, ?, ?, 'present', ?, ?)
             ON DUPLICATE KEY UPDATE status = 'present', check_in_time = IF(check_in_time IS NULL, VALUES(check_in_time), check_in_time), recorded_by = VALUES(recorded_by)
         ");
@@ -339,18 +339,18 @@ switch ($action) {
             exit;
         }
         
-        $stmt->bind_param("iiissi", $memberId, $classId, $academicYearId, $date, $checkInTime, $userId);
+        $stmt->bind_param("iiissi", $studentId, $classId, $academicYearId, $date, $checkInTime, $userId);
         
         if ($stmt->execute()) {
             updateAttendanceSummary($conn, $classId, $date, $academicYearId, null);
             // Phase 2: a scan marks presence, which may end a streak — re-evaluate
-            // this member (flag-gated, never fails the scan).
-            \App\Services\AttendanceWarningService::safeEvaluateMany($conn, 'edu', [(int)$memberId], $date, (int)$userId);
+            // this student (flag-gated, never fails the scan).
+            \App\Services\AttendanceWarningService::safeEvaluateMany($conn, 'edu', [(int)$studentId], $date, (int)$userId);
             echo json_encode([
                 'status' => 'success', 
                 'message' => "Scan successful!",
-                'member_name' => $memberName,
-                'member_id' => $memberId,
+                'student_name' => $memberName,
+                'student_id' => $studentId,
                 'check_in_time' => $checkInTime
             ]);
         } else {
@@ -372,16 +372,16 @@ switch ($action) {
         
         $stmt = $conn->prepare("
             SELECT 
-                a.member_id,
+                a.student_id,
                 m.student_name, m.father_name,
                 COUNT(*) as total_days,
                 SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present_days,
                 SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent_days,
                 SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late_days
             FROM attendance a
-            JOIN members m ON a.member_id = m.id
+            JOIN students m ON a.student_id = m.id
             WHERE a.class_id = ? AND a.attendance_date BETWEEN ? AND ?
-            GROUP BY a.member_id
+            GROUP BY a.student_id
             ORDER BY m.student_name
         ");
         $stmt->bind_param("iss", $classId, $startDate, $endDate);
@@ -413,7 +413,7 @@ switch ($action) {
         $stmt = $conn->prepare("
             SELECT 
                 attendance_date,
-                COUNT(DISTINCT member_id) as total_recorded,
+                COUNT(DISTINCT student_id) as total_recorded,
                 SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_count,
                 SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
                 SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_count
@@ -482,7 +482,7 @@ switch ($action) {
         $stmt = $conn->prepare("
             SELECT 
                 attendance_date,
-                COUNT(DISTINCT member_id) as total_recorded,
+                COUNT(DISTINCT student_id) as total_recorded,
                 SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_count,
                 SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
                 SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_count
@@ -519,7 +519,7 @@ switch ($action) {
         $stmt = $conn->prepare("
             SELECT 
                 c.id as class_id, c.class_name,
-                COUNT(DISTINCT a.member_id) as total_recorded,
+                COUNT(DISTINCT a.student_id) as total_recorded,
                 SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present_count,
                 SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent_count,
                 SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late_count
@@ -557,13 +557,13 @@ switch ($action) {
 }
 
 /**
- * Update monthly attendance summary for every member appearing on the
+ * Update monthly attendance summary for every student appearing on the
  * saved class sheet.
  *
  * SINGLE-WRITER NOTICE: aggregation and persistence live in
  * App\Services\AttendanceSummaryService — the only writer of
- * attendance_summary. The summary unique key (member_id, academic_year_id,
- * month, year) has NO class column, so each affected member is aggregated
+ * attendance_summary. The summary unique key (student_id, academic_year_id,
+ * month, year) has NO class column, so each affected student is aggregated
  * across ALL of their classes for the month of the recorded date; this
  * keeps a transferred student's month intact and every recomputation
  * idempotent.
@@ -573,9 +573,9 @@ function updateAttendanceSummary($conn, $classId, $date, $academicYearId, $termI
         if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return;
         }
-        // Members whose records changed on this class/date sheet.
+        // Students whose records changed on this class/date sheet.
         $stmt = $conn->prepare(
-            "SELECT DISTINCT member_id FROM attendance WHERE class_id = ? AND attendance_date = ?"
+            "SELECT DISTINCT student_id FROM attendance WHERE class_id = ? AND attendance_date = ?"
         );
         if (!$stmt) return;
         $stmt->bind_param("is", $classId, $date);
@@ -584,14 +584,14 @@ function updateAttendanceSummary($conn, $classId, $date, $academicYearId, $termI
 
         $affected = [];
         while ($row = $result->fetch_assoc()) {
-            $affected[] = (int)$row['member_id'];
+            $affected[] = (int)$row['student_id'];
         }
         $stmt->close();
 
-        foreach ($affected as $memberId) {
+        foreach ($affected as $studentId) {
             \App\Services\AttendanceSummaryService::recordSaved(
                 $conn,
-                $memberId,
+                $studentId,
                 $date,
                 $academicYearId !== null ? (int)$academicYearId : null
             );

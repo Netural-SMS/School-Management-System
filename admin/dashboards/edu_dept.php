@@ -7,7 +7,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../backend/ethiopian_date.php';
 require_once __DIR__ . '/../backend/calendar_system.php';
-require_once __DIR__ . '/../backend/services/MemberCategory.php';
+require_once __DIR__ . '/../backend/services/StudentCategory.php';
 require_once __DIR__ . '/../backend/services/AttendanceWarningService.php';
 require_once __DIR__ . '/../backend/services/AttendanceMonthRollupService.php';
 require_once __DIR__ . '/../backend/services/AssessmentFollowupService.php';
@@ -39,7 +39,7 @@ try {
     error_log('Dashboard attendance warning counts failed: ' . $e->getMessage());
 }
 
-// Practice members are loaded only from Super Admin → Load button.
+// Practice students are loaded only from Super Admin → Load button.
 // Never write on a GET. That used to hold the only PHP worker and
 // make /admin/ time out for everyone.
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_SESSION_ACTIVE) {
@@ -76,7 +76,7 @@ if ($tablesExist) {
     } catch (Exception $e) {}
 }
 
-$totalStudents = 0; $r = $conn->query("SELECT COUNT(*) c FROM members WHERE status='active'");
+$totalStudents = 0; $r = $conn->query("SELECT COUNT(*) c FROM students WHERE status='active'");
 if ($r) $totalStudents = (int)$r->fetch_assoc()['c'];
 $totalTeachers = 0; try { $r = $conn->query("SELECT COUNT(*) c FROM users WHERE role='teacher'");
 if ($r) $totalTeachers = (int)$r->fetch_assoc()['c']; } catch(Exception $e) {}
@@ -94,8 +94,8 @@ $csrfToken = generateCsrfToken();
 <script>const CSRF_TOKEN='<?= $csrfToken ?>';
 /* Attendance alerting Phase 3: only edu_dept may reopen / reject an APPROVED attendance sheet (server re-checks). */
 const CAN_REOPEN_ATTENDANCE=<?= json_encode($userRole === 'edu_dept') ?>;
-/* P71: section/age-group definition injected from App\Services\MemberCategory (single source of truth). secCode('ህጻናት') maps legacy section names onto codes. */
-const EDU_SECTIONS=<?= json_encode(\App\Services\MemberCategory::sections(), JSON_UNESCAPED_UNICODE) ?>;function eduSecLabel(code){const s=EDU_SECTIONS[code];return s?s.am+' · '+s.ages:(code||'—');}function eduSecCode(name){if(!name)return '';if(EDU_SECTIONS[name])return name;for(const c in EDU_SECTIONS){if(EDU_SECTIONS[c].am===name)return c;}return '';}</script>
+/* P71: section/age-group definition injected from App\Services\StudentCategory (single source of truth). secCode('ህጻናት') maps legacy section names onto codes. */
+const EDU_SECTIONS=<?= json_encode(\App\Services\StudentCategory::sections(), JSON_UNESCAPED_UNICODE) ?>;function eduSecLabel(code){const s=EDU_SECTIONS[code];return s?s.am+' · '+s.ages:(code||'—');}function eduSecCode(name){if(!name)return '';if(EDU_SECTIONS[name])return name;for(const c in EDU_SECTIONS){if(EDU_SECTIONS[c].am===name)return c;}return '';}</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="/admin/js/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
@@ -331,7 +331,7 @@ main{padding:0!important;background:#fff!important;color:#1a0a0a!important}
     /* Teachers (7 cols) */
     body.page-edu #teacherBody td:nth-child(2)::before { content: 'Username'; }
     body.page-edu #teacherBody td:nth-child(3)::before { content: 'Email'; }
-    body.page-edu #teacherBody td:nth-child(4)::before { content: 'Member Link'; }
+    body.page-edu #teacherBody td:nth-child(4)::before { content: 'Student Link'; }
     body.page-edu #teacherBody td:nth-child(5)::before { content: 'Assignments'; }
     body.page-edu #teacherBody td:nth-child(6)::before { content: 'Status'; }
     /* Classes (8 cols — P71 merged Section+Age Group) — Order is a corner
@@ -389,7 +389,7 @@ main{padding:0!important;background:#fff!important;color:#1a0a0a!important}
     body.page-edu #rosterArea .dt td:nth-child(7)::before { content: 'Age'; }
     /* Age is data, not an action row: neutralise the generic last-child styling. */
     body.page-edu #rosterArea .dt td:last-child { display: block; margin-top: 0; padding-top: 0; border-top: 0; }
-    /* Unassigned members (7 cols, leading checkbox) — Phone is data, not an
+    /* Unassigned students (7 cols, leading checkbox) — Phone is data, not an
        action row: neutralise the generic last-child styling. */
     body.page-edu #unassignedArea .dt td:nth-child(1) {
         grid-column: auto;
@@ -481,7 +481,7 @@ main{padding:0!important;background:#fff!important;color:#1a0a0a!important}
     body.page-edu .hr-chip { min-height: 38px; }
     /* Section fade on switch. */
     body.page-edu .sec.act { animation: eduSecIn .18s ease; }
-    /* Member-search hit lists fill the card. */
+    /* Student-search hit lists fill the card. */
     body.page-edu .t-hits { max-height: 240px; }
 }
 
@@ -576,7 +576,7 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <div class="sc" style="background:linear-gradient(135deg,#ec4899,#d946ef)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><?= $totalEnrolled ?></div><div style="font-size:.75rem;opacity:.8">Enrolled</div></div><i class="fa-solid fa-user-graduate" style="font-size:1.5rem;opacity:.3"></i></div></div>
 <?php // Attendance alerting Phase 2: Open Attendance Warnings (Education only — server-scoped) ?>
 <a class="sc" id="aw-dashboard-card" href="/admin/attendance_warnings.php?department=edu" style="background:linear-gradient(135deg,#dc2626,#f97316);text-decoration:none;color:inherit" title="Open attendance warnings"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-aw-total><?= $attendanceWarningsAvailable ? (int)$attendanceWarningCounts['edu']['total'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Open Attendance Warnings<?= $attendanceWarningsAvailable && (int)$attendanceWarningCounts['edu']['critical'] > 0 ? ' · ' . (int)$attendanceWarningCounts['edu']['critical'] . ' critical' : '' ?></div></div><i class="fa-solid fa-triangle-exclamation" style="font-size:1.5rem;opacity:.3"></i></div></a>
-<?php // Attendance alerting Phase 5: Assessment follow-ups (make-up queue opened when a member returns to Education) ?>
+<?php // Attendance alerting Phase 5: Assessment follow-ups (make-up queue opened when a student returns to Education) ?>
 <a class="sc" id="af-dashboard-card" href="/admin/assessment_followups.php" style="background:linear-gradient(135deg,#7c3aed,#a855f7);text-decoration:none;color:inherit" title="Assessments missed during an inactive period — decide make-up / exempt"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-af-pending><?= $assessmentFollowupCard['available'] ? (int)$assessmentFollowupCard['pending'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Assessment Follow-ups · pending decision<?= $assessmentFollowupCard['available'] && (int)$assessmentFollowupCard['makeup_required'] > 0 ? ' · ' . (int)$assessmentFollowupCard['makeup_required'] . ' make-up' : '' ?></div></div><i class="fa-solid fa-clipboard-check" style="font-size:1.5rem;opacity:.3"></i></div></a>
 <?php // Attendance alerting Phase 4: Monthly Attendance (current EC month, Education only — server-scoped) ?>
 <a class="sc" id="am-dashboard-card" href="/admin/attendance_monthly.php?department=edu" style="background:linear-gradient(135deg,#0f766e,#14b8a6);text-decoration:none;color:inherit" title="Monthly attendance report (Ethiopian months)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-am-below><?= $attendanceMonthCard['available'] ? (int)$attendanceMonthCard['below'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Monthly Attendance · <?= e($attendanceMonthCard['month_label_am']) ?> · below threshold<?= $attendanceMonthCard['available'] && $attendanceMonthCard['avg_rate'] !== null ? ' · avg ' . $attendanceMonthCard['avg_rate'] . '%' : '' ?></div></div><i class="fa-solid fa-calendar-days" style="font-size:1.5rem;opacity:.3"></i></div></a>
@@ -610,7 +610,7 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <select id="teacherSort" class="inp" style="max-width:160px" onchange="_teacherPager?loadTeachers():renderTeachers()"><option value="name">Sort: Name</option><option value="username">Sort: Username</option><option value="classes">Sort: Most classes</option></select>
 <button class="btn btn-o btn-xs" onclick="exportTeachers()"><i class="fa-solid fa-download"></i> Excel</button>
 </div></div>
-<div class="crd" style="margin-top:.75rem"><div class="tw"><table class="dt"><thead><tr><th>Teacher</th><th>Username</th><th>Email</th><th>Member Link</th><th>Assignments</th><th>Status</th><th class="text-center">Actions</th></tr></thead><tbody id="teacherBody"><tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div><div id="teacherPager" style="padding:0 .75rem"></div></div>
+<div class="crd" style="margin-top:.75rem"><div class="tw"><table class="dt"><thead><tr><th>Teacher</th><th>Username</th><th>Email</th><th>Student Link</th><th>Assignments</th><th>Status</th><th class="text-center">Actions</th></tr></thead><tbody id="teacherBody"><tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div><div id="teacherPager" style="padding:0 .75rem"></div></div>
 </div>
 
 <!-- ═══ CLASSES ═══ -->
@@ -669,7 +669,7 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:1rem">
 <button class="tbn act" id="enrTabClasses" onclick="switchEnrollTab('classes')"><i class="fa-solid fa-school"></i> By Class</button>
 <button class="tbn" id="enrTabRoster" onclick="switchEnrollTab('roster')"><i class="fa-solid fa-table-list"></i> All Students</button>
-<button class="tbn" id="enrTabUnassigned" onclick="switchEnrollTab('unassigned')"><i class="fa-solid fa-user-xmark"></i> Unassigned Members</button>
+<button class="tbn" id="enrTabUnassigned" onclick="switchEnrollTab('unassigned')"><i class="fa-solid fa-user-xmark"></i> Unassigned Students</button>
 
 </div>
 
@@ -698,7 +698,7 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <div><label class="lbl">Class</label><select id="rosterClass" class="inp" onchange="loadRoster(1)"><option value="">All classes</option><option value="unassigned">Unassigned</option><?php foreach ($classes as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['class_name']) ?></option><?php endforeach; ?></select></div>
 <div><label class="lbl">Gender</label><select id="rosterGender" class="inp" onchange="loadRoster(1)"><option value="">All</option><option value="male">Male</option><option value="female">Female</option></select></div>
 <div><label class="lbl">Type</label><select id="rosterType" class="inp" onchange="loadRoster(1)"><option value="">All types</option><option value="regular">Regular</option><option value="special_regular">Special</option><option value="honorary">Honorary</option></select></div>
-<div><label class="lbl">Age</label><select id="rosterAge" class="inp" onchange="loadRoster(1)"><option value="">All</option><?php foreach (\App\Services\MemberCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
+<div><label class="lbl">Age</label><select id="rosterAge" class="inp" onchange="loadRoster(1)"><option value="">All</option><?php foreach (\App\Services\StudentCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
 <div><label class="lbl">Sort</label><select id="rosterSort" class="inp" onchange="loadRoster(1)"><option value="name">Name</option><option value="code">Code</option><option value="class">Class</option></select></div>
 </div>
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end;margin-top:.65rem">
@@ -710,15 +710,15 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <div id="rosterPager" class="crd" style="padding:0 .75rem;margin-top:-1px"></div>
 </div>
 
-<!-- TAB: Unassigned Members -->
+<!-- TAB: Unassigned Students -->
 <div id="enrPanelUnassigned" style="display:none">
 <div class="crd" style="padding:1rem">
 <div id="unassignedFormAlert" class="form-alert" role="alert"></div>
 <div style="display:grid;grid-template-columns:1fr auto auto auto auto auto;gap:.5rem;align-items:end;flex-wrap:wrap">
-<div><label class="lbl">Search Members</label><input autocomplete="off" type="text" id="unassignedSearch" class="inp" placeholder="Search by name or code..." oninput="debounceUnassigned()"></div>
+<div><label class="lbl">Search Students</label><input autocomplete="off" type="text" id="unassignedSearch" class="inp" placeholder="Search by name or code..." oninput="debounceUnassigned()"></div>
 <div><label class="lbl">Gender</label><select id="unassignedGender" class="inp" onchange="loadUnassigned()"><option value="">All</option><option value="male">Male ♂</option><option value="female">Female ♀</option></select></div>
 <div><label class="lbl">Type</label><select id="unassignedMType" class="inp" onchange="loadUnassigned()"><option value="">All Types</option><option value="regular">Regular</option><option value="special_regular">Special</option><option value="honorary">Honorary</option></select></div>
-<div><label class="lbl">Age Group</label><select id="unassignedAge" class="inp" onchange="loadUnassigned()"><option value="">All</option><?php foreach (\App\Services\MemberCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
+<div><label class="lbl">Age Group</label><select id="unassignedAge" class="inp" onchange="loadUnassigned()"><option value="">All</option><?php foreach (\App\Services\StudentCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
 <div><label class="lbl">Enroll To</label><select id="unassignedTargetClass" class="inp"><option value="">— Class —</option><?php foreach ($classes as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['class_name']) ?></option><?php endforeach; ?></select></div>
 <button class="btn btn-s" onclick="bulkEnrollSelected()"><i class="fa-solid fa-users"></i> Enroll Selected</button>
 </div>
@@ -1085,7 +1085,7 @@ Classes with low curriculum recorded percentages indicate pending exam score sub
 </div>
 
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.75rem">
-<input autocomplete="off" type="text" id="pfSearch" class="inp" style="flex:1;min-width:200px" placeholder="Search by student name, father name, or member code…" oninput="applyPerformanceFilter()">
+<input autocomplete="off" type="text" id="pfSearch" class="inp" style="flex:1;min-width:200px" placeholder="Search by student name, father name, or student code…" oninput="applyPerformanceFilter()">
 <button class="btn btn-p" type="button" onclick="applyPerformanceFilter()"><i class="fa-solid fa-filter"></i> Apply Filter</button>
 <button class="btn btn-o" type="button" onclick="resetPerformanceFilter()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
 </div>
@@ -1272,8 +1272,8 @@ renderProfileTabSection('sec-profile', 'sec');
 <p style="font-size:.75rem;color:#64748b;margin:0 0 1rem">Creates their login and class work in one save. They sign in with the username and password.</p>
 <div id="teacherFormAlert" class="form-alert" role="alert"></div>
 <input type="hidden" id="teacherMemberId" value="">
-<div style="margin-bottom:.75rem"><label class="lbl">Link an existing member (optional)</label>
-<input id="teacherMemberQ" class="inp" placeholder="Search member name or code..." autocomplete="off" oninput="searchTeacherMembers(this.value)">
+<div style="margin-bottom:.75rem"><label class="lbl">Link an existing student (optional)</label>
+<input id="teacherMemberQ" class="inp" placeholder="Search student name or code..." autocomplete="off" oninput="searchTeacherMembers(this.value)">
 <div id="teacherMemberHits" class="t-hits" style="display:none"></div>
 <div id="teacherMemberPicked" style="font-size:.72rem;color:#64748b;margin-top:.35rem">Not linked — you can still type a name below.</div>
 </div>
@@ -1335,10 +1335,10 @@ renderProfileTabSection('sec-profile', 'sec');
 <div><label class="lbl">Name (English)</label><input id="classNameEn" class="inp" placeholder="Grade 1"></div>
 <div><label class="lbl">Code *</label><input id="classCode" class="inp" placeholder="grade_1"></div>
 <div><label class="lbl">Level Order</label><input type="number" id="classLevel" class="inp" value="1" min="1"></div>
-<?php /* P71: ONE select — section IS the age group (App\Services\MemberCategory).
+<?php /* P71: ONE select — section IS the age group (App\Services\StudentCategory).
          Value = the stored age_group code; the section name is derived
          server-side in api_education save_class. */ ?>
-<div style="grid-column:1/-1"><label class="lbl">Section / Age Group</label><select id="classAge" class="inp"><option value="">—</option><?php foreach (\App\Services\MemberCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> · <?= e($eduSec['ages']) ?> (<?= e($eduSec['en']) ?>)</option><?php endforeach; ?></select></div>
+<div style="grid-column:1/-1"><label class="lbl">Section / Age Group</label><select id="classAge" class="inp"><option value="">—</option><?php foreach (\App\Services\StudentCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> · <?= e($eduSec['ages']) ?> (<?= e($eduSec['en']) ?>)</option><?php endforeach; ?></select></div>
 </div>
 <div style="margin-top:.75rem"><label class="lbl">Description</label><textarea id="classDesc" class="inp" rows="2"></textarea></div>
 <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem"><button class="btn btn-o" onclick="closeModal('classModal')">Cancel</button><button class="btn btn-p" onclick="saveClass()"><i class="fa-solid fa-save"></i> Save</button></div>
@@ -1544,23 +1544,23 @@ renderProfileTabSection('sec-profile', 'sec');
 <div class="mo" id="bulkEnrollModal"><div class="mc" style="max-width:680px">
 <div style="background:linear-gradient(135deg,#ec4899,#d946ef);color:#fff;padding:1rem 1.25rem;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:center"><h3 style="font-weight:700;font-size:1rem;margin:0"><i class="fa-solid fa-users"></i> Bulk Enroll Students</h3><button onclick="closeModal('bulkEnrollModal')" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem">&times;</button></div>
 <div style="padding:1.25rem">
-<p style="font-size:.75rem;color:#64748b;margin:0 0 .75rem">Pick a class, search the members who are not in a class yet, tick the ones you want, and save once.</p>
+<p style="font-size:.75rem;color:#64748b;margin:0 0 .75rem">Pick a class, search the students who are not in a class yet, tick the ones you want, and save once.</p>
 <div id="bulkFormAlert" class="form-alert" role="alert"></div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
 <div><label class="lbl">Target class *</label>
 <select id="bulkClass" class="inp"><option value="">— Select class —</option><?php foreach ($classes as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['class_name']) ?><?php if (!empty($c['class_name_en'])): ?> (<?= e($c['class_name_en']) ?>)<?php endif; ?></option><?php endforeach; ?></select></div>
-<div><label class="lbl">Search members</label>
-<input type="text" id="bulkSearch" class="inp" placeholder="Name or member code…" autocomplete="off" oninput="debounceBulkSearch()"></div>
+<div><label class="lbl">Search students</label>
+<input type="text" id="bulkSearch" class="inp" placeholder="Name or student code…" autocomplete="off" oninput="debounceBulkSearch()"></div>
 </div>
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end;margin-bottom:.75rem">
 <div style="min-width:140px"><label class="lbl">Filter</label>
-<select id="bulkFilter" class="inp" onchange="loadBulkCandidates()"><option value="">All unassigned</option><option value="male">Male</option><option value="female">Female</option><?php foreach (\App\Services\MemberCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
+<select id="bulkFilter" class="inp" onchange="loadBulkCandidates()"><option value="">All unassigned</option><option value="male">Male</option><option value="female">Female</option><?php foreach (\App\Services\StudentCategory::sections() as $eduCode => $eduSec): ?><option value="<?= $eduCode ?>"><?= e($eduSec['am']) ?> (<?= e($eduSec['ages']) ?>)</option><?php endforeach; ?></select></div>
 </div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
 <label style="font-size:.75rem;color:#64748b"><input type="checkbox" id="bulkSelectAll" onchange="toggleBulkAll()"> Select all on this list</label>
 <span id="bulkCount" style="font-size:.7rem;color:#7c3aed;font-weight:600">0 selected</span>
 </div>
-<div id="bulkCandidateList" style="max-height:280px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:10px;padding:.5rem"><div style="padding:1rem;text-align:center;color:#94a3b8">Open this window to load unassigned members.</div></div>
+<div id="bulkCandidateList" style="max-height:280px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:10px;padding:.5rem"><div style="padding:1rem;text-align:center;color:#94a3b8">Open this window to load unassigned students.</div></div>
 <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
 <button type="button" class="btn btn-o" onclick="closeModal('bulkEnrollModal')">Cancel</button>
 <button type="button" class="btn btn-p" id="bulkEnrollBtn" onclick="executeBulkEnroll()"><i class="fa-solid fa-check-double"></i> Enroll selected</button>
@@ -1832,7 +1832,7 @@ function closeModal(id){document.getElementById(id).classList.remove('show');}
 function showTab(){/* teacher form is one scroll — no tabs */}
 
 // ═══ TEACHERS ═══
-let _teacherSearchTimer=null,_memberSearchTimer=null;
+let _teacherSearchTimer=null,_studentSearchTimer=null;
 function debounceTeacherSearch(){ clearTimeout(_teacherSearchTimer); _teacherSearchTimer=setTimeout(loadTeachers, 300); }
 // Phase 3 paging: teachers page on the server (was cut at 100). Search,
 // status and sort are applied by the server so every page is correct.
@@ -1878,7 +1878,7 @@ function renderTeachers(){
     if(!_teacherPager){ // paged lists are already filtered + sorted by the server
     if(status==='inactive') list=list.filter(t=>t.is_active!=1);
     else if(status==='active') list=list.filter(t=>t.is_active==1);
-    if(q) list=list.filter(t=>[t.full_name,t.username,t.email,t.member_code].filter(Boolean).join(' ').toLowerCase().includes(q));
+    if(q) list=list.filter(t=>[t.full_name,t.username,t.email,t.student_code].filter(Boolean).join(' ').toLowerCase().includes(q));
     list.sort((a,b)=>{
         if(sort==='username') return String(a.username||'').localeCompare(String(b.username||''));
         if(sort==='classes') return (parseInt(b.assigned_classes,10)||0)-(parseInt(a.assigned_classes,10)||0);
@@ -1888,7 +1888,7 @@ function renderTeachers(){
     document.getElementById('teacherBody').innerHTML=list.length?list.map(t=>`<tr style="${t.is_active==0?'opacity:.5':''}">
         <td><div style="display:flex;align-items:center;gap:.5rem"><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.7rem">${esc((t.full_name||'?')[0].toUpperCase())}</div><div><div style="font-weight:600;font-size:.8rem">${esc(t.full_name)}</div></div></div></td>
         <td style="font-size:.8rem">${esc(t.username)}</td><td style="font-size:.8rem">${esc(t.email||'—')}</td>
-        <td>${t.member_code?`<span class="ch ch-i">${esc(t.member_code)}</span>`:'—'}</td>
+        <td>${t.student_code?`<span class="ch ch-i">${esc(t.student_code)}</span>`:'—'}</td>
         <td><span class="ch ch-p" style="cursor:pointer" onclick="viewTeacher(${t.id})" title="Click to view assignments">${t.assigned_classes||0} class${(t.assigned_classes||0)!=1?'es':''}, ${t.assigned_subjects||0} subj</span></td>
         <td><span class="ch ${t.is_active==1?'ch-ok':'ch-d'}">${t.is_active==1?'Active':'Inactive'}</span></td>
         <td style="text-align:center;white-space:nowrap">
@@ -1989,19 +1989,19 @@ function clearTeacherMember(){
     document.getElementById('teacherMemberPicked').textContent='Not linked — you can still type a name below.';
 }
 function searchTeacherMembers(q){
-    clearTimeout(_memberSearchTimer);
+    clearTimeout(_studentSearchTimer);
     const box=document.getElementById('teacherMemberHits');
     if(!q||q.trim().length<1){box.style.display='none';return;}
-    _memberSearchTimer=setTimeout(async()=>{
+    _studentSearchTimer=setTimeout(async()=>{
         try{
             const d=await getAPI('/admin/api_teachers.php?action=search_members_for_teacher&q='+encodeURIComponent(q.trim()));
-            const m=d.members||[];
-            if(!m.length){box.innerHTML='<div class="t-hit" style="cursor:default;color:#94a3b8">No matching members</div>';box.style.display='block';return;}
+            const m=d.students||[];
+            if(!m.length){box.innerHTML='<div class="t-hit" style="cursor:default;color:#94a3b8">No matching students</div>';box.style.display='block';return;}
             box.innerHTML=m.map(x=>{
                 const nm=((x.student_name||'')+' '+(x.father_name||'')).trim();
                 const safeNm=nm.replace(/['"\\]/g,'');
-                const safeCode=String(x.member_code||'').replace(/['"\\]/g,'');
-                return `<div class="t-hit" onclick="pickTeacherMember(${parseInt(x.id,10)},'${esc(safeNm)}','${esc(safeCode)}')"><strong>${esc(x.student_name||'')}</strong> <span style="color:#64748b">${esc(x.father_name||'')}</span> <span class="ch ch-i">${esc(x.member_code||'')}</span></div>`;
+                const safeCode=String(x.student_code||'').replace(/['"\\]/g,'');
+                return `<div class="t-hit" onclick="pickTeacherMember(${parseInt(x.id,10)},'${esc(safeNm)}','${esc(safeCode)}')"><strong>${esc(x.student_name||'')}</strong> <span style="color:#64748b">${esc(x.father_name||'')}</span> <span class="ch ch-i">${esc(x.student_code||'')}</span></div>`;
             }).join('');
             box.style.display='block';
         }catch(e){box.style.display='none';}
@@ -2025,9 +2025,9 @@ function editTeacher(id){
         document.getElementById('teacherFullName').value=t.full_name||'';
         document.getElementById('teacherUsername').value=t.username||'';
         document.getElementById('teacherEmail').value=t.email||'';
-        if(t.member_id){
-            const nm=(t.member_name||t.full_name||'Member');
-            pickTeacherMember(t.member_id,nm,t.member_code||'');
+        if(t.student_id){
+            const nm=(t.student_name||t.full_name||'Student');
+            pickTeacherMember(t.student_id,nm,t.student_code||'');
         }
         const asgns=t.assignments||d.assignments||[];
         asgRows=[];homeroomClassIds=[];
@@ -2063,7 +2063,7 @@ async function saveTeacher(){
     fd.append('full_name',name);
     fd.append('username',user);
     fd.append('email',email);
-    fd.append('member_id',document.getElementById('teacherMemberId').value);
+    fd.append('student_id',document.getElementById('teacherMemberId').value);
     if(pw) fd.append('password',pw);
     fd.append('assignments',JSON.stringify(assignments));
     fd.append('homeroom_class_ids',JSON.stringify(homeroomClassIds));
@@ -2098,7 +2098,7 @@ async function viewTeacher(id){
                 <h3 style="font-size:1.1rem;font-weight:700;color:#1e293b;margin:0 0 .2rem">${esc(t.full_name)}</h3>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
                     <span class="ch ${t.is_active==1?'ch-ok':'ch-d'}">${t.is_active==1?'Active':'Inactive'}</span>
-                    ${t.member_code?`<span class="ch ch-i"><i class="fa-solid fa-link" style="font-size:.5rem"></i> ${esc(t.member_code)}</span>`:''}
+                    ${t.student_code?`<span class="ch ch-i"><i class="fa-solid fa-link" style="font-size:.5rem"></i> ${esc(t.student_code)}</span>`:''}
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem .75rem;font-size:.8rem">
                     <div style="color:#64748b"><i class="fa-solid fa-user" style="width:14px;color:#94a3b8"></i> ${esc(t.username)}</div>
@@ -2138,9 +2138,9 @@ async function deleteTeacher(id,name){const dc=await dcAsk({tier:'medium',title:
 function exportTeachers(){if(!allTeachers.length)return toast('No data','err');const h=['Name','Username','Email','Status','Assignments'];const r=allTeachers.map(t=>[t.full_name,t.username,t.email||'',t.is_active==1?'Active':'Inactive',t.assigned_classes||0]);const ws=XLSX.utils.aoa_to_sheet([h,...r]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Teachers');XLSX.writeFile(wb,'<?= MEMBER_CODE_PREFIX ?>_Teachers.xlsx');}
 
 // ═══ CLASSES ═══
-async function loadClasses(){try{const r=await fetch('/admin/api_education.php?action=get_classes',{credentials:'same-origin'});const txt=await r.text();let d;try{d=JSON.parse(txt);}catch(e){console.error('Classes API parse error:',txt);toast('Error loading classes: invalid response','err');return;}if(d.status==='success'){const cls=d.classes||[];document.getElementById('classBody').innerHTML=cls.length?cls.map(c=>`<tr><td style="font-weight:700">${c.level_order}</td><td class="amharic" style="font-weight:600">${esc(c.class_name)}</td><td>${esc(c.class_name_en||'—')}</td><td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(c.class_code)}</code></td><td><span class="ch ch-p">${esc(eduSecLabel(c.age_group||eduSecCode(c.section)))}</span></td><td><span class="ch ch-i">${c.student_count||0}</span></td><td><span class="ch ${c.is_active==1?'ch-ok':'ch-d'}">${c.is_active==1?'Active':'Inactive'}</span></td><td><button class="ab" style="background:#dbeafe;color:#2563eb" onclick='editClass(${JSON.stringify(c).replace(/&/g,'&amp;').replace(/'/g,'&#39;')})'><i class="fa-solid fa-pen"></i></button> <button class="ab" style="background:${c.is_active==1?'#fef3c7':'#d1fae5'};color:${c.is_active==1?'#92400e':'#065f46'}" onclick="toggleClass(${c.id},${c.is_active},this)" data-name="${esc(c.class_name)}" title="${c.is_active==1?'Deactivate':'Restore'}"><i class="fa-solid fa-${c.is_active==1?'ban':'rotate-left'}"></i></button> <button class="ab" style="background:#fee2e2;color:#dc2626" onclick="deleteClass(${c.id},this)" data-name="${esc(c.class_name)}" title="Delete"><i class="fa-solid fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#94a3b8">No classes. Click Add Class.</td></tr>';}else{toast(d.message||'Error loading classes','err');}}catch(e){console.error('Classes load error:',e);toast('Error loading classes','err');}}
+async function loadClasses(){try{const r=await fetch('/admin/api_education.php?action=get_classes',{credentials:'same-origin'});const txt=await r.text();let d;try{d=JSON.parse(txt);}catch(e){console.error('Classes API parse error:',txt);toast('Error loading classes: invalid response','err');return;}if(d.status==='success'){const cls=d.classes||[];document.getElementById('classBody').innerHTML=cls.length?cls.map(c=>`<tr><td style="font-weight:700">${c.level_order}</td><td class="amharic" style="font-weight:600">${esc(c.class_name)}</td><td>${esc(c.class_name_en||'—')}</td><td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(c.class_code)}</code></td><td><span class="ch ch-p">${esc(eduSecLabel(c||eduSecCode(c.section)))}</span></td><td><span class="ch ch-i">${c.student_count||0}</span></td><td><span class="ch ${c.is_active==1?'ch-ok':'ch-d'}">${c.is_active==1?'Active':'Inactive'}</span></td><td><button class="ab" style="background:#dbeafe;color:#2563eb" onclick='editClass(${JSON.stringify(c).replace(/&/g,'&amp;').replace(/'/g,'&#39;')})'><i class="fa-solid fa-pen"></i></button> <button class="ab" style="background:${c.is_active==1?'#fef3c7':'#d1fae5'};color:${c.is_active==1?'#92400e':'#065f46'}" onclick="toggleClass(${c.id},${c.is_active},this)" data-name="${esc(c.class_name)}" title="${c.is_active==1?'Deactivate':'Restore'}"><i class="fa-solid fa-${c.is_active==1?'ban':'rotate-left'}"></i></button> <button class="ab" style="background:#fee2e2;color:#dc2626" onclick="deleteClass(${c.id},this)" data-name="${esc(c.class_name)}" title="Delete"><i class="fa-solid fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#94a3b8">No classes. Click Add Class.</td></tr>';}else{toast(d.message||'Error loading classes','err');}}catch(e){console.error('Classes load error:',e);toast('Error loading classes','err');}}
 function openClassModal(){document.getElementById('classFormId').value=0;document.getElementById('className').value='';document.getElementById('classNameEn').value='';document.getElementById('classCode').value='';document.getElementById('classLevel').value='1';document.getElementById('classAge').value='';document.getElementById('classDesc').value='';document.getElementById('classModalTitle').innerHTML='<i class="fa-solid fa-school"></i> Add Class';document.getElementById('classModal').classList.add('show');}
-function editClass(c){document.getElementById('classFormId').value=c.id;document.getElementById('className').value=c.class_name||'';document.getElementById('classNameEn').value=c.class_name_en||'';document.getElementById('classCode').value=c.class_code||'';document.getElementById('classLevel').value=c.level_order||1;document.getElementById('classAge').value=c.age_group||eduSecCode(c.section);document.getElementById('classDesc').value=c.description||'';document.getElementById('classModalTitle').innerHTML='<i class="fa-solid fa-pen"></i> Edit Class';document.getElementById('classModal').classList.add('show');}
+function editClass(c){document.getElementById('classFormId').value=c.id;document.getElementById('className').value=c.class_name||'';document.getElementById('classNameEn').value=c.class_name_en||'';document.getElementById('classCode').value=c.class_code||'';document.getElementById('classLevel').value=c.level_order||1;document.getElementById('classAge').value=c||eduSecCode(c.section);document.getElementById('classDesc').value=c.description||'';document.getElementById('classModalTitle').innerHTML='<i class="fa-solid fa-pen"></i> Edit Class';document.getElementById('classModal').classList.add('show');}
 async function saveClass(){const fd=new FormData();fd.append('action','save_class');fd.append('id',document.getElementById('classFormId').value);fd.append('class_name',document.getElementById('className').value);fd.append('class_name_en',document.getElementById('classNameEn').value);fd.append('class_code',document.getElementById('classCode').value);fd.append('level_order',document.getElementById('classLevel').value);fd.append('age_group',document.getElementById('classAge').value);fd.append('description',document.getElementById('classDesc').value);fd.append('is_active','1');try{const d=await postAPI('/admin/api_education.php',fd);if(d.status==='success'){toast('Class saved!');closeModal('classModal');loadClasses();}else toast(d.message,'err');}catch(e){toast('Error','err');}}
 async function deleteClass(id,btn){const name=(btn&&btn.dataset&&btn.dataset.name)||('#'+id);const dc=await dcAsk({tier:'high',title:'Delete class '+name+'?',object:name,summary:'Deleting a class removes its setup. The system first checks what the class still holds.',intent:'I want to delete this class',consequences:()=>getAPI('/admin/api_education.php?action=impact_delete_class&class_id='+id).then(d=>{if(!d||d.status!=='success')throw new Error('x');const c=d.counts||{};if(d.mode==='blocked')return['This class still has '+c.active_enrollments+' enrolled student(s). The system will REFUSE to delete it — move or remove the students first.'];if(d.mode==='deactivate')return['This class has grade history, so it will be DEACTIVATED instead of deleted. All records are kept.',(c.teacher_assignments||0)+' teacher assignment(s) will be switched off.','The class disappears from new enrolments, subject assignment and the timetable class list.'];return['The class is deleted permanently.',(c.subjects||0)+' subject link(s), '+(c.teacher_assignments||0)+' teacher assignment(s) and '+(c.timetable_lessons||0)+' timetable lesson(s) will be deleted.',(c.assessments||0)+' assessment(s) without grades and '+(c.past_enrollments||0)+' old enrolment record(s) will be deleted.'];}),fallbackConsequences:['If students are enrolled, the system refuses.','If the class has grade history, it is deactivated instead of deleted.','Otherwise the class and its subjects, teacher assignments, timetable and assessments are deleted permanently.'],irreversible:true,phrase:'DELETE CLASS',confirmLabel:'Delete class'});if(!dc)return;const fd=new FormData();fd.append('action','delete_class');fd.append('class_id',id);fd.append('confirm_phrase',dc.phrase);try{const d=await postAPI('/admin/api_education.php',fd);toast(d.message,d.status==='success'?'ok':'err');if(d.status==='success')loadClasses();}catch(e){toast('Error','err');}}
 
@@ -2237,8 +2237,8 @@ document.getElementById('subjectForm')?.addEventListener('submit',async function
     }).catch(err=>{toast(err.message||'Could not reach the server.','err');}).finally(()=>{if(btn)btn.disabled=false;});
 });
 
-// ═══ MEMBER TYPE HELPERS ═══
-function mtBadge(type) {
+// ═══ STUDENT TYPE HELPERS ═══
+function {
     if(type==='special_regular') return '<span class="ch" style="background:#fef3c7;color:#92400e;font-size:.5rem;padding:1px 5px">ልዩ Special</span>';
     if(type==='honorary') return '<span class="ch" style="background:#ede9fe;color:#5b21b6;font-size:.5rem;padding:1px 5px">ክብር Honorary</span>';
     return '<span class="ch" style="background:#ecfdf5;color:#065f46;font-size:.5rem;padding:1px 5px">መደበኛ Regular</span>';
@@ -2283,19 +2283,18 @@ function _rosterUrl(page, perPage){
     if(cls==='unassigned') url+='&unassigned=1';
     else if(cls) url+=`&class_id=${encodeURIComponent(cls)}`;
     if(gender) url+=`&gender=${encodeURIComponent(gender)}`;
-    if(type) url+=`&member_type=${encodeURIComponent(type)}`;
-    if(age) url+=`&age_group=${encodeURIComponent(age)}`;
+    if(type) url+=`&age_group=${encodeURIComponent(age)}`;
     return url;
 }
 function _rosterRow(x){
     return `<tr>
                 <td><input type="checkbox" class="roster-cb" value="${x.id}"></td>
                 <td><div style="font-weight:600">${esc(x.student_name||'')} ${x.baptismal_name?'<span style="font-size:.65rem;color:#94a3b8">('+esc(x.baptismal_name)+')</span>':''}</div><div style="font-size:.65rem;color:#64748b">${esc(x.father_name||'')} ${esc(x.grandfather_name||'')}</div></td>
-                <td><span class="ch ch-i">${esc(x.member_code||'—')}</span></td>
+                <td><span class="ch ch-i">${esc(x.student_code||'—')}</span></td>
                 <td class="amharic">${x.class_name?esc(x.class_name)+' <span style="font-size:.6rem;color:#94a3b8">'+esc(x.class_code||'')+'</span>':'<span style="color:#f59e0b">Unassigned</span>'}</td>
-                <td>${mtBadge(x.member_type)}</td>
+                <td>${}</td>
                 <td>${x.gender==='male'?'♂':'♀'}</td>
-                <td>${esc(x.age||x.age_group||'—')}</td>
+                <td>${esc(x.age||x||'—')}</td>
             </tr>`;
 }
 async function _rosterFetch(page, perPage){
@@ -2355,7 +2354,7 @@ async function rosterBulkEnroll(){
     const ids=[]; document.querySelectorAll('.roster-cb:checked').forEach(cb=>ids.push(parseInt(cb.value,10)));
     if(!ids.length){ setFormAlert('rosterFormAlert','Tick at least one student.','err'); toast('Tick at least one student.','err'); return; }
     const dc=await dcAsk({tier:'medium',title:'Enrol '+ids.length+' student(s) into '+(dcSelText('rosterTargetClass')||'the selected class')+'?',object:dcSelText('rosterTargetClass'),summary:'Each selected student gets an active enrolment in this class for the current year.',intent:'I want to enrol these students',consequences:[ids.length+' student(s) will appear in this class roster, attendance sheets and mark lists.','Students already active in another class are handled by the server rules (it reports any that were skipped).'],keeps:['You can remove a student from the class later; history is kept.'],phrase:'ENROLL STUDENTS',confirmLabel:'Enrol '+ids.length+' student(s)'}); if(!dc) return;
-    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('member_ids',JSON.stringify(ids));
+    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('student_ids',JSON.stringify(ids));
     try{
         const d=await postAPI('/admin/api_education.php',fd);
         if(d.status==='success'||d.status==='partial'){
@@ -2395,13 +2394,13 @@ function liveSearchEnroll(q) {
         let url=`/admin/api_education.php?action=search_members&q=${encodeURIComponent(q)}&limit=10`;
         if(cid) url+=`&exclude_class=${cid}`;
         try { const d=await getAPI(url);
-        if(d.status==='success' && d.members.length) {
-            res.innerHTML=d.members.map(m=>`<div style="padding:.5rem .75rem;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:.8rem;display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background=''" onclick="selectEnrollMember(${m.id},'${esc(m.student_name)} ${esc(m.father_name)}','${esc(m.member_code||'')}')">
-                <div><strong>${esc(m.student_name)}</strong> <span style="color:#64748b">${esc(m.father_name)}</span> ${mtBadge(m.member_type)} ${m.is_teacher?'<span class="ch ch-w" style="font-size:.45rem">Teacher</span>':''}</div>
-                <div style="display:flex;gap:.3rem;align-items:center"><span class="ch ch-i" style="font-size:.55rem">${esc(m.member_code||'')}</span><span style="color:${m.gender==='male'?'#2563eb':'#ec4899'};font-size:.7rem">${m.gender==='male'?'♂':'♀'}</span></div>
+        if(d.status==='success' && d.students.length) {
+            res.innerHTML=d.students.map(m=>`<div style="padding:.5rem .75rem;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:.8rem;display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background=''" onclick="selectEnrollMember(${m.id},'${esc(m.student_name)} ${esc(m.father_name)}','${esc(m.student_code||'')}')">
+                <div><strong>${esc(m.student_name)}</strong> <span style="color:#64748b">${esc(m.father_name)}</span> ${} ${m.is_teacher?'<span class="ch ch-w" style="font-size:.45rem">Teacher</span>':''}</div>
+                <div style="display:flex;gap:.3rem;align-items:center"><span class="ch ch-i" style="font-size:.55rem">${esc(m.student_code||'')}</span><span style="color:${m.gender==='male'?'#2563eb':'#ec4899'};font-size:.7rem">${m.gender==='male'?'♂':'♀'}</span></div>
             </div>`).join('');
             res.style.display='block';
-        } else { res.innerHTML='<div style="padding:.75rem;text-align:center;color:#94a3b8;font-size:.8rem">No matching members found</div>'; res.style.display='block'; }
+        } else { res.innerHTML='<div style="padding:.75rem;text-align:center;color:#94a3b8;font-size:.8rem">No matching students found</div>'; res.style.display='block'; }
         } catch(e){ res.style.display='none'; }
     }, 300);
 }
@@ -2415,7 +2414,7 @@ async function enrollFromSearch() {
     const cid=document.getElementById('enrollClass').value;
     if(!cid) return toast('Select a class first','err');
     if(!_selectedEnrollMember) return toast('Search and select a student','err');
-    const fd=new FormData(); fd.append('action','enroll'); fd.append('class_id',cid); fd.append('member_id',_selectedEnrollMember);
+    const fd=new FormData(); fd.append('action','enroll'); fd.append('class_id',cid); fd.append('student_id',_selectedEnrollMember);
     try { const d=await postAPI('/admin/api_education.php',fd);
     toast(d.message, d.status==='success'?'ok':'err');
     if(d.status==='success') { loadEnrolled(); document.getElementById('enrollSearchInput').value=''; _selectedEnrollMember=null; document.getElementById('enrollBtn').disabled=true; loadEnrollOverview(); }
@@ -2430,13 +2429,12 @@ async function loadEnrolled() {
     if(area) area.innerHTML='<div class="crd" style="padding:1.75rem;text-align:center;color:#64748b"><i class="fa-solid fa-spinner fa-spin" style="color:#7c3aed"></i><div style="margin-top:.55rem;font-size:.8rem">Loading students…</div></div>';
     const search=document.getElementById('enrollFilterSearch')?.value||'';
     const gender=document.getElementById('enrollFilterGender')?.value||'';
-    const memberType=document.getElementById('enrollFilterMType')?.value||'';
+    const =document.getElementById('enrollFilterMType')?.value||'';
     const sort=document.getElementById('enrollFilterSort')?.value||'name';
     let url=`/admin/api_education.php?action=get_enrolled_students&class_id=${cid}`;
     if(search) url+=`&search=${encodeURIComponent(search)}`;
     if(gender) url+=`&gender=${gender}`;
-    if(memberType) url+=`&member_type=${memberType}`;
-    if(sort) url+=`&sort=${sort}`;
+    if() url+=`&sort=${sort}`;
     try {
         const d=await getAPI(url);
         if(d.status!=='success'){
@@ -2463,7 +2461,7 @@ async function loadEnrolled() {
                 <div style="display:flex;gap:.4rem;flex-wrap:wrap">
                     <input autocomplete="off" type="text" id="enrollFilterSearch" class="inp" style="max-width:140px;padding:.35rem .6rem;font-size:.75rem" placeholder="Filter..." value="${esc(search)}" oninput="loadEnrolled()">
                     <select id="enrollFilterGender" class="inp" style="max-width:85px;padding:.35rem .5rem;font-size:.75rem" onchange="loadEnrolled()"><option value="">Gender</option><option value="male" ${gender==='male'?'selected':''}>Male</option><option value="female" ${gender==='female'?'selected':''}>Female</option></select>
-                    <select id="enrollFilterMType" class="inp" style="max-width:110px;padding:.35rem .5rem;font-size:.75rem" onchange="loadEnrolled()"><option value="">All Types</option><option value="regular" ${memberType==='regular'?'selected':''}>Regular</option><option value="special_regular" ${memberType==='special_regular'?'selected':''}>Special</option><option value="honorary" ${memberType==='honorary'?'selected':''}>Honorary</option></select>
+                    <select id="enrollFilterMType" class="inp" style="max-width:110px;padding:.35rem .5rem;font-size:.75rem" onchange="loadEnrolled()"><option value="">All Types</option><option value="regular" ${==='regular'?'selected':''}>Regular</option><option value="special_regular" ${==='special_regular'?'selected':''}>Special</option><option value="honorary" ${==='honorary'?'selected':''}>Honorary</option></select>
                     <select id="enrollFilterSort" class="inp" style="max-width:100px;padding:.35rem .5rem;font-size:.75rem" onchange="loadEnrolled()"><option value="name" ${sort==='name'?'selected':''}>Name</option><option value="code" ${sort==='code'?'selected':''}>Code</option><option value="date" ${sort==='date'?'selected':''}>Date</option><option value="gender" ${sort==='gender'?'selected':''}>Gender</option></select>
                     <button class="btn btn-o btn-xs" onclick="exportEnrolled()"><i class="fa-solid fa-download"></i></button>
                 </div>
@@ -2472,13 +2470,13 @@ async function loadEnrolled() {
             ${s.length?`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student Name</th><th>Code</th><th>Type</th><th>Gender</th><th>Age</th><th>Enrolled</th><th style="text-align:center">Actions</th></tr></thead><tbody>${s.map((x,i)=>`<tr>
                 <td>${i+1}</td>
                 <td><div style="font-weight:600">${esc(x.student_name)}${x.baptismal_name?' <span style="font-size:.6rem;color:#94a3b8">('+esc(x.baptismal_name)+')</span>':''}</div><div style="font-size:.65rem;color:#64748b">${esc(x.father_name||'')} ${esc(x.grandfather_name||'')}</div><div style="margin-top:2px">${roleTags(x)}</div></td>
-                <td><span class="ch ch-i">${esc(x.member_code||'')}</span></td>
-                <td>${mtBadge(x.member_type)}</td>
+                <td><span class="ch ch-i">${esc(x.student_code||'')}</span></td>
+                <td>${}</td>
                 <td>${x.gender==='male'?'<span style="color:#2563eb">♂</span>':'<span style="color:#ec4899">♀</span>'}</td>
                 <td style="font-size:.75rem">${x.age||'—'}</td>
                 <td style="font-size:.7rem;color:#64748b">${fD(x.enrolled_at)}</td>
                 <td style="text-align:center;white-space:nowrap">
-                    <button class="ab" style="background:#dbeafe;color:#2563eb" onclick="openTransfer(${x.enrollment_id},'${esc(x.student_name)} ${esc(x.father_name)}','${esc(x.member_code||'')}')" title="Transfer"><i class="fa-solid fa-exchange-alt"></i></button>
+                    <button class="ab" style="background:#dbeafe;color:#2563eb" onclick="openTransfer(${x.enrollment_id},'${esc(x.student_name)} ${esc(x.father_name)}','${esc(x.student_code||'')}')" title="Transfer"><i class="fa-solid fa-exchange-alt"></i></button>
                     <button class="ab" style="background:#fee2e2;color:#dc2626" onclick="unenroll(${x.enrollment_id})" title="Remove"><i class="fa-solid fa-user-minus"></i></button>
                 </td>
             </tr>`).join('')}</tbody></table></div>`:empty}
@@ -2490,7 +2488,7 @@ async function loadEnrolled() {
     }
 }
 
-async function enrollStudent(){const cid=document.getElementById('enrollClass').value,mid=document.getElementById('enrollMember')?.value;if(!cid||!mid)return toast('Select class and student','err');const fd=new FormData();fd.append('action','enroll');fd.append('class_id',cid);fd.append('member_id',mid);try{const d=await postAPI('/admin/api_education.php',fd);toast(d.message,d.status==='success'?'ok':'err');if(d.status==='success'){loadEnrolled();loadEnrollOverview();}}catch(e){toast('Error','err');}}
+async function enrollStudent(){const cid=document.getElementById('enrollClass').value,mid=document.getElementById('enrollMember')?.value;if(!cid||!mid)return toast('Select class and student','err');const fd=new FormData();fd.append('action','enroll');fd.append('class_id',cid);fd.append('student_id',mid);try{const d=await postAPI('/admin/api_education.php',fd);toast(d.message,d.status==='success'?'ok':'err');if(d.status==='success'){loadEnrolled();loadEnrollOverview();}}catch(e){toast('Error','err');}}
 async function unenroll(eid){const dc=await dcAsk({tier:'medium',title:'Remove this student from the class?',summary:'The student’s enrolment in this class is closed (withdrawn).',intent:'I want to remove this student',consequences:['The student no longer appears in this class roster, attendance sheets or mark lists.'],keeps:['Past attendance and grades stay in history.','You can enrol the student again later.'],phrase:'REMOVE STUDENT',confirmLabel:'Remove from class'});if(!dc)return;const fd=new FormData();fd.append('action','unenroll_student');fd.append('enrollment_id',eid);try{const d=await postAPI('/admin/api_education.php',fd);toast(d.message,d.status==='success'?'ok':'err');if(d.status==='success'){loadEnrolled();loadEnrollOverview();}}catch(e){toast('Error','err');}}
 
 // --- Transfer ---
@@ -2514,27 +2512,26 @@ async function executeTransfer() {
     } catch(e){ toast('Error','err'); }
 }
 
-// --- Unassigned Members ---
+// --- Unassigned Students ---
 function debounceUnassigned() { clearTimeout(_unassignedTimer); _unassignedTimer=setTimeout(loadUnassigned, 350); }
 let _unassignedPage=1, _unassignedLimit=50;
 async function loadUnassigned(page=1) {
     const area=document.getElementById('unassignedArea');
     if(!area) return;
     _unassignedPage=Math.max(1,page|0);
-    area.innerHTML='<div class="crd" style="padding:1.5rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading unassigned members...</div>';
+    area.innerHTML='<div class="crd" style="padding:1.5rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading unassigned students...</div>';
     const search=document.getElementById('unassignedSearch').value;
     const gender=document.getElementById('unassignedGender').value;
-    const memberType=document.getElementById('unassignedMType').value;
+    const =document.getElementById('unassignedMType').value;
     const age=document.getElementById('unassignedAge').value;
     const offset=(_unassignedPage-1)*_unassignedLimit;
     let url=`/admin/api_education.php?action=get_unassigned_members&offset=${offset}&limit=${_unassignedLimit}`;
     if(search) url+=`&search=${encodeURIComponent(search)}`;
     if(gender) url+=`&gender=${gender}`;
-    if(memberType) url+=`&member_type=${memberType}`;
-    if(age) url+=`&age_group=${age}`;
+    if() url+=`&age_group=${age}`;
     try { const d=await getAPI(url);
     if(d.status==='success') {
-        const m=d.members||[], total=d.total||0, pages=Math.max(1,Math.ceil(total/_unassignedLimit));
+        const m=d.students||[], total=d.total||0, pages=Math.max(1,Math.ceil(total/_unassignedLimit));
         if(_unassignedPage>pages) _unassignedPage=pages;
         const from=total?offset+1:0, to=Math.min(offset+_unassignedLimit,total);
         const allOnPage=m.length>0&&m.every(x=>_bulkSelected.has(parseInt(x.id,10)));
@@ -2544,19 +2541,19 @@ async function loadUnassigned(page=1) {
         area.innerHTML=`
         <div class="crd">
             <div style="padding:.75rem 1rem;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center">
-                <span style="font-weight:700;font-size:.9rem"><i class="fa-solid fa-user-xmark" style="color:#ef4444"></i> ${total} unassigned member${total!==1?'s':''}</span>
+                <span style="font-weight:700;font-size:.9rem"><i class="fa-solid fa-user-xmark" style="color:#ef4444"></i> ${total} unassigned student${total!==1?'s':''}</span>
                 <span style="font-size:.7rem;color:#64748b">Not enrolled in any class this year</span>
             </div>
             ${selBar}
             ${m.length?`<div class="tw"><table class="dt"><thead><tr><th><input type="checkbox" ${allOnPage?'checked':''} onchange="toggleBulkPage(this.checked)"></th><th>Name</th><th>Code</th><th>Type</th><th>Gender</th><th>Age Group</th><th>Phone</th></tr></thead><tbody>${m.map(x=>`<tr>
                 <td><input type="checkbox" class="unassigned-cb" value="${x.id}" ${_bulkSelected.has(parseInt(x.id,10))?'checked':''} onchange="unassignedToggle(this)"></td>
                 <td><div style="font-weight:600">${esc(x.student_name)} <span style="color:#64748b;font-weight:400">${esc(x.father_name)}</span></div><div style="margin-top:1px">${roleTags(x)}</div></td>
-                <td><span class="ch ch-i">${esc(x.member_code||'—')}</span></td>
-                <td>${mtBadge(x.member_type)}</td>
+                <td><span class="ch ch-i">${esc(x.student_code||'—')}</span></td>
+                <td>${}</td>
                 <td>${x.gender==='male'?'<span style="color:#2563eb">♂ Male</span>':'<span style="color:#ec4899">♀ Female</span>'}</td>
-                <td style="font-size:.75rem">${esc(eduSecLabel(x.age_group))}</td>
+                <td style="font-size:.75rem">${esc(eduSecLabel(x))}</td>
                 <td style="font-size:.75rem">${esc(x.phone_number||x.phone_primary||'—')}</td>
-            </tr>`).join('')}</tbody></table></div>`:'<div style="padding:2rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-check-circle" style="font-size:2rem;color:#059669;display:block;margin-bottom:.5rem"></i>All members are enrolled!</div>'}
+            </tr>`).join('')}</tbody></table></div>`:'<div style="padding:2rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-check-circle" style="font-size:2rem;color:#059669;display:block;margin-bottom:.5rem"></i>All students are enrolled!</div>'}
             ${unassignedFooter(from,to,total,pages)}
         </div>`;
         updateBulkCount();
@@ -2591,19 +2588,19 @@ function updateBulkCount() { const cnt=_bulkSelected.size; const el=document.que
 async function bulkEnrollSelected() {
     setFormAlert('unassignedFormAlert','');
     const cls=document.getElementById('unassignedTargetClass').value;
-    if(!cls){ setFormAlert('unassignedFormAlert','Pick the class these members should join.','err'); toast('Pick a class first.','err'); return; }
+    if(!cls){ setFormAlert('unassignedFormAlert','Pick the class these students should join.','err'); toast('Pick a class first.','err'); return; }
     const ids=[..._bulkSelected];
-    if(!ids.length){ setFormAlert('unassignedFormAlert','Tick at least one member.','err'); toast('Tick at least one member.','err'); return; }
+    if(!ids.length){ setFormAlert('unassignedFormAlert','Tick at least one student.','err'); toast('Tick at least one student.','err'); return; }
     const dc=await dcAsk({tier:'medium',title:'Enrol '+ids.length+' student(s) into '+(dcSelText('unassignedTargetClass')||'the selected class')+'?',object:dcSelText('unassignedTargetClass'),summary:'Each selected student gets an active enrolment in this class for the current year.',intent:'I want to enrol these students',consequences:[ids.length+' student(s) will appear in this class roster, attendance sheets and mark lists.','Students already active in another class are handled by the server rules (it reports any that were skipped).'],keeps:['You can remove a student from the class later; history is kept.'],phrase:'ENROLL STUDENTS',confirmLabel:'Enrol '+ids.length+' student(s)'}); if(!dc) return;
-    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('member_ids',JSON.stringify(ids));
+    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('student_ids',JSON.stringify(ids));
     try {
         const d=await postAPI('/admin/api_education.php',fd);
         if(d.status==='success'||d.status==='partial'){
             toast(d.message||'Students enrolled.', d.status==='partial'?'w':'ok');
             _bulkSelected.clear(); loadUnassigned(1); loadEnrollOverview();
         }else{
-            setFormAlert('unassignedFormAlert',d.message||'Could not enroll those members.','err');
-            toast(d.message||'Could not enroll those members.','err');
+            setFormAlert('unassignedFormAlert',d.message||'Could not enroll those students.','err');
+            toast(d.message||'Could not enroll those students.','err');
         }
     } catch(e){ const msg=friendlyNetError(e); setFormAlert('unassignedFormAlert',msg,'err'); toast(msg,'err'); }
 }
@@ -2625,7 +2622,7 @@ async function loadBulkCandidates(page=1) {
     const list=document.getElementById('bulkCandidateList');
     if(!list) return;
     _bulkModalPage=Math.max(1,page|0);
-    list.innerHTML='<div style="padding:1rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading unassigned members…</div>';
+    list.innerHTML='<div style="padding:1rem;text-align:center;color:#94a3b8"><i class="fa-solid fa-spinner fa-spin"></i> Loading unassigned students…</div>';
     const search=document.getElementById('bulkSearch')?.value||'';
     const filter=document.getElementById('bulkFilter')?.value||'';
     const limit=50, offset=(_bulkModalPage-1)*limit;
@@ -2636,20 +2633,20 @@ async function loadBulkCandidates(page=1) {
     try {
         const d=await getAPI(url);
         if(d.status!=='success'){
-            list.innerHTML=`<div style="padding:1rem;text-align:center;color:#dc2626">${esc(d.message||'Could not load members.')}</div>`;
+            list.innerHTML=`<div style="padding:1rem;text-align:center;color:#dc2626">${esc(d.message||'Could not load students.')}</div>`;
             return;
         }
-        const m=d.members||[];
+        const m=d.students||[];
         const total=d.total||m.length, pages=Math.max(1,Math.ceil(total/limit));
         if(_bulkModalPage>pages) _bulkModalPage=pages;
         const from=total?offset+1:0, to=Math.min(offset+limit,total);
         const allOn=m.length>0&&m.every(x=>_bulkModalSelected.has(parseInt(x.id,10)));
         list.innerHTML=(m.length?m.map(x=>`<label style="display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;border-bottom:1px solid #f8fafc;cursor:pointer;font-size:.8rem" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background=''">
             <input type="checkbox" class="bulk-cb" value="${x.id}" ${_bulkModalSelected.has(parseInt(x.id,10))?'checked':''} onchange="bulkModalToggle(this)">
-            <div style="flex:1"><strong>${esc(x.student_name)}</strong> ${esc(x.father_name||'')} <span class="ch ch-i" style="font-size:.5rem">${esc(x.member_code||'')}</span> ${mtBadge(x.member_type)} ${roleTags(x)}</div>
+            <div style="flex:1"><strong>${esc(x.student_name)}</strong> ${esc(x.father_name||'')} <span class="ch ch-i" style="font-size:.5rem">${esc(x.student_code||'')}</span> ${} ${roleTags(x)}</div>
             <span style="color:${x.gender==='male'?'#2563eb':'#ec4899'};font-size:.7rem">${x.gender==='male'?'♂':'♀'}</span>
-        </label>`).join(''):'<div style="padding:1rem;text-align:center;color:#94a3b8">No unassigned members match this search.</div>')
-        +(total>0?`<div style="padding:.45rem .5rem;font-size:.68rem;color:#94a3b8">Showing ${from}–${to} of ${total} unassigned member(s).</div>`:'')
+        </label>`).join(''):'<div style="padding:1rem;text-align:center;color:#94a3b8">No unassigned students match this search.</div>')
+        +(total>0?`<div style="padding:.45rem .5rem;font-size:.68rem;color:#94a3b8">Showing ${from}–${to} of ${total} unassigned student(s).</div>`:'')
         +pagerButtons(_bulkModalPage,pages,'loadBulkCandidates');
         const sa=document.getElementById('bulkSelectAll'); if(sa) sa.checked=allOn;
         updateBulkModalCount();
@@ -2666,10 +2663,10 @@ async function executeBulkEnroll() {
     const cls=document.getElementById('bulkClass').value;
     const ids=[..._bulkModalSelected];
     if(!cls){ setFormAlert('bulkFormAlert','Pick the class these students should join.','err'); markField('bulkClass',true); toast('Pick a class first.','err'); return; }
-    if(!ids.length){ setFormAlert('bulkFormAlert','Tick at least one member.','err'); toast('Tick at least one member.','err'); return; }
+    if(!ids.length){ setFormAlert('bulkFormAlert','Tick at least one student.','err'); toast('Tick at least one student.','err'); return; }
     const btn=document.getElementById('bulkEnrollBtn');
     if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Enrolling…';}
-    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('member_ids',JSON.stringify(ids));
+    const fd=new FormData(); fd.append('action','bulk_enroll'); fd.append('class_id',cls); fd.append('student_ids',JSON.stringify(ids));
     try {
         const d=await postAPI('/admin/api_education.php',fd);
         if(d.status==='success'||d.status==='partial'){
@@ -2680,7 +2677,7 @@ async function executeBulkEnroll() {
             loadEnrollOverview();
             if(document.getElementById('enrPanelUnassigned')?.style.display==='block') loadUnassigned(1);
         }else{
-            setFormAlert('bulkFormAlert',d.message||'Could not enroll those members.','err'); toast(d.message||'Could not enroll those members.','err');
+            setFormAlert('bulkFormAlert',d.message||'Could not enroll those students.','err'); toast(d.message||'Could not enroll those students.','err');
             if(d.error_ref) console.warn('Ref', d.error_ref);
         }
     } catch(e){ const msg=friendlyNetError(e); setFormAlert('bulkFormAlert',msg,'err'); toast(msg,'err'); }
@@ -2694,7 +2691,7 @@ async function loadUnassignedTeachers() {
     try { const d=await getAPI('/admin/api_education.php?action=get_unassigned_teachers');
     if(d.status==='success') {
         const t=d.teachers||[];
-        t.forEach(x=>{ sel.innerHTML+=`<option value="${x.id}">${esc(x.full_name)}${x.member_code?' — '+esc(x.member_code):''}</option>`; });
+        t.forEach(x=>{ sel.innerHTML+=`<option value="${x.id}">${esc(x.full_name)}${x.student_code?' — '+esc(x.student_code):''}</option>`; });
         document.getElementById('unassignedTeachersArea').innerHTML=t.length?`<div class="crd" style="padding:.75rem 1rem;border-left:4px solid #f59e0b;background:#fffbeb"><div style="font-size:.8rem;font-weight:600;color:#92400e"><i class="fa-solid fa-exclamation-triangle"></i> ${t.length} teacher(s) not assigned to any class</div><div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem">${t.map(x=>`<span class="at">${esc(x.full_name)}</span>`).join('')}</div></div>`:'<div class="crd" style="padding:.75rem 1rem;border-left:4px solid #059669;background:#f0fdf4"><div style="font-size:.8rem;font-weight:600;color:#065f46"><i class="fa-solid fa-check-circle"></i> All teachers are assigned</div></div>';
     }} catch(e){}
 }
@@ -2761,7 +2758,7 @@ async function loadGradeStudents(){
                             </div>
                         </div>
                     </div>
-                    <div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Score</th><th>Remark</th></tr></thead><tbody>${st.map((s,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(s.student_name)}</td><td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(s.member_code||'—')}</code></td><td><input type="number" class="inp grade-input" oninput="updateLiveGradingProgress()" data-mid="${s.member_id||s.id}" data-rid="${s.record_id||''}" style="width:80px" min="0" max="${mx}" step="0.5" value="${s.score==null?'':s.score}"></td><td><input type="text" class="inp grade-remark" data-mid="${s.member_id||s.id}" style="width:140px" value="${esc(s.remark||s.remarks||'')}"></td></tr>`).join('')}</tbody></table></div>
+                    <div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Score</th><th>Remark</th></tr></thead><tbody>${st.map((s,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(s.student_name)}</td><td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(s.student_code||'—')}</code></td><td><input type="number" class="inp grade-input" oninput="updateLiveGradingProgress()" data-mid="${s.student_id||s.id}" data-rid="${s.record_id||''}" style="width:80px" min="0" max="${mx}" step="0.5" value="${s.score==null?'':s.score}"></td><td><input type="text" class="inp grade-remark" data-mid="${s.student_id||s.id}" style="width:140px" value="${esc(s.remark||s.remarks||'')}"></td></tr>`).join('')}</tbody></table></div>
                     <div style="padding:1rem;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-top:1px solid #e2e8f0">
                         <span style="font-size:.75rem;color:#64748b"><i class="fa-solid fa-circle-info"></i> Enter scores for each student and click Save All Grades</span>
                         <button class="btn btn-p" onclick="saveAllGrades(${aid})"><i class="fa-solid fa-save"></i> Save All Grades</button>
@@ -2796,7 +2793,7 @@ async function saveAllGrades(aid){
     const grades=[];
     document.querySelectorAll('.grade-input').forEach(inp=>{
         const mid=inp.dataset.mid,score=inp.value,remark=document.querySelector(`.grade-remark[data-mid="${mid}"]`)?.value||'';
-        if(score!=='')grades.push({member_id:mid,record_id:inp.dataset.rid||null,score:parseFloat(score),remark});
+        if(score!=='')grades.push({student_id:mid,record_id:inp.dataset.rid||null,score:parseFloat(score),remark});
     });
     if(!grades.length)return toast('No grades entered','err');
     const fd=new FormData();
@@ -3784,7 +3781,7 @@ function renderReviewRows(){
     const q=(document.getElementById('reviewSearch')?.value||'').toLowerCase().trim();
     const f=document.getElementById('reviewFilter')?.value||'';
     const sort=document.getElementById('reviewSort')?.value||'name';
-    if(q) rows=rows.filter(st=>[st.student_name,st.father_name,st.member_code].filter(Boolean).join(' ').toLowerCase().includes(q));
+    if(q) rows=rows.filter(st=>[st.student_name,st.father_name,st.student_code].filter(Boolean).join(' ').toLowerCase().includes(q));
     if(isAtt && f) rows=rows.filter(st=>(st.status||'')===f);
     if(!isAtt && f==='scored') rows=rows.filter(st=>st.score!=null);
     if(!isAtt && f==='blank') rows=rows.filter(st=>st.score==null);
@@ -3794,7 +3791,7 @@ function renderReviewRows(){
     if(!isAtt && f==='high') rows=rows.filter(st=>st.score!=null && scorePct(st)>=80);
     if(!isAtt && f==='low') rows=rows.filter(st=>st.score!=null && scorePct(st)<50);
     rows.sort((a,b)=>{
-        if(sort==='code') return String(a.member_code||'').localeCompare(String(b.member_code||''));
+        if(sort==='code') return String(a.student_code||'').localeCompare(String(b.student_code||''));
         if(sort==='mark') return String(a.status||'').localeCompare(String(b.status||''));
         if(sort==='score') return (Number(b.score)||-1)-(Number(a.score)||-1);
         return String(a.student_name||'').localeCompare(String(b.student_name||''));
@@ -3802,9 +3799,9 @@ function renderReviewRows(){
     if(!rows.length){ box.innerHTML='<p style="text-align:center;color:#94a3b8">No matching students.</p>'; return; }
     const color={present:'#059669',absent:'#dc2626',late:'#d97706',excused:'#2563eb'};
     if(isAtt){
-        box.innerHTML=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Mark</th><th>Note</th></tr></thead><tbody>${rows.map((st,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(st.student_name||'')} ${esc(st.father_name||'')}</td><td><span class="ch ch-i">${esc(st.member_code||'')}</span></td><td><span style="font-weight:700;color:${color[st.status]||'#64748b'};text-transform:capitalize">${esc(st.status||'—')}</span></td><td style="font-size:.75rem;color:#64748b">${esc(st.notes||'')}</td></tr>`).join('')}</tbody></table></div>`;
+        box.innerHTML=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Mark</th><th>Note</th></tr></thead><tbody>${rows.map((st,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(st.student_name||'')} ${esc(st.father_name||'')}</td><td><span class="ch ch-i">${esc(st.student_code||'')}</span></td><td><span style="font-weight:700;color:${color[st.status]||'#64748b'};text-transform:capitalize">${esc(st.status||'—')}</span></td><td style="font-size:.75rem;color:#64748b">${esc(st.notes||'')}</td></tr>`).join('')}</tbody></table></div>`;
     }else{
-        box.innerHTML=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Score</th><th>Remark</th></tr></thead><tbody>${rows.map((st,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(st.student_name||'')} ${esc(st.father_name||'')}</td><td><span class="ch ch-i">${esc(st.member_code||'')}</span></td><td style="font-weight:700">${st.score!=null?st.score+(st.max_score?' / '+st.max_score:''):(st.score_label?`<span class="rv-dnt" style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:.7rem;font-weight:700;background:${st.score_state==='not_taken'?'#fef3c7;color:#92400e':'#f1f5f9;color:#64748b'}">${esc(st.score_label)}</span>`:'—')}</td><td style="font-size:.75rem;color:#64748b">${esc(st.remarks||'')}</td></tr>`).join('')}</tbody></table></div>`;
+        box.innerHTML=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Student</th><th>Code</th><th>Score</th><th>Remark</th></tr></thead><tbody>${rows.map((st,i)=>`<tr><td>${i+1}</td><td style="font-weight:600">${esc(st.student_name||'')} ${esc(st.father_name||'')}</td><td><span class="ch ch-i">${esc(st.student_code||'')}</span></td><td style="font-weight:700">${st.score!=null?st.score+(st.max_score?' / '+st.max_score:''):(st.score_label?`<span class="rv-dnt" style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:.7rem;font-weight:700;background:${st.score_state==='not_taken'?'#fef3c7;color:#92400e':'#f1f5f9;color:#64748b'}">${esc(st.score_label)}</span>`:'—')}</td><td style="font-size:.75rem;color:#64748b">${esc(st.remarks||'')}</td></tr>`).join('')}</tbody></table></div>`;
     }
 }
 async function quickReview(id,status){
@@ -3938,7 +3935,7 @@ function renderRcTable(){
     const f=document.getElementById('rcFilter')?.value||'';
     const sort=document.getElementById('rcSort')?.value||'rank';
     let list=rcData.slice();
-    if(q) list=list.filter(s=>[s.student_name,s.father_name,s.member_code,s.christian_name].filter(Boolean).join(' ').toLowerCase().includes(q));
+    if(q) list=list.filter(s=>[s.student_name,s.father_name,s.student_code,s.christian_name].filter(Boolean).join(' ').toLowerCase().includes(q));
     if(f==='graded') list=list.filter(s=>s.overall_average!=null||s.avg_percentage!=null);
     if(f==='blank') list=list.filter(s=>s.overall_average==null&&s.avg_percentage==null);
     if(['A','B','C','D','F'].includes(f)) list=list.filter(s=>(s.grade_letter||s.overall_grade)===f);
@@ -3958,7 +3955,7 @@ function renderRcTable(){
         return `<tr>
             <td><span style="display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-weight:700;font-size:.7rem;${s.rank&&s.rank<=3?'background:#F0C000;color:#600000':'background:#f1f5f9;color:#64748b'}">${s.rank||'—'}${s.tied?'=':''}</span></td>
             <td style="font-weight:600;font-size:.82rem">${esc(s.student_name||'')} ${esc(s.father_name||'')}${s.christian_name?`<div style="font-size:.62rem;color:#94a3b8">Christian name: ${esc(s.christian_name)}</div>`:''}</td>
-            <td><span class="ch ch-i" style="font-size:.65rem">${esc(s.member_code||'')}</span></td>
+            <td><span class="ch ch-i" style="font-size:.65rem">${esc(s.student_code||'')}</span></td>
             <td style="font-size:.8rem">${esc(obt)}</td>
             <td style="font-weight:700;font-size:.9rem">${pct!=null?Number(pct).toFixed(1)+'%':'—'}</td>
             <td><span style="display:inline-flex;width:26px;height:26px;border-radius:50%;align-items:center;justify-content:center;font-weight:700;font-size:.65rem;color:#fff;background:${gc[s.grade_letter]||'#94a3b8'}">${s.grade_letter||'—'}</span></td>
@@ -3966,12 +3963,12 @@ function renderRcTable(){
             <td class="no-print"><button class="btn btn-o btn-xs" type="button" onclick="viewStudentReport(${s.id})"><i class="fa-solid fa-file-lines"></i> Report</button></td></tr>`;
     }).join(''):'<tr><td colspan="8" style="text-align:center;padding:2rem;color:#94a3b8">No matching students</td></tr>';
 }
-async function viewStudentReport(memberId){
+async function viewStudentReport(studentId){
     const cid=document.getElementById('rcClass')?.value||0;
     document.getElementById('rcModal').classList.add('show');
     document.getElementById('rcModalBody').innerHTML='<p style="text-align:center;color:#94a3b8;padding:2rem"><i class="fa-solid fa-spinner fa-spin"></i> Opening report card…</p>';
     try{
-        const d=await getAPI(`/admin/api_communication.php?action=get_report_card&member_id=${memberId}&class_id=${cid}${rcQs()}`);
+        const d=await getAPI(`/admin/api_communication.php?action=get_report_card&student_id=${studentId}&class_id=${cid}${rcQs()}`);
         if(d.status!=='success'){
             document.getElementById('rcModalBody').innerHTML=`<p style="text-align:center;color:#ef4444;padding:2rem">${esc(d.message||'Could not open this report card.')}</p>`;
             return;
@@ -4190,7 +4187,7 @@ function renderFilterTable(){
                 <div>${esc(s.student_name || '')} ${esc(s.father_name || '')}</div>
                 ${s.christian_name ? `<div style="font-size:.65rem;color:#94a3b8"><i class="fa-solid fa-cross" style="font-size:.55rem"></i> ${esc(s.christian_name)}</div>` : ''}
             </td>
-            <td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(s.member_code || '—')}</code></td>
+            <td><code style="font-size:.7rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">${esc(s.student_code || '—')}</code></td>
             <td><span class="amharic" style="font-weight:600;font-size:.78rem">${esc(s.class_name || '—')}</span></td>
             <td><span class="chip ${isMale ? 'chip-info' : 'chip-success'}" style="font-size:.65rem">${isMale ? 'M' : 'F'}</span></td>
             <td>
@@ -4227,7 +4224,7 @@ function renderFilterTable(){
     }).join('');
 }
 
-function viewStudentReportFromFilter(memberId, classId){
+function viewStudentReportFromFilter(studentId, classId){
     const y = document.getElementById('pfYear')?.value || '';
     const t = document.getElementById('pfTerm')?.value || '';
     let q = '';
@@ -4236,7 +4233,7 @@ function viewStudentReportFromFilter(memberId, classId){
 
     document.getElementById('rcModal').classList.add('show');
     document.getElementById('rcModalBody').innerHTML = '<p style="text-align:center;color:#94a3b8;padding:2rem"><i class="fa-solid fa-spinner fa-spin"></i> Opening report card…</p>';
-    getAPI(`/admin/api_communication.php?action=get_report_card&member_id=${memberId}&class_id=${classId}${q}`)
+    getAPI(`/admin/api_communication.php?action=get_report_card&student_id=${studentId}&class_id=${classId}${q}`)
         .then(d => {
             if(d.status !== 'success'){
                 document.getElementById('rcModalBody').innerHTML = `<p style="text-align:center;color:#ef4444;padding:2rem">${esc(d.message || 'Could not open report card.')}</p>`;
@@ -4258,7 +4255,7 @@ function exportFilteredPerformance(){
     try{
         if(typeof XLSX !== 'undefined' && XLSX.utils){
             const headers = [
-                '#', 'Student Name', 'Father Name', 'Baptismal Name', 'Member Code',
+                '#', 'Student Name', 'Father Name', 'Baptismal Name', 'Student Code',
                 'Class', 'Gender', 'Grade Average (%)', 'Letter Grade',
                 'Total Obtained (pts)', 'Total Max (pts)', 'Assessments Count',
                 'Attendance Rate (%)', 'Attendance Breakdown', 'Present Days', 'Absent Days', 'Late Days', 'Excused Days', 'Total Sessions'
@@ -4279,7 +4276,7 @@ function exportFilteredPerformance(){
                     s.student_name || '',
                     s.father_name || '',
                     s.christian_name || '',
-                    s.member_code || '',
+                    s.student_code || '',
                     s.class_name || '',
                     (s.gender || '').toUpperCase(),
                     s.overall_average != null ? Number(s.overall_average).toFixed(1) : '',
@@ -4382,8 +4379,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{
         if(typeof AdvancedAnalyticsCenter !== 'undefined'){
             window.FKSSAnalyticsInstance = new AdvancedAnalyticsCenter({
-                onStudentClick: function(memberId, classId){
-                    viewStudentReportFromFilter(memberId, classId);
+                onStudentClick: function(studentId, classId){
+                    viewStudentReportFromFilter(studentId, classId);
                 },
                 onTierClick: function(tierKey){
                     switch(tierKey){

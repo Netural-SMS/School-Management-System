@@ -2,7 +2,7 @@
 /**
  * Single source of truth for resolving school branding assets (logo, seal,
  * signatures, ID card background) across the public website, admin portal,
- * member verification page, report cards, and ID card generator.
+ * student verification page, report cards, and ID card generator.
  *
  * Read-only, fail-soft, and request-cached: never executes DDL and degrades
  * cleanly to theme/packaged defaults if the database is unavailable.

@@ -3,21 +3,21 @@
  * Format-v2 renumbering engine — shared by the CLI tool and the web
  * runner so the logic can never drift.
  *
- * Every active member is (re)issued a v2 code:
+ * Every active student is (re)issued a v2 code:
  *   * prefix recomputed from CURRENT positions (v2 composition) or the
- *     category letter when the member holds none,
+ *     category letter when the student holds none,
  *   * tail is a fresh random unique 5-digit number,
- *   * old code preserved in legacy_member_code + member_code_migrations,
+ *   * old code preserved in legacy_student_code + student_code_migrations,
  *   * QR image regenerated.
  *
- * Members whose stored code already matches their computed v2 prefix
+ * Students whose stored code already matches their computed v2 prefix
  * are skipped, which makes the runner idempotent and cheap to re-run.
  * Keyset pagination (id > last) keeps memory flat at any roster size.
  */
 namespace App\Services;
 
 require_once __DIR__ . '/IdentityCodeService.php';
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 
 final class IdentityMigrationService
 {
@@ -38,8 +38,8 @@ final class IdentityMigrationService
 
         while (true) {
             $stmt = $conn->prepare(
-                "SELECT id, member_code, age_group, student_name, father_name
-                 FROM members
+                "SELECT id, student_code,  student_name, father_name
+                 FROM students
                  WHERE status != 'archived' AND id > ?
                  ORDER BY id ASC LIMIT " . self::PAGE
             );
@@ -56,18 +56,18 @@ final class IdentityMigrationService
             }
 
             while ($row = $result->fetch_assoc()) {
-                $memberId = (int)$row['id'];
-                $lastId = $memberId;
-                $old = (string)($row['member_code'] ?? '');
+                $studentId = (int)$row['id'];
+                $lastId = $studentId;
+                $old = (string)($row['student_code'] ?? '');
                 $name = $row['student_name'] . ' ' . $row['father_name'];
 
-                $segments = IdentityCodeService::resolveStaffSegments($conn, $memberId);
+                $segments = IdentityCodeService::resolveStaffSegments($conn, $studentId);
                 if ($segments !== null && $segments !== []) {
                     $prefix = $segments[0];
                     $letter = null;
                 } else {
                     $prefix = null;
-                    $letter = MemberCategory::letterFor((string)$row['age_group']);
+                    $letter = StudentCategory::letterFor((string));
                 }
 
                 if ($prefix === null && $letter === null) {
@@ -100,32 +100,32 @@ final class IdentityMigrationService
                         : IdentityCodeService::allocateStaff($conn, [$prefix]);
 
                     $update = $conn->prepare(
-                        'UPDATE members SET legacy_member_code = ?, member_code = ? WHERE id = ?'
+                        'UPDATE students SET legacy_student_code = ?, student_code = ? WHERE id = ?'
                     );
-                    $update->bind_param('ssi', $old, $newCode, $memberId);
+                    $update->bind_param('ssi', $old, $newCode, $studentId);
                     if (!$update->execute()) {
-                        $errors[] = "Update failed for member {$memberId}";
+                        $errors[] = "Update failed for student {$studentId}";
                         $update->close();
                         continue;
                     }
                     $update->close();
 
                     $logStmt = $conn->prepare(
-                        'INSERT INTO member_code_migrations (member_id, old_code, new_code, reason)
+                        'INSERT INTO student_code_migrations (student_id, old_code, new_code, reason)
                          VALUES (?, ?, ?, ?)
                          ON DUPLICATE KEY UPDATE old_code = VALUES(old_code), new_code = VALUES(new_code), reason = VALUES(reason)'
                     );
                     $reason = 'format_v2_renumber';
-                    $logStmt->bind_param('isss', $memberId, $old, $newCode, $reason);
+                    $logStmt->bind_param('isss', $studentId, $old, $newCode, $reason);
                     $logStmt->execute();
                     $logStmt->close();
 
                     $renumbered++;
-                    if (IdentityCodeService::regenerateQr($conn, $memberId)) {
+                    if (IdentityCodeService::regenerateQr($conn, $studentId)) {
                         $qr++;
                     }
                 } catch (\Throwable $e) {
-                    $errors[] = "Member {$memberId}: " . $e->getMessage();
+                    $errors[] = "Student {$studentId}: " . $e->getMessage();
                 }
             }
             $result->free();

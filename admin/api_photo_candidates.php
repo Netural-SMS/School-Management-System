@@ -7,14 +7,14 @@
  *                                Sets the candidate as current (accept) or
  *                                archives it (reject). Both actions are
  *                                transactional and update the denormalized
- *                                members.student_photo_path.
+ *                                students.student_photo_path.
  *
  * Access: super_admin, school_admin, info_dept, hr_dept, photo_importer.
  */
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/access_control.php';
-require_once __DIR__ . '/backend/services/MemberFileService.php';
+require_once __DIR__ . '/backend/services/StudentFileService.php';
 
 if (session_status() === PHP_SESSION_NONE) @session_start();
 // access_control.php auto-runs auth + role gating on include.
@@ -80,7 +80,7 @@ exit;
 // ------------------------------------------------------------------
 function pendingCandidates(mysqli $conn): array {
     $sql = "SELECT c.id,
-                   c.member_id,
+                   c.student_id,
                    c.field,
                    c.stored_path,
                    c.mime,
@@ -93,17 +93,17 @@ function pendingCandidates(mysqli $conn): array {
                    u.full_name AS operator_name,
                    c.device_id,
                    m.student_name,
-                   m.member_code,
+                   m.student_code,
                    m.father_name,
                    cur.id AS current_id,
                    cur.stored_path AS current_path,
                    cur.taken_at AS current_taken_at,
                    cur.operator_admin_id AS current_operator_id
-              FROM member_photo_candidates c
-              JOIN members m ON m.id = c.member_id
+              FROM student_photo_candidates c
+              JOIN students m ON m.id = c.student_id
               LEFT JOIN users u ON u.id = c.operator_admin_id
-              LEFT JOIN member_photo_candidates cur
-                ON cur.member_id = c.member_id AND cur.field = c.field
+              LEFT JOIN student_photo_candidates cur
+                ON cur.student_id = c.student_id AND cur.field = c.field
                AND cur.is_current = 1 AND cur.archived = 0
              WHERE c.decision_pending = 1 AND c.archived = 0
              ORDER BY c.created_at DESC
@@ -113,9 +113,9 @@ function pendingCandidates(mysqli $conn): array {
     while ($res && ($row = $res->fetch_assoc())) {
         $items[] = [
             'id' => (int)$row['id'],
-            'member_id' => (int)$row['member_id'],
-            'member_name' => $row['student_name'] ?? '',
-            'member_code' => $row['member_code'] ?? '',
+            'student_id' => (int)$row['student_id'],
+            'student_name' => $row['student_name'] ?? '',
+            'student_code' => $row['student_code'] ?? '',
             'father_name' => $row['father_name'] ?? '',
             'field' => $row['field'],
             'path' => '/' . ltrim((string)$row['stored_path'], '/'),
@@ -138,7 +138,7 @@ function decideCandidate(mysqli $conn, int $candidateId, string $decision, int $
     $conn->begin_transaction();
     try {
         $sel = $conn->prepare(
-            "SELECT id, member_id, field, stored_path FROM member_photo_candidates
+            "SELECT id, student_id, field, stored_path FROM student_photo_candidates
               WHERE id = ? AND archived = 0 LIMIT 1"
         );
         $sel->bind_param('i', $candidateId);
@@ -149,21 +149,21 @@ function decideCandidate(mysqli $conn, int $candidateId, string $decision, int $
             $conn->rollback();
             return ['status' => 'error', 'message' => 'Candidate not found.'];
         }
-        $memberId = (int)$cand['member_id'];
+        $studentId = (int)$cand['student_id'];
         $field = (string)$cand['field'];
         $newPath = (string)$cand['stored_path'];
 
         if ($decision === 'accept') {
             // De-throne existing current.
             $conn->query(
-                "UPDATE member_photo_candidates
+                "UPDATE student_photo_candidates
                     SET is_current = 0
-                  WHERE member_id = $memberId AND field = '" .
+                  WHERE student_id = $studentId AND field = '" .
                 $conn->real_escape_string($field) .
                 "' AND is_current = 1 AND id <> $candidateId"
             );
             $u = $conn->prepare(
-                "UPDATE member_photo_candidates
+                "UPDATE student_photo_candidates
                     SET is_current = 1,
                         decision_pending = 0,
                         archived = 0,
@@ -176,15 +176,15 @@ function decideCandidate(mysqli $conn, int $candidateId, string $decision, int $
             $u->close();
 
             $col = $field === 'guardian_photo' ? 'guardian_photo_path' : 'student_photo_path';
-            $u2 = $conn->prepare("UPDATE members SET $col = ? WHERE id = ?");
-            $u2->bind_param('si', $newPath, $memberId);
+            $u2 = $conn->prepare("UPDATE students SET $col = ? WHERE id = ?");
+            $u2->bind_param('si', $newPath, $studentId);
             $u2->execute();
             $u2->close();
         } else {
             // Reject: archive this candidate (keep for audit), do not
             // change current photo.
             $u = $conn->prepare(
-                "UPDATE member_photo_candidates
+                "UPDATE student_photo_candidates
                     SET is_current = 0,
                         decision_pending = 0,
                         archived = 1,

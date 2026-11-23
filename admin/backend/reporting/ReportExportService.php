@@ -130,7 +130,7 @@ final class ReportExportService
      * Streamed XLSX via openspout. Caller must have checked xlsxAvailable().
      * @return int rows written
      */
-    public static function streamXlsx(array $export, string $filename, string $lang = 'en', string $title = 'Members'): int
+    public static function streamXlsx(array $export, string $filename, string $lang = 'en', string $title = 'Students'): int
     {
         self::commonHeaders('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $filename, ReportRegistry::MAX_EXPORT_ROWS);
 

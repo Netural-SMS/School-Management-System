@@ -12,7 +12,7 @@
  *   • READ-ONLY — reports render from InfoAnalyticsService read
  *     model + scoped read queries; nothing is ever written.
  *   • Sources stay separate — comparison tables show one row per
- *     source; member reports list each source's history under its
+ *     source; student reports list each source's history under its
  *     own heading. Identities are never merged.
  *   • Budgeted — the same read budgets as the analytics hub apply
  *     (date window ≤ 366 days, paged group reads).
@@ -21,7 +21,7 @@
  *   general   — KPI band + department comparison (all sources)
  *   sections  — section-based detail (mezmur)
  *   classes   — class-based detail (education)
- *   member    — one member's attendance history per source
+ *   student    — one student's attendance history per source
  *   full      — combined deep-dive (all of the above)
  */
 
@@ -32,13 +32,13 @@ require_once __DIR__ . '/../ethiopian_date.php';
 
 class PdfReportService
 {
-    public const TYPES = ['general', 'sections', 'classes', 'member', 'full'];
+    public const TYPES = ['general', 'sections', 'classes', 'student', 'full'];
 
     public const TYPE_LABELS = [
         'general' => 'General Attendance Report',
         'sections' => 'Section-Based Attendance Report',
         'classes' => 'Class-Based Attendance Report',
-        'member' => 'Member Attendance Report',
+        'student' => 'Student Attendance Report',
         'full' => 'Full Attendance Analysis',
     ];
 
@@ -56,10 +56,10 @@ class PdfReportService
         if (!in_array($type, self::TYPES, true)) {
             return ['ok' => false, 'message' => 'Unknown report type.'];
         }
-        if ($type === 'member') {
-            $memberId = (int)($opts['member_id'] ?? 0);
-            if ($memberId <= 0) {
-                return ['ok' => false, 'message' => 'Member ID is required for member reports.'];
+        if ($type === 'student') {
+            $studentId = (int)($opts['student_id'] ?? 0);
+            if ($studentId <= 0) {
+                return ['ok' => false, 'message' => 'Student ID is required for student reports.'];
             }
         }
 
@@ -80,8 +80,8 @@ class PdfReportService
             case 'classes':
                 self::renderGroupDetail($pdf, $conn, 'edu', $from, $to);
                 break;
-            case 'member':
-                self::renderMember($pdf, $conn, (int)$opts['member_id'], $from, $to);
+            case 'student':
+                self::renderMember($pdf, $conn, (int)$opts['student_id'], $from, $to);
                 break;
             case 'full':
                 self::renderGeneral($pdf, $conn, $from, $to);
@@ -196,30 +196,30 @@ class PdfReportService
         }
     }
 
-    /** One member's history under each source's own heading (never merged). */
-    private static function renderMember(\TCPDF $pdf, \mysqli $conn, int $memberId, ?string $from, ?string $to): void
+    /** One student's history under each source's own heading (never merged). */
+    private static function renderMember(\TCPDF $pdf, \mysqli $conn, int $studentId, ?string $from, ?string $to): void
     {
         $stmt = $conn->prepare(
-            "SELECT id, member_code, student_name, father_name, grandfather_name,
-                    status, current_section
-             FROM members WHERE id = ? LIMIT 1"
+            "SELECT id, student_code, student_name, father_name, grandfather_name,
+                    status
+             FROM students WHERE id = ? LIMIT 1"
         );
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc();
+        $student = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!$member) {
+        if (!$student) {
             $pdf->SetFont(self::FONT, '', 10);
-            $pdf->Cell(0, 8, 'Member not found.', 0, 1);
+            $pdf->Cell(0, 8, 'Student not found.', 0, 1);
             return;
         }
 
-        $name = trim($member['student_name'] . ' ' . $member['father_name'] . ' ' . $member['grandfather_name']);
-        self::sectionTitle($pdf, 'Member: ' . $name);
+        $name = trim($student['student_name'] . ' ' . $student['father_name'] . ' ' . $student['grandfather_name']);
+        self::sectionTitle($pdf, 'Student: ' . $name);
         $pdf->SetFont(self::FONT, '', 9.5);
-        $pdf->Cell(0, 6, 'Code: ' . ($member['member_code'] ?: '—')
-            . '    Status: ' . ($member['status'] ?: '—')
-            . '    Section: ' . ($member['current_section'] ?: '—'), 0, 1);
+        $pdf->Cell(0, 6, 'Code: ' . ($student['student_code'] ?: '—')
+            . '    Status: ' . ($student['status'] ?: '—')
+            . '    Section: ' . ($student['current_section'] ?: '—'), 0, 1);
         $pdf->Ln(2);
 
         [$fromD, $toD] = self::window($from, $to);
@@ -234,9 +234,9 @@ class PdfReportService
                 $conn,
                 "SELECT a.attendance_date, a.status, COALESCE(c.class_name, '—') AS grp, a.notes
                  FROM attendance a LEFT JOIN classes c ON c.id = a.class_id
-                 WHERE a.member_id = ? AND a.attendance_date BETWEEN ? AND ?
+                 WHERE a.student_id = ? AND a.attendance_date BETWEEN ? AND ?
                  ORDER BY a.attendance_date DESC LIMIT " . self::MAX_MEMBER_ROWS,
-                [$memberId, $fromD, $toD]
+                [$studentId, $fromD, $toD]
             )
         );
 
@@ -247,12 +247,12 @@ class PdfReportService
             self::fetchHistory(
                 $conn,
                 "SELECT m.attendance_date, m.status,
-                        COALESCE(NULLIF(TRIM(mb.current_section), ''), '—') AS grp, m.notes
+                        COALESCE(NULLIF(TRIM(mb), ''), '—') AS grp, m.notes
                  FROM mezmur_attendance m
-                 LEFT JOIN members mb ON mb.id = m.member_id
-                 WHERE m.member_id = ? AND m.attendance_date BETWEEN ? AND ?
+                 LEFT JOIN students mb ON mb.id = m.student_id
+                 WHERE m.student_id = ? AND m.attendance_date BETWEEN ? AND ?
                  ORDER BY m.attendance_date DESC LIMIT " . self::MAX_MEMBER_ROWS,
-                [$memberId, $fromD, $toD]
+                [$studentId, $fromD, $toD]
             )
         );
 

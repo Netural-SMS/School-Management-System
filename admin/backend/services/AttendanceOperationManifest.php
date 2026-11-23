@@ -38,12 +38,12 @@ final class AttendanceOperationManifest
         $seen = [];
         foreach ($records as $record) {
             if (!is_array($record)) throw new \InvalidArgumentException('Invalid manifest record.');
-            self::keys($record, ['member_id', 'status', 'notes']);
-            self::id($record['member_id']);
-            if (isset($seen[$record['member_id']])) {
-                throw new \InvalidArgumentException('Duplicate manifest member.');
+            self::keys($record, ['student_id', 'status', 'notes']);
+            self::id($record['student_id']);
+            if (isset($seen[$record['student_id']])) {
+                throw new \InvalidArgumentException('Duplicate manifest student.');
             }
-            $seen[$record['member_id']] = true;
+            $seen[$record['student_id']] = true;
             if (!in_array($record['status'], ['present', 'absent', 'late', 'excused'], true)) {
                 throw new \InvalidArgumentException('Invalid manifest status.');
             }
@@ -55,12 +55,12 @@ final class AttendanceOperationManifest
             }
         }
         // Local copy: canonical ordering must not rewrite the captured input.
-        usort($records, static fn(array $a, array $b): int => $a['member_id'] <=> $b['member_id']);
+        usort($records, static fn(array $a, array $b): int => $a['student_id'] <=> $b['student_id']);
         $hash = hash_init('sha256');
         self::frame($hash, 'ssms.attendance.records.v1');
         self::frame($hash, (string)count($records));
         foreach ($records as $record) {
-            self::frame($hash, (string)$record['member_id']);
+            self::frame($hash, (string)$record['student_id']);
             self::frame($hash, $record['status']);
             self::frame($hash, $record['notes']);
         }

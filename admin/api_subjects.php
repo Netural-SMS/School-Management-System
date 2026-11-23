@@ -1672,13 +1672,13 @@ switch ($action) {
         // Phase 2 (owner D2, 2026-10-22): private result card on the web —
         // one student's results for this class + subject + semester.
         $assessmentId = (int)($_GET['assessment_id'] ?? 0);
-        $memberId = (int)($_GET['member_id'] ?? 0);
+        $studentId = (int)($_GET['student_id'] ?? 0);
         $stmt = $conn->prepare("SELECT class_id, subject_id, academic_year_id FROM assessments WHERE id = ?");
         $stmt->bind_param("i", $assessmentId);
         $stmt->execute();
         $own = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!$own || $memberId <= 0) {
+        if (!$own || $studentId <= 0) {
             http_response_code(404);
             echo json_encode(['status' => 'error', 'message' => 'Test or student not found.']);
             exit;
@@ -1691,7 +1691,7 @@ switch ($action) {
             );
         }
         require_once __DIR__ . '/backend/services/SubmissionService.php';
-        $out = \App\Services\SubmissionService::studentResults($conn, $assessmentId, $memberId);
+        $out = \App\Services\SubmissionService::studentResults($conn, $assessmentId, $studentId);
         if (($out['status'] ?? '') !== 'success') {
             http_response_code(($out['code'] ?? '') === 'not_found' ? 404 : 422);
         }
@@ -1737,13 +1737,13 @@ switch ($action) {
             : [];
 
         $gradesByMember = [];
-        $gstmt = $conn->prepare("SELECT id, member_id, score, remarks FROM academic_records WHERE assessment_id = ?");
+        $gstmt = $conn->prepare("SELECT id, student_id, score, remarks FROM academic_records WHERE assessment_id = ?");
         if ($gstmt) {
             $gstmt->bind_param('i', $assessmentId);
             $gstmt->execute();
             $gr = $gstmt->get_result();
             while ($grow = $gr->fetch_assoc()) {
-                $gradesByMember[(int)$grow['member_id']] = $grow;
+                $gradesByMember[(int)$grow['student_id']] = $grow;
             }
             $gstmt->close();
         }
@@ -1751,7 +1751,7 @@ switch ($action) {
         $students = [];
         $gradedCount = 0;
         foreach ($roster as $row) {
-            $mid = (int)($row['member_id'] ?? $row['id'] ?? 0);
+            $mid = (int)($row['student_id'] ?? $row['id'] ?? 0);
             if ($mid <= 0) continue;
             $g = $gradesByMember[$mid] ?? null;
             $hasScore = ($g && $g['score'] !== null && $g['score'] !== '');
@@ -1759,11 +1759,11 @@ switch ($action) {
                 $gradedCount++;
             }
             $students[] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'id' => $mid,
                 'student_name' => $row['student_name'] ?? '',
                 'father_name' => $row['father_name'] ?? '',
-                'member_code' => $row['member_code'] ?? '',
+                'student_code' => $row['student_code'] ?? '',
                 'gender' => $row['gender'] ?? '',
                 'record_id' => $g && !empty($g['id']) ? (int)$g['id'] : null,
                 'score' => $g && $g['score'] !== null ? (float)$g['score'] : null,
@@ -1847,7 +1847,7 @@ switch ($action) {
     
     case 'save_grades':
         $assessmentId = (int)($_POST['assessment_id'] ?? 0);
-        $grades = $_POST['grades'] ?? []; // Array of {member_id, score, remarks, record_id?}
+        $grades = $_POST['grades'] ?? []; // Array of {student_id, score, remarks, record_id?}
         
         if (!$assessmentId || empty($grades)) {
             echo json_encode(['status' => 'error', 'message' => 'Assessment ID and grades required']);
@@ -1922,23 +1922,23 @@ switch ($action) {
         // PATCH C1: re-saving a sheet used to run a blind INSERT that hit the
         // uq_ar_assessment_member unique key and failed for every existing
         // row. All writes now go through the same canonical upsert the mobile
-        // app uses (lookup by assessment+member, then update-or-insert), so
+        // app uses (lookup by assessment+student, then update-or-insert), so
         // first save and every re-save behave identically.
         foreach ($grades as $grade) {
             if (!is_array($grade)) {
                 continue;
             }
-            $memberId = (int)($grade['member_id'] ?? 0);
+            $studentId = (int)($grade['student_id'] ?? 0);
             $score = isset($grade['score']) && $grade['score'] !== '' ? (float)$grade['score'] : null;
             $remarks = trim((string)($grade['remarks'] ?? $grade['remark'] ?? ''));
             
-            if (!$memberId) {
+            if (!$studentId) {
                 continue;
             }
             
             // Validate score against the assessment's max
             if ($score !== null && ($score < 0 || $score > $maxScore)) {
-                $errors[] = "Invalid score for member $memberId (max: $maxScore)";
+                $errors[] = "Invalid score for student $studentId (max: $maxScore)";
                 continue;
             }
             
@@ -1951,7 +1951,7 @@ switch ($action) {
             try {
                 $rid = \App\Services\SubmissionService::upsertScore($conn, [
                     'assessment_id' => $assessmentId,
-                    'member_id' => $memberId,
+                    'student_id' => $studentId,
                     'score' => $score,
                     'remarks' => $remarks,
                     'recorded_by' => $recordedBy,
@@ -1964,13 +1964,13 @@ switch ($action) {
                 if ($rid > 0) {
                     $successCount++;
                 } else {
-                    $errors[] = \App\Services\SubmissionService::memberBelongsToClass($conn, $memberId, (int)$assessment['class_id'])
-                        ? "Could not save the grade for member $memberId."
-                        : "Member $memberId is not enrolled in this class — mark not saved.";
+                    $errors[] = \App\Services\SubmissionService::memberBelongsToClass($conn, $studentId, (int)$assessment['class_id'])
+                        ? "Could not save the grade for student $studentId."
+                        : "Student $studentId is not enrolled in this class — mark not saved.";
                 }
             } catch (Throwable $e) {
-                reportInternalError('Web grade save failed for member ' . $memberId, $e);
-                $errors[] = "Could not save the grade for member $memberId.";
+                reportInternalError('Web grade save failed for student ' . $studentId, $e);
+                $errors[] = "Could not save the grade for student $studentId.";
             }
         }
         
@@ -2038,7 +2038,7 @@ switch ($action) {
     case 'get_grade_summary':
         $classId = (int)($_GET['class_id'] ?? 0);
         $subjectId = (int)($_GET['subject_id'] ?? 0);
-        $memberId = (int)($_GET['member_id'] ?? 0);
+        $studentId = (int)($_GET['student_id'] ?? 0);
         
         if (!$currentYear) {
             echo json_encode(['status' => 'error', 'message' => 'No active academic year']);
@@ -2061,11 +2061,11 @@ switch ($action) {
             SELECT 
                 a.id as assessment_id, a.assessment_name, a.assessment_type, 
                 a.weight_percentage, a.max_score,
-                ar.member_id, ar.score,
+                ar.student_id, ar.score,
                 m.student_name, m.father_name
             FROM assessments a
             LEFT JOIN academic_records ar ON ar.assessment_id = a.id
-            LEFT JOIN members m ON ar.member_id = m.id
+            LEFT JOIN students m ON ar.student_id = m.id
             WHERE a.class_id = ? AND a.academic_year_id = ?
         ";
         $params = [$classId, $currentYear['id']];
@@ -2076,9 +2076,9 @@ switch ($action) {
             $params[] = $subjectId;
             $types .= "i";
         }
-        if ($memberId) {
-            $sql .= " AND (ar.member_id = ? OR ar.member_id IS NULL)";
-            $params[] = $memberId;
+        if ($studentId) {
+            $sql .= " AND (ar.student_id = ? OR ar.student_id IS NULL)";
+            $params[] = $studentId;
             $types .= "i";
         }
         

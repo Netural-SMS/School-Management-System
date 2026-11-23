@@ -1,7 +1,7 @@
 /*
  * FKSSPager — the shared pager for lists that do not use PaginatedList
- * (review inbox, teachers, member fees, …). Same look and behaviour as the
- * member lists (Phase 3, owner request 2026-10-22):
+ * (review inbox, teachers, student fees, …). Same look and behaviour as the
+ * student lists (Phase 3, owner request 2026-10-22):
  *
  *   Showing 51–100 of 440 packets            Per page [25|50|100|200]
  *   ‹ Previous   Page 2 of 9   Next ›         [Load more (340 left)]

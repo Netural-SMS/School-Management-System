@@ -96,7 +96,7 @@ class AcademicIntelligenceService
             case 'student':
                 return self::student(
                     $conn,
-                    (int)($params['member_id'] ?? 0),
+                    (int)($params['student_id'] ?? 0),
                     (int)($params['class_id'] ?? 0),
                     $yearId,
                     $termId,
@@ -123,19 +123,19 @@ class AcademicIntelligenceService
      */
     public static function student(
         \mysqli $conn,
-        int $memberId,
+        int $studentId,
         int $classId = 0,
         int $yearId = 0,
         int $termId = 0,
         array $filters = []
     ): array {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return ['status' => 'error', 'message' => 'Student is required.'];
         }
 
         // getCard resolves the class from the active enrolment when the
         // caller does not know it, and does every calculation.
-        $card = ReportCardService::getCard($conn, $memberId, $classId, $yearId, $termId);
+        $card = ReportCardService::getCard($conn, $studentId, $classId, $yearId, $termId);
         if (($card['status'] ?? '') !== 'success') {
             return [
                 'status' => 'error',
@@ -219,11 +219,11 @@ class AcademicIntelligenceService
             'term' => self::termEnvelope($card['term'] ?? null),
             'filters' => self::echoFilters($filters),
             'summary' => [
-                'member_id' => $memberId,
+                'student_id' => $studentId,
                 'student_name' => (string)($student['student_name'] ?? ''),
                 'father_name' => (string)($student['father_name'] ?? ''),
                 'christian_name' => (string)($student['baptismal_name'] ?? $student['christian_name'] ?? ''),
-                'member_code' => (string)($student['member_code'] ?? ''),
+                'student_code' => (string)($student['student_code'] ?? ''),
                 'gender' => (string)($student['gender'] ?? ''),
                 'class_id' => (int)($card['class']['id'] ?? 0),
                 'class_name' => (string)($card['class']['class_name'] ?? ''),
@@ -698,7 +698,7 @@ class AcademicIntelligenceService
                 }, $rows)),
                 'attendance_vs_result' => array_values(array_map(static function ($s) {
                     return [
-                        'member_id' => (int)$s['id'],
+                        'student_id' => (int)$s['id'],
                         'label' => (string)($s['student_name'] ?? ''),
                         'attendance' => (int)($s['total_days'] ?? 0) > 0 ? $s['attendance_rate'] : null,
                         'result' => $s['overall_average'],
@@ -715,10 +715,10 @@ class AcademicIntelligenceService
             'drilldown' => [
                 'students' => array_values(array_map(static function ($s) {
                     return [
-                        'member_id' => (int)$s['id'],
+                        'student_id' => (int)$s['id'],
                         'student_name' => (string)($s['student_name'] ?? ''),
                         'father_name' => (string)($s['father_name'] ?? ''),
-                        'member_code' => (string)($s['member_code'] ?? ''),
+                        'student_code' => (string)($s['student_code'] ?? ''),
                         'gender' => (string)($s['gender'] ?? ''),
                         'overall_average' => $s['overall_average'],
                         'grade_letter' => $s['grade_letter'] ?? null,
@@ -1178,7 +1178,7 @@ class AcademicIntelligenceService
                 $hay = strtolower(
                     (string)($st['student_name'] ?? '') . ' '
                     . (string)($st['father_name'] ?? '') . ' '
-                    . (string)($st['member_code'] ?? '') . ' '
+                    . (string)($st['student_code'] ?? '') . ' '
                     . (string)($st['christian_name'] ?? '')
                 );
                 if (strpos($hay, $search) === false) {

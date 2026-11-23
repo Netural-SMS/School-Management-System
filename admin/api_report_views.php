@@ -150,7 +150,7 @@ try {
             [$where, $params] = rvVisibilityWhere($adminId, $role, $isAdmin);
             $stmt = $pdo->prepare(
                 "SELECT rd.*, u.full_name AS owner_name FROM report_definitions rd LEFT JOIN users u ON u.id = rd.owner_user_id
-                  WHERE rd.dataset = 'members' AND {$where}
+                  WHERE rd.dataset = 'students' AND {$where}
                   ORDER BY rd.is_pinned DESC, rd.sort_order ASC, rd.scope = 'shared' DESC, rd.name ASC LIMIT 300"
             );
             $stmt->execute($params);
@@ -197,7 +197,7 @@ try {
             $svc = new ReportQueryService($pdo, $role);
             $n   = $svc->normalise($decoded);
             $definition = [
-                'dataset'  => 'members',
+                'dataset'  => 'students',
                 'filters'  => $n['filters'],
                 'search'   => $n['search'],
                 'columns'  => $n['columns'],
@@ -232,7 +232,7 @@ try {
                 }
                 $visibleRole = $scope === 'department' ? $role : null;
                 $stmt = $pdo->prepare('INSERT INTO report_definitions (dataset, name, description, definition, scope, visible_role, is_pinned, owner_user_id, owner_role, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                $stmt->execute(['members', $name, $desc !== '' ? $desc : null, $json, $scope, $visibleRole, $pinned, $adminId, $role, $adminId]);
+                $stmt->execute(['students', $name, $desc !== '' ? $desc : null, $json, $scope, $visibleRole, $pinned, $adminId, $role, $adminId]);
                 $id = (int)$pdo->lastInsertId();
                 SecurityAuditService::record($conn, 'Report View Saved', ['id' => $id, 'scope' => $scope, 'pinned' => $pinned, 'filters' => count($definition['filters'])], 'report_view', $id);
             }

@@ -102,12 +102,12 @@ if (isset($conn) && !$conn->connect_error) {
         if ($r) while ($row = $r->fetch_assoc()) $securityEvents[] = $row;
     } catch (Exception $e) {}
     
-    // Member stats for performance chart
+    // Student stats for performance chart
     try {
         $r = $conn->query("SELECT 
             DATE_FORMAT(created_at, '%Y-%m') as month,
             COUNT(*) as count
-            FROM members 
+            FROM students 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
             GROUP BY DATE_FORMAT(created_at, '%Y-%m')
             ORDER BY month ASC");

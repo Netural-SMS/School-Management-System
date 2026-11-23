@@ -1,15 +1,15 @@
 <?php
 /**
- * Advisory duplicate-member lookup.
+ * Advisory duplicate-student lookup.
  *
- * Registration enforcement lives in MemberDuplicateService and is invoked by
- * hr_register_member.php inside its transaction. This route is only a bounded
+ * Registration enforcement lives in StudentDuplicateService and is invoked by
+ * hr_register_student.php inside its transaction. This route is only a bounded
  * UI adapter over the same domain service.
  */
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/backend/services/MemberDuplicateService.php';
+require_once __DIR__ . '/backend/services/StudentDuplicateService.php';
 
 function duplicateJson(array $payload, int $status = 200): void
 {
@@ -68,7 +68,7 @@ if ($identity['student_name'] === '' || $identity['father_name'] === '') {
 }
 
 try {
-    $matches = \App\Services\MemberDuplicateService::findAdvisoryMatches($conn, $identity, 5);
+    $matches = \App\Services\StudentDuplicateService::findAdvisoryMatches($conn, $identity, 5);
 } catch (Throwable $error) {
     error_log('Duplicate advisory lookup failed: ' . $error->getMessage());
     duplicateJson(['status' => 'error', 'message' => 'Duplicate check is temporarily unavailable.'], 503);
@@ -89,5 +89,5 @@ duplicateJson([
     'found' => $matches !== [],
     'count' => count($matches),
     'matches' => $matches,
-    'message' => $matches === [] ? 'No duplicates found' : 'Potential duplicate member(s) found!',
+    'message' => $matches === [] ? 'No duplicates found' : 'Potential duplicate student(s) found!',
 ]);

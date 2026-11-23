@@ -1,7 +1,7 @@
 <?php
 /**
  * Finance Department API 
- * Full CRUD for transactions, categories, budgets, member fees
+ * Full CRUD for transactions, categories, budgets, student fees
  */
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
@@ -44,10 +44,10 @@ function financeCategory(?int $id, string $type): void {
 function financeMember(?int $id): void {
     global $conn;
     if ($id === null) return;
-    $stmt = $conn->prepare('SELECT id FROM members WHERE id=?');
+    $stmt = $conn->prepare('SELECT id FROM students WHERE id=?');
     $stmt->bind_param('i', $id); $stmt->execute();
     $exists = (bool)$stmt->get_result()->fetch_assoc(); $stmt->close();
-    if (!$exists) throw new LedgerInputException('Member not found.');
+    if (!$exists) throw new LedgerInputException('Student not found.');
 }
 /**
  * Audit 2026-10-20 (A14): every ledger mutation leaves an activity_logs row
@@ -97,7 +97,7 @@ case 'dashboard':
     $data['pending_amount'] = (float)$row['a'];
 
     // Recent transactions
-    $r = $conn->query("SELECT t.*, c.name as category_name, m.student_name as member_name FROM finance_transactions t LEFT JOIN finance_categories c ON t.category_id=c.id LEFT JOIN members m ON t.member_id=m.id ORDER BY t.transaction_date DESC, t.id DESC LIMIT 20");
+    $r = $conn->query("SELECT t.*, c.name as category_name, m.student_name as student_name FROM finance_transactions t LEFT JOIN finance_categories c ON t.category_id=c.id LEFT JOIN students m ON t.student_id=m.id ORDER BY t.transaction_date DESC, t.id DESC LIMIT 20");
     $data['recent'] = [];
     while ($row = $r->fetch_assoc()) $data['recent'][] = $row;
 
@@ -137,7 +137,7 @@ case 'transactions':
     if ($status) { $where[] = "t.status=?"; $params[] = $status; }
     if ($search) { $where[] = "(t.description LIKE ? OR t.receipt_number LIKE ? OR m.student_name LIKE ?)"; $s="%$search%"; $params[]=$s; $params[]=$s; $params[]=$s; }
 
-    $sql = "SELECT t.*, c.name as category_name, m.student_name as member_name FROM finance_transactions t LEFT JOIN finance_categories c ON t.category_id=c.id LEFT JOIN members m ON t.member_id=m.id WHERE ".implode(' AND ',$where)." ORDER BY t.transaction_date DESC, t.id DESC LIMIT $limit";
+    $sql = "SELECT t.*, c.name as category_name, m.student_name as student_name FROM finance_transactions t LEFT JOIN finance_categories c ON t.category_id=c.id LEFT JOIN students m ON t.student_id=m.id WHERE ".implode(' AND ',$where)." ORDER BY t.transaction_date DESC, t.id DESC LIMIT $limit";
     $stmt = $conn->prepare($sql);
     if ($params) { $types = str_repeat('s', count($params)); $stmt->bind_param($types, ...$params); }
     $stmt->execute();
@@ -151,7 +151,7 @@ case 'transactions':
 case 'add_transaction':
 $type = Input::choice($_POST['type'] ?? '', ['income','expense'], 'Transaction type');
     $catId = Input::optionalId($_POST['category_id'] ?? null, 'Category');
-    $memberId = Input::optionalId($_POST['member_id'] ?? null, 'Member');
+    $studentId = Input::optionalId($_POST['student_id'] ?? null, 'Student');
     $amount = Input::money($_POST['amount'] ?? '');
     $desc = Input::text($_POST['description'] ?? '', 'Description', 500);
     $receipt = Input::text($_POST['receipt_number'] ?? '', 'Receipt number', 50);
@@ -160,10 +160,10 @@ $type = Input::choice($_POST['type'] ?? '', ['income','expense'], 'Transaction t
     $ecMonth = Input::optionalId($_POST['ec_month'] ?? null, 'Ethiopian month');
     $ecYear = Input::optionalId($_POST['ec_year'] ?? null, 'Ethiopian year');
     if (($ecMonth !== null && $ecMonth > 13) || ($ecYear !== null && $ecYear > 9999)) throw new LedgerInputException('Invalid Ethiopian month or year.');
-    financeCategory($catId, $type); financeMember($memberId);
-    $stmt = $conn->prepare("INSERT INTO finance_transactions (type,category_id,member_id,amount,description,receipt_number,payment_method,transaction_date,ec_month,ec_year,recorded_by,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'confirmed')");
+    financeCategory($catId, $type); financeMember($studentId);
+    $stmt = $conn->prepare("INSERT INTO finance_transactions (type,category_id,student_id,amount,description,receipt_number,payment_method,transaction_date,ec_month,ec_year,recorded_by,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'confirmed')");
     // transaction_date is a string. Binding it as i truncated YYYY-MM-DD.
-    $stmt->bind_param('siidssssiii', $type, $catId, $memberId, $amount, $desc, $receipt, $method, $date, $ecMonth, $ecYear, $adminId);
+    $stmt->bind_param('siidssssiii', $type, $catId, $studentId, $amount, $desc, $receipt, $method, $date, $ecMonth, $ecYear, $adminId);
     $stmt->execute();
     $newTxnId = (int)$conn->insert_id;
     financeAudit('Finance Transaction Added', "$type $amount on $date" . ($receipt !== '' ? " receipt $receipt" : '') . ($desc !== '' ? " — $desc" : ''), $newTxnId);
@@ -234,13 +234,13 @@ $id = Input::optionalId($_POST['id'] ?? null, 'Category ID');
     echo json_encode(['status'=>'success','id'=>$id ?: $conn->insert_id]);
     break;
 
-case 'member_fees':
-    $memberId = (int)($_GET['member_id'] ?? 0);
+case 'student_fees':
+    $studentId = (int)($_GET['student_id'] ?? 0);
     $year = (int)($_GET['ec_year'] ?? 0);
     $status = $_GET['status'] ?? '';
     $where = ['1=1'];
     $params = []; $types = '';
-    if ($memberId) { $where[] = "f.member_id=?"; $params[] = $memberId; $types .= 'i'; }
+    if ($studentId) { $where[] = "f.student_id=?"; $params[] = $studentId; $types .= 'i'; }
     if ($year) { $where[] = "f.ec_year=?"; $params[] = $year; $types .= 'i'; }
     if ($status && in_array($status, ['paid','unpaid','partial'])) { $where[] = "f.status=?"; $params[] = $status; $types .= 's'; }
 
@@ -251,7 +251,7 @@ case 'member_fees':
     if ($paged) {
         $perPage = (int)($_GET['per_page'] ?? 50);
         if (!in_array($perPage, [25, 50, 100, 200], true)) { $perPage = 50; }
-        $cstmt = $conn->prepare("SELECT COUNT(*) AS c FROM finance_member_fees f WHERE ".implode(' AND ',$where));
+        $cstmt = $conn->prepare("SELECT COUNT(*) AS c FROM finance_student_fees f WHERE ".implode(' AND ',$where));
         if ($params) { $cstmt->bind_param($types, ...$params); }
         $cstmt->execute();
         $total = (int)($cstmt->get_result()->fetch_assoc()['c'] ?? 0);
@@ -261,7 +261,7 @@ case 'member_fees':
         $limit = $perPage; $offset = ($page - 1) * $perPage;
         $pageInfo = ['total' => $total, 'page' => $page, 'total_pages' => $totalPages, 'per_page' => $perPage];
     }
-    $sql = "SELECT f.*, m.student_name, m.member_code FROM finance_member_fees f LEFT JOIN members m ON f.member_id=m.id WHERE ".implode(' AND ',$where)." ORDER BY f.ec_year DESC, f.ec_month DESC, f.id DESC LIMIT ".(int)$limit." OFFSET ".(int)$offset;
+    $sql = "SELECT f.*, m.student_name, m.student_code FROM finance_student_fees f LEFT JOIN students m ON f.student_id=m.id WHERE ".implode(' AND ',$where)." ORDER BY f.ec_year DESC, f.ec_month DESC, f.id DESC LIMIT ".(int)$limit." OFFSET ".(int)$offset;
     $stmt = $conn->prepare($sql);
     if ($params) { $stmt->bind_param($types, ...$params); }
     $stmt->execute();
@@ -272,7 +272,7 @@ case 'member_fees':
     break;
 
 case 'save_fee':
-$memberId = Input::integer($_POST['member_id'] ?? 0, 'Member', 1);
+$studentId = Input::integer($_POST['student_id'] ?? 0, 'Student', 1);
     $feeType = Input::text($_POST['fee_type'] ?? 'monthly', 'Fee type', 100, true);
     $amount = Input::money($_POST['amount'] ?? '');
     $ecMonth = Input::optionalId($_POST['ec_month'] ?? null, 'Ethiopian month');
@@ -280,12 +280,12 @@ $memberId = Input::integer($_POST['member_id'] ?? 0, 'Member', 1);
     if (($ecMonth !== null && $ecMonth > 13) || ($ecYear !== null && $ecYear > 9999)) throw new LedgerInputException('Invalid Ethiopian month or year.');
     $status = Input::choice($_POST['status'] ?? 'paid', ['paid','unpaid','partial'], 'Fee status');
     $paidDate = Input::date($_POST['paid_date'] ?? null, 'Paid date', $status === 'paid' ? date('Y-m-d') : null);
-    financeMember($memberId);
+    financeMember($studentId);
 
     // A paid fee and its ledger income are ONE operation, never half a save.
     $conn->begin_transaction(); $financeTransactionOpen = true;
-    $stmt = $conn->prepare('INSERT INTO finance_member_fees (member_id,fee_type,amount,ec_month,ec_year,paid_date,status,recorded_by) VALUES (?,?,?,?,?,?,?,?)');
-    $stmt->bind_param('isdiissi', $memberId, $feeType, $amount, $ecMonth, $ecYear, $paidDate, $status, $adminId);
+    $stmt = $conn->prepare('INSERT INTO finance_student_fees (student_id,fee_type,amount,ec_month,ec_year,paid_date,status,recorded_by) VALUES (?,?,?,?,?,?,?,?)');
+    $stmt->bind_param('isdiissi', $studentId, $feeType, $amount, $ecMonth, $ecYear, $paidDate, $status, $adminId);
     $stmt->execute();
     $feeId = $conn->insert_id;
     if ($status === 'paid') {
@@ -296,8 +296,8 @@ $memberId = Input::integer($_POST['member_id'] ?? 0, 'Member', 1);
         // IDs differ by deployment. Never assume category 1 is fee income.
         $category = $conn->query("SELECT id FROM finance_categories WHERE type='income' AND name='Monthly Contribution' ORDER BY id LIMIT 1")->fetch_assoc();
         $feeCatId = $category ? (int)$category['id'] : null;
-        $stmt2 = $conn->prepare("INSERT INTO finance_transactions (type,category_id,member_id,amount,description,payment_method,transaction_date,ec_month,ec_year,recorded_by,status) VALUES ('income',?,?,?,?,?,?,?,?,?,?)");
-        $stmt2->bind_param('iidsssiiis', $feeCatId, $memberId, $amount, $feeDesc, $feeMethod, $feeDate, $ecMonth, $ecYear, $adminId, $feeStatus);
+        $stmt2 = $conn->prepare("INSERT INTO finance_transactions (type,category_id,student_id,amount,description,payment_method,transaction_date,ec_month,ec_year,recorded_by,status) VALUES ('income',?,?,?,?,?,?,?,?,?,?)");
+        $stmt2->bind_param('iidsssiiis', $feeCatId, $studentId, $amount, $feeDesc, $feeMethod, $feeDate, $ecMonth, $ecYear, $adminId, $feeStatus);
         $stmt2->execute();
     }
     $conn->commit(); $financeTransactionOpen = false;

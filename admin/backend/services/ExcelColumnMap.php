@@ -10,28 +10,27 @@ namespace App\Services;
 
 class ExcelColumnMap
 {
-    /** Virtual columns that are not members.* fields. */
+    /** Virtual columns that are not students.* fields. */
     public const VIRTUAL = ['class', 'class_code', 'class_name', 'system_id'];
 
     /**
      * key => [display header, aliases...]
      */
     private const META = [
-        'member_code'        => ['Member Code'],
-        // members.id — exported read-only so re-uploads match exactly, even
-        // for temporary members and permanent members with a pending code.
+        'student_code'        => ['Student Code'],
+        // students.id — exported read-only so re-uploads match exactly, even
+        // for temporary students and permanent students with a pending code.
         'system_id'          => ['System ID'],
         'full_name_am'       => ['Full Name', 'full_name', 'name'],
         'baptismal_name'     => ['Christian Name', 'christian_name', 'Christian Name (የክርስትና ስም)', 'baptismal', 'baptismal_name'],
         'class'              => ['Class', 'class_code', 'class_name', 'grade', 'grade_code'],
-        'current_section'    => ['Age Section', 'section'],
+         'section'],
         'education_level'    => ['Education Level'],
         'gender'             => ['Gender'],
         'date_of_birth'      => ['Date of Birth', 'dob'],
         'age'                => ['Age'],
         'spiritual_education'=> ['Spiritual Education'],
-        'member_type'        => ['Member Type'],
-        'membership_tier'    => ['Membership Tier'],
+                'membership_tier'    => ['Membership Tier'],
         'status'             => ['Status'],
         'phone_primary'      => ['Primary Phone'],
         'phone_number'       => ['Phone Number', 'phone'],
@@ -74,14 +73,14 @@ class ExcelColumnMap
             ];
         }
         return [
-            'member_code',
+            'student_code',
             'full_name_am',
             'baptismal_name',
             'class',
             'current_section',
             'education_level',
             'gender', 'date_of_birth', 'age',
-            'spiritual_education', 'member_type', 'membership_tier',
+            'spiritual_education', 'student_type', 'membership_tier',
             'status',
             'phone_primary', 'phone_number', 'alt_phone_number', 'phone_guardian',
             'guardian_name', 'guardian_phone1', 'guardian_phone2',
@@ -94,7 +93,7 @@ class ExcelColumnMap
 
     public static function locked(string $tier): array
     {
-        return $tier === 'temporary' ? ['system_id'] : ['member_code', 'system_id'];
+        return $tier === 'temporary' ? ['system_id'] : ['student_code', 'system_id'];
     }
 
     public static function header(string $key): string

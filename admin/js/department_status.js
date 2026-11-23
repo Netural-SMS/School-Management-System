@@ -3,9 +3,9 @@
  *
  * Renders the Education / Mezmur status badges, a "Change" action (HR and
  * Information only — the server enforces it) and the period history for a
- * member. Mount it on any container that holds
+ * student. Mount it on any container that holds
  *   <div data-dept-status="MEMBER_ID"></div>
- * e.g. after injecting info_manage_member.php into a dashboard panel:
+ * e.g. after injecting info_manage_student.php into a dashboard panel:
  *   DeptStatus.mount(panelElement)
  *
  * Dates are rendered with the global Ethiopian-calendar helpers
@@ -78,10 +78,10 @@
         });
     }
 
-    function render(box, memberId, data, history) {
+    function render(box, studentId, data, history) {
         var html = '<div class="ds-wrap">';
         if (!data.available) {
-            html += '<div class="ds-unavailable"><i class="fas fa-info-circle"></i> Department status is not enabled yet on this installation (feature flag / sql 071). Every member is treated as active in both departments.</div></div>';
+            html += '<div class="ds-unavailable"><i class="fas fa-info-circle"></i> Department status is not enabled yet on this installation (feature flag / sql 071). Every student is treated as active in both departments.</div></div>';
             box.innerHTML = html;
             return;
         }
@@ -101,7 +101,7 @@
             html += '</div>';
         });
         html += '</div>';
-        html += '<div class="ds-note">Department status is separate from the global member status. Inactive members are left off that department\'s attendance sheets and grade lists from the day of the change; their history is kept. Reactivation starts a fresh period.</div>';
+        html += '<div class="ds-note">Department status is separate from the global student status. Inactive students are left off that department\'s attendance sheets and grade lists from the day of the change; their history is kept. Reactivation starts a fresh period.</div>';
         if (history && history.length) {
             html += '<table class="ds-hist"><thead><tr><th>Department</th><th>Status</th><th>From</th><th>To</th><th>By</th><th>Reason</th></tr></thead><tbody>';
             history.forEach(function (h) {
@@ -121,17 +121,17 @@
         box.innerHTML = html;
         box.querySelectorAll('[data-ds-change]').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                openModal(box, memberId, btn.getAttribute('data-ds-change'), btn.getAttribute('data-ds-to'));
+                openModal(box, studentId, btn.getAttribute('data-ds-change'), btn.getAttribute('data-ds-to'));
             });
         });
-        loadWarnings(box.querySelector('[data-ds-aw]'), memberId);
+        loadWarnings(box.querySelector('[data-ds-aw]'), studentId);
     }
 
     // Attendance alerting Phase 2: shared risk + warnings per department
     // (api_attendance_warnings.php scopes departments by role; 403 = not for this role).
-    function loadWarnings(el, memberId) {
+    function loadWarnings(el, studentId) {
         if (!el) return;
-        fetchJson(WARN_API + '?action=member_summary&member_id=' + encodeURIComponent(memberId)).then(function (d) {
+        fetchJson(WARN_API + '?action=student_summary&student_id=' + encodeURIComponent(studentId)).then(function (d) {
             if (d.status !== 'success' || !d.summary || !d.summary.departments) { el.innerHTML = ''; return; }
             var depts = d.summary.departments;
             var html = '<div class="ds-dept-name" style="margin-top:10px">Attendance risk &amp; warnings <span class="ds-since">(Ethiopian calendar)</span></div>';
@@ -148,9 +148,9 @@
                     '<div class="ds-since">Streak: <b>' + esc(st.length || 0) + '</b> day(s)' + (st.start_ec ? ' (' + esc(st.start_ec) + ' – ' + esc(st.last_ec) + ')' : '') + '</div>' +
                     '<div class="ds-since">' + esc(m.label || 'This month') + ': <b>' + (m.rate == null ? 'No data' : esc(m.rate) + '%') + '</b> · ' + esc(m.sessions || 0) + ' sessions</div>' +
                     '<div class="ds-since">Year ' + esc(y.ec_year || '') + ': <b>' + (y.rate == null ? 'No data' : esc(y.rate) + '%') + '</b> · ' + esc(y.sessions || 0) + ' sessions</div>' +
-                    '<div class="ds-since">Open warnings: <b>' + open.length + '</b>' + (open.length ? ' · <a href="/admin/attendance_warnings.php?member_id=' + encodeURIComponent(memberId) + '&department=' + encodeURIComponent(k) + '">open list</a>' : '') + '</div>' +
+                    '<div class="ds-since">Open warnings: <b>' + open.length + '</b>' + (open.length ? ' · <a href="/admin/attendance_warnings.php?student_id=' + encodeURIComponent(studentId) + '&department=' + encodeURIComponent(k) + '">open list</a>' : '') + '</div>' +
                     // Phase 6: lesson-level history (Education only has lessons)
-                    (k === 'edu' ? '<div class="ds-since"><a href="/admin/lesson_attendance.php?member_id=' + encodeURIComponent(memberId) + '">Lesson attendance history</a></div>' : '') +
+                    (k === 'edu' ? '<div class="ds-since"><a href="/admin/lesson_attendance.php?student_id=' + encodeURIComponent(studentId) + '">Lesson attendance history</a></div>' : '') +
                     '</div></div>';
             });
             html += '</div>';
@@ -167,14 +167,14 @@
                 });
                 html += '</tbody></table>';
             } else {
-                html += '<div class="ds-note">No attendance warnings for this member.</div>';
+                html += '<div class="ds-note">No attendance warnings for this student.</div>';
             }
             el.innerHTML = html;
         }).catch(function () { el.innerHTML = ''; });
     }
 
     // Danger confirmation (DC-4, MEDIUM): deactivating in a department removes
-    // the member from that department's sheets. Uses the shared dialog
+    // the student from that department's sheets. Uses the shared dialog
     // (loaded on demand); reactivation keeps the simple dialog below.
     function dcLoad() {
         return new Promise(function (res) {
@@ -186,33 +186,33 @@
             document.head.appendChild(sc);
         });
     }
-    function sendSet(box, memberId, dept, to, reason) {
+    function sendSet(box, studentId, dept, to, reason) {
         return fetchJson(API, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
-            body: JSON.stringify({ action: 'set', member_id: memberId, department: dept, status: to, reason: reason, csrf_token: csrf() })
+            body: JSON.stringify({ action: 'set', student_id: studentId, department: dept, status: to, reason: reason, csrf_token: csrf() })
         }).then(function (d) {
             if (d.status === 'success') {
                 toast(d.message || 'Saved', true);
-                load(box, memberId);
-                document.dispatchEvent(new CustomEvent('deptstatus:changed', { detail: { member_id: memberId, department: dept, status: to } }));
+                load(box, studentId);
+                document.dispatchEvent(new CustomEvent('deptstatus:changed', { detail: { student_id: studentId, department: dept, status: to } }));
             } else {
                 toast(d.message || 'Could not change status', false);
             }
         }).catch(function () { toast('Network error', false); });
     }
-    function openModal(box, memberId, dept, to, plain) {
+    function openModal(box, studentId, dept, to, plain) {
         if (to === 'inactive' && !plain) {
             dcLoad().then(function (ok) {
                 if (!ok) { toast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.', false); return; }
                 window.DangerConfirm.ask({
-                    tier: 'medium', title: 'Deactivate this member in ' + LABELS[dept] + '?', object: LABELS[dept],
-                    summary: 'The member is switched off in this department only. Nothing is deleted.', intent: 'I want to deactivate this member here',
-                    consequences: ['From today the member no longer appears on ' + LABELS[dept] + ' attendance sheets or grade lists.', 'Open attendance warnings in this department stop growing.'],
-                    keeps: ['All history (attendance, marks, warnings) is kept.', 'Other departments are not affected.', 'You can reactivate the member later.'],
+                    tier: 'medium', title: 'Deactivate this student in ' + LABELS[dept] + '?', object: LABELS[dept],
+                    summary: 'The student is switched off in this department only. Nothing is deleted.', intent: 'I want to deactivate this student here',
+                    consequences: ['From today the student no longer appears on ' + LABELS[dept] + ' attendance sheets or grade lists.', 'Open attendance warnings in this department stop growing.'],
+                    keeps: ['All history (attendance, marks, warnings) is kept.', 'Other departments are not affected.', 'You can reactivate the student later.'],
                     reason: { label: 'Reason (at least 3 letters)', required: true, minLength: 3, maxLength: 500, placeholder: 'e.g. Travelled abroad for 3 months' },
-                    phrase: 'DEACTIVATE MEMBER', confirmLabel: 'Deactivate'
-                }).then(function (r) { if (r) sendSet(box, memberId, dept, to, r.reason); });
+                    phrase: 'DEACTIVATE STUDENT', confirmLabel: 'Deactivate'
+                }).then(function (r) { if (r) sendSet(box, studentId, dept, to, r.reason); });
             });
             return;
         }
@@ -222,8 +222,8 @@
         bg.innerHTML = '<div class="ds-modal" role="dialog" aria-modal="true">' +
             '<h4>' + verb + ' in ' + esc(LABELS[dept]) + '</h4>' +
             '<div class="ds-note">' + (to === 'inactive'
-                ? 'The member will no longer appear on ' + esc(LABELS[dept]) + ' attendance sheets or grade lists from today. Nothing is deleted.'
-                : 'The member returns to ' + esc(LABELS[dept]) + ' sheets from today. A new period starts, so earlier absences do not carry over.') + '</div>' +
+                ? 'The student will no longer appear on ' + esc(LABELS[dept]) + ' attendance sheets or grade lists from today. Nothing is deleted.'
+                : 'The student returns to ' + esc(LABELS[dept]) + ' sheets from today. A new period starts, so earlier absences do not carry over.') + '</div>' +
             '<label style="font-size:12px;font-weight:600;color:#334155">Reason (required)</label>' +
             '<textarea maxlength="500" placeholder="e.g. Travelled abroad for 3 months"></textarea>' +
             '<div class="ds-actions"><button type="button" class="ds-btn" data-ds-cancel>Cancel</button>' +
@@ -241,14 +241,14 @@
             fetchJson(API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
-                body: JSON.stringify({ action: 'set', member_id: memberId, department: dept, status: to, reason: reason, csrf_token: csrf() })
+                body: JSON.stringify({ action: 'set', student_id: studentId, department: dept, status: to, reason: reason, csrf_token: csrf() })
             }).then(function (d) {
                 btn.disabled = false;
                 if (d.status === 'success') {
                     toast(d.message || 'Saved', true);
                     close();
-                    load(box, memberId);
-                    document.dispatchEvent(new CustomEvent('deptstatus:changed', { detail: { member_id: memberId, department: dept, status: to } }));
+                    load(box, studentId);
+                    document.dispatchEvent(new CustomEvent('deptstatus:changed', { detail: { student_id: studentId, department: dept, status: to } }));
                 } else {
                     toast(d.message || 'Could not change status', false);
                 }
@@ -256,18 +256,18 @@
         });
     }
 
-    function load(box, memberId) {
+    function load(box, studentId) {
         box.innerHTML = '<div class="ds-note"><i class="fas fa-spinner fa-spin"></i> Loading department status…</div>';
         Promise.all([
-            fetchJson(API + '?action=status&member_id=' + encodeURIComponent(memberId)),
-            fetchJson(API + '?action=history&member_id=' + encodeURIComponent(memberId))
+            fetchJson(API + '?action=status&student_id=' + encodeURIComponent(studentId)),
+            fetchJson(API + '?action=history&student_id=' + encodeURIComponent(studentId))
         ]).then(function (res) {
             var st = res[0], hi = res[1];
             if (st.status !== 'success') {
                 box.innerHTML = '<div class="ds-unavailable">' + esc(st.message || 'Department status unavailable') + '</div>';
                 return;
             }
-            render(box, memberId, st, hi.status === 'success' ? (hi.history || []) : []);
+            render(box, studentId, st, hi.status === 'success' ? (hi.history || []) : []);
         }).catch(function () {
             box.innerHTML = '<div class="ds-unavailable">Could not load department status.</div>';
         });

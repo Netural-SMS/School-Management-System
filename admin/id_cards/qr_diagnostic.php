@@ -63,11 +63,11 @@ if (extension_loaded('gd')) {
     echo "   FIX: Enable php-gd in your hosting panel\n";
 }
 
-// 5. Check members with QR issues
-echo "\n5. Member QR Status in Database:\n";
-$result = $conn->query("SELECT id, member_code, qr_code_path, id_card_status FROM members WHERE id_card_status = 'generated' OR qr_code_path IS NOT NULL LIMIT 20");
+// 5. Check students with QR issues
+echo "\n5. Student QR Status in Database:\n";
+$result = $conn->query("SELECT id, student_code, qr_code_path, id_card_status FROM students WHERE id_card_status = 'generated' OR qr_code_path IS NOT NULL LIMIT 20");
 if ($result && $result->num_rows > 0) {
-    echo "   Members with ID cards:\n";
+    echo "   Students with ID cards:\n";
     while ($row = $result->fetch_assoc()) {
         $qr_db_path = $row['qr_code_path'] ?? 'NULL';
         $qr_exists = false;
@@ -84,10 +84,10 @@ if ($result && $result->num_rows > 0) {
         }
         
         $status_icon = $qr_exists ? "✅" : "❌";
-        echo "   $status_icon Member #{$row['id']} ({$row['member_code']}): DB path={$qr_db_path} | File exists: " . ($qr_exists ? "YES" : "NO") . "\n";
+        echo "   $status_icon Student #{$row['id']} ({$row['student_code']}): DB path={$qr_db_path} | File exists: " . ($qr_exists ? "YES" : "NO") . "\n";
     }
 } else {
-    echo "   ⚠️ No members found with generated ID cards\n";
+    echo "   ⚠️ No students found with generated ID cards\n";
 }
 
 // 6. Test QR generation

@@ -88,7 +88,7 @@ body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background
         <ol class="steps">
             <li>Open the <strong>FKSS app</strong> on your phone.</li>
             <li>Sign in with your taker username and password.</li>
-            <li>Pick the date and section, mark each member, then <strong>Save</strong> or <strong>Submit</strong>.</li>
+            <li>Pick the date and section, mark each student, then <strong>Save</strong> or <strong>Submit</strong>.</li>
         </ol>
         <div class="lockline">
             This page is read-only. Department attendance data is managed by your department's

@@ -106,26 +106,26 @@ class GuardianService
         if (!$ok) {
             throw new \RuntimeException('Guardian update failed.');
         }
-        // Propagate contact details to the legacy denormalized member
+        // Propagate contact details to the legacy denormalized student
         // columns so existing screens/exports stay consistent until the
         // guardian tables fully replace them (primary links only: a
         // second guardian must never overwrite the primary's columns).
         $synced = self::syncLegacy($conn, $id);
-        self::audit($conn, 'Guardian Updated', "Guardian id {$id} updated (single source of truth: all linked children see the new values; {$synced} member row(s) synced).");
+        self::audit($conn, 'Guardian Updated', "Guardian id {$id} updated (single source of truth: all linked children see the new values; {$synced} student row(s) synced).");
     }
 
     /**
-     * Copy the guardian's name/phones into members.guardian_* for every
-     * member whose PRIMARY guardian this is (or one member when given).
+     * Copy the guardian's name/phones into students.guardian_* for every
+     * student whose PRIMARY guardian this is (or one student when given).
      * @return int rows updated
      */
     public static function syncLegacy(\mysqli $conn, int $guardianId, int $onlyMemberId = 0): int
     {
-        $sql = 'UPDATE members m JOIN member_guardians mg ON mg.member_id = m.id JOIN guardians g ON g.id = mg.guardian_id
+        $sql = 'UPDATE students m JOIN student_guardians mg ON mg.student_id = m.id JOIN guardians g ON g.id = mg.guardian_id
                 SET m.guardian_name = g.display_name, m.guardian_phone1 = g.phone_primary, m.guardian_phone2 = g.phone_alt
                 WHERE mg.guardian_id = ? AND mg.is_primary = 1';
         if ($onlyMemberId > 0) {
-            $sql .= ' AND mg.member_id = ?';
+            $sql .= ' AND mg.student_id = ?';
         }
         $sync = $conn->prepare($sql);
         if (!$sync) {
@@ -145,13 +145,13 @@ class GuardianService
     }
 
     /**
-     * Guarantee the member has exactly one primary link when it has any
+     * Guarantee the student has exactly one primary link when it has any
      * link at all (lowest contact_priority, then oldest link wins).
      */
-    public static function ensurePrimary(\mysqli $conn, int $memberId): void
+    public static function ensurePrimary(\mysqli $conn, int $studentId): void
     {
-        $memberId = (int)$memberId;
-        $r = $conn->query("SELECT guardian_id, is_primary FROM member_guardians WHERE member_id = {$memberId} ORDER BY is_primary DESC, contact_priority ASC, created_at ASC, guardian_id ASC");
+        $studentId = (int)$studentId;
+        $r = $conn->query("SELECT guardian_id, is_primary FROM student_guardians WHERE student_id = {$studentId} ORDER BY is_primary DESC, contact_priority ASC, created_at ASC, guardian_id ASC");
         if (!$r) {
             return;
         }
@@ -167,19 +167,19 @@ class GuardianService
             return;
         }
         $keep = (int)$rows[0]['guardian_id'];
-        $conn->query("UPDATE member_guardians SET is_primary = 0 WHERE member_id = {$memberId}");
-        $conn->query("UPDATE member_guardians SET is_primary = 1 WHERE member_id = {$memberId} AND guardian_id = {$keep}");
-        self::syncLegacy($conn, $keep, $memberId);
+        $conn->query("UPDATE student_guardians SET is_primary = 0 WHERE student_id = {$studentId}");
+        $conn->query("UPDATE student_guardians SET is_primary = 1 WHERE student_id = {$studentId} AND guardian_id = {$keep}");
+        self::syncLegacy($conn, $keep, $studentId);
     }
 
-    /** True when the member has at least one primary guardian link. */
-    public static function primaryGuardianId(\mysqli $conn, int $memberId): int
+    /** True when the student has at least one primary guardian link. */
+    public static function primaryGuardianId(\mysqli $conn, int $studentId): int
     {
-        $stmt = $conn->prepare('SELECT guardian_id FROM member_guardians WHERE member_id = ? AND is_primary = 1 LIMIT 1');
+        $stmt = $conn->prepare('SELECT guardian_id FROM student_guardians WHERE student_id = ? AND is_primary = 1 LIMIT 1');
         if (!$stmt) {
             return 0;
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -187,20 +187,20 @@ class GuardianService
     }
 
     /**
-     * Attach a member to a guardian using its legacy guardian_* columns:
+     * Attach a student to a guardian using its legacy guardian_* columns:
      * explicit pick -> typo-tolerant auto-match -> create new guardian.
      * Review-band near-misses are filed as pending suggestions. Shared by
-     * HR registration, web member edit and the mobile PUT route.
+     * HR registration, web student edit and the mobile PUT route.
      *
      * @return array{guardian_id:int, mode:string}  mode: picked|auto|created|none
      */
-    public static function attachFromLegacy(\mysqli $conn, int $memberId, int $pickedGuardianId = 0, string $source = 'hr'): array
+    public static function attachFromLegacy(\mysqli $conn, int $studentId, int $pickedGuardianId = 0, string $source = 'hr'): array
     {
-        $stmt = $conn->prepare('SELECT guardian_name, guardian_phone1, guardian_phone2, guardian_city, guardian_sub_city, guardian_woreda, guardian_mender, guardian_block_number, guardian_house FROM members WHERE id = ?');
+        $stmt = $conn->prepare('SELECT guardian_name, guardian_phone1, guardian_phone2, guardian_city, guardian_sub_city, guardian_woreda, guardian_mender, guardian_block_number, guardian_house FROM students WHERE id = ?');
         if (!$stmt) {
             return ['guardian_id' => 0, 'mode' => 'none'];
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $m = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -208,8 +208,8 @@ class GuardianService
             return ['guardian_id' => 0, 'mode' => 'none'];
         }
         if ($pickedGuardianId > 0) {
-            self::linkMember($conn, $pickedGuardianId, $memberId, 'other', 1, true, true, true);
-            self::audit($conn, 'Guardian Linked', "Member {$memberId} linked to picked guardian {$pickedGuardianId}.");
+            self::linkMember($conn, $pickedGuardianId, $studentId, 'other', 1, true, true, true);
+            self::audit($conn, 'Guardian Linked', "Student {$studentId} linked to picked guardian {$pickedGuardianId}.");
             return ['guardian_id' => $pickedGuardianId, 'mode' => 'picked'];
         }
         $name = trim((string)($m['guardian_name'] ?? ''));
@@ -218,21 +218,21 @@ class GuardianService
         }
         $p1 = trim((string)($m['guardian_phone1'] ?? ''));
         $p2 = trim((string)($m['guardian_phone2'] ?? ''));
-        // Already linked (e.g. registration *upgrade* of an existing member):
+        // Already linked (e.g. registration *upgrade* of an existing student):
         // this is an edit of the primary guardian, not a new attachment.
-        $existing = self::primaryGuardianId($conn, $memberId);
+        $existing = self::primaryGuardianId($conn, $studentId);
         if ($existing > 0) {
             self::update($conn, $existing, ['display_name' => $name, 'phone_primary' => $p1, 'phone_alt' => $p2]);
             return ['guardian_id' => $existing, 'mode' => 'synced'];
         }
         // D5 (owner decision 2026-10-21): siblings share a guardian when the
-        // mother's full name matches exactly AND the members' father +
+        // mother's full name matches exactly AND the students' father +
         // grandfather names match — even when no phone was recorded.
         // A phone match alone stays a scored (review) suggestion below.
-        $familyGid = self::familyNameGuardianMatch($conn, $memberId, $name);
+        $familyGid = self::familyNameGuardianMatch($conn, $studentId, $name);
         if ($familyGid > 0) {
-            self::linkMember($conn, $familyGid, $memberId, 'other', 1, true);
-            self::audit($conn, 'Guardian Linked', "Member {$memberId} auto-linked to guardian {$familyGid} (same guardian name and same father/grandfather names).");
+            self::linkMember($conn, $familyGid, $studentId, 'other', 1, true);
+            self::audit($conn, 'Guardian Linked', "Student {$studentId} auto-linked to guardian {$familyGid} (same guardian name and same father/grandfather names).");
             return ['guardian_id' => $familyGid, 'mode' => 'auto_family'];
         }
         $probe = [
@@ -273,8 +273,8 @@ class GuardianService
         }
         if ($best !== null && $best['band'] === 'auto') {
             $gid = (int)$bestRow['id'];
-            self::linkMember($conn, $gid, $memberId, 'other', 1, true);
-            self::audit($conn, 'Guardian Linked', "Member {$memberId} auto-linked to guardian {$gid} (score {$best['score']}).");
+            self::linkMember($conn, $gid, $studentId, 'other', 1, true);
+            self::audit($conn, 'Guardian Linked', "Student {$studentId} auto-linked to guardian {$gid} (score {$best['score']}).");
             return ['guardian_id' => $gid, 'mode' => 'auto'];
         }
         $gid = self::create($conn, [
@@ -288,13 +288,13 @@ class GuardianService
             'block_number' => $probe['block_number'],
             'house' => $probe['house'],
         ], $source);
-        self::linkMember($conn, $gid, $memberId, 'other', 1, true);
+        self::linkMember($conn, $gid, $studentId, 'other', 1, true);
         if ($best !== null && $best['band'] === 'review') {
-            $sg = $conn->prepare("INSERT INTO guardian_link_suggestions (guardian_a, guardian_b, member_id, score, band, evidence, status) VALUES (?,?,?,?, 'review', ?, 'pending')");
+            $sg = $conn->prepare("INSERT INTO guardian_link_suggestions (guardian_a, guardian_b, student_id, score, band, evidence, status) VALUES (?,?,?,?, 'review', ?, 'pending')");
             if ($sg) {
                 $a = (int)$bestRow['id'];
                 $ev = json_encode($best['evidence'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                $sg->bind_param('iiids', $a, $gid, $memberId, $bestScore, $ev);
+                $sg->bind_param('iiids', $a, $gid, $studentId, $bestScore, $ev);
                 $sg->execute();
                 $sg->close();
             }
@@ -305,17 +305,17 @@ class GuardianService
     /**
      * D5 sibling rule: the ONE active guardian whose name (display name or
      * alias, normalized) equals $guardianName and who is already linked to
-     * another non-archived member with the same normalized father_name AND
+     * another non-archived student with the same normalized father_name AND
      * grandfather_name. Returns 0 when there is no such guardian or when
      * more than one distinct guardian qualifies (never guessed).
      */
-    private static function familyNameGuardianMatch(\mysqli $conn, int $memberId, string $guardianName): int
+    private static function familyNameGuardianMatch(\mysqli $conn, int $studentId, string $guardianName): int
     {
-        $stmt = $conn->prepare('SELECT father_name, grandfather_name FROM members WHERE id = ?');
+        $stmt = $conn->prepare('SELECT father_name, grandfather_name FROM students WHERE id = ?');
         if (!$stmt) {
             return 0;
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $me = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -327,10 +327,10 @@ class GuardianService
         }
         $stmt = $conn->prepare(
             "SELECT g.id, g.display_name, m2.father_name, m2.grandfather_name
-               FROM member_guardians mg
+               FROM student_guardians mg
                JOIN guardians g ON g.id = mg.guardian_id
-               JOIN members m2 ON m2.id = mg.member_id
-              WHERE mg.member_id <> ?
+               JOIN students m2 ON m2.id = mg.student_id
+              WHERE mg.student_id <> ?
                 AND g.status = 'active'
                 AND m2.status <> 'archived'
                 AND TRIM(m2.father_name) = ?
@@ -340,7 +340,7 @@ class GuardianService
             return 0;
         }
         $rawFather = trim((string)($me['father_name'] ?? ''));
-        $stmt->bind_param('is', $memberId, $rawFather);
+        $stmt->bind_param('is', $studentId, $rawFather);
         $stmt->execute();
         $res = $stmt->get_result();
         $hits = [];
@@ -411,10 +411,10 @@ class GuardianService
      * Every derived path (auto/auto_family/created/synced, batch, backfill,
      * mobile reverse-sync) leaves verification NULL for later stamping.
      */
-    public static function linkMember(\mysqli $conn, int $guardianId, int $memberId, string $relation = 'other', int $priority = 1, bool $isPrimary = false, bool $audit = true, bool $officeVerified = false): void
+    public static function linkMember(\mysqli $conn, int $guardianId, int $studentId, string $relation = 'other', int $priority = 1, bool $isPrimary = false, bool $audit = true, bool $officeVerified = false): void
     {
-        if ($guardianId <= 0 || $memberId <= 0) {
-            throw new \InvalidArgumentException('Guardian and member are required.');
+        if ($guardianId <= 0 || $studentId <= 0) {
+            throw new \InvalidArgumentException('Guardian and student are required.');
         }
         $g = self::get($conn, $guardianId);
         if (!$g) {
@@ -423,27 +423,27 @@ class GuardianService
         if ($g['status'] === 'merged') {
             throw new \InvalidArgumentException('That guardian was merged into #' . (int)$g['merged_into'] . ' — link the surviving record instead.');
         }
-        $mc = $conn->prepare('SELECT id FROM members WHERE id = ?');
+        $mc = $conn->prepare('SELECT id FROM students WHERE id = ?');
         if ($mc) {
-            $mc->bind_param('i', $memberId);
+            $mc->bind_param('i', $studentId);
             $mc->execute();
             $exists = $mc->get_result()->fetch_assoc();
             $mc->close();
             if (!$exists) {
-                throw new \InvalidArgumentException('Member not found.');
+                throw new \InvalidArgumentException('Student not found.');
             }
         }
         if (!in_array($relation, ['father', 'mother', 'other'], true)) {
             $relation = 'other';
         }
         $priority = max(1, $priority);
-        // First link of a member is always its primary contact.
-        if (!$isPrimary && self::primaryGuardianId($conn, $memberId) === 0) {
+        // First link of a student is always its primary contact.
+        if (!$isPrimary && self::primaryGuardianId($conn, $studentId) === 0) {
             $isPrimary = true;
         }
         $pri = $isPrimary ? 1 : 0;
         if ($pri === 1) {
-            $conn->query("UPDATE member_guardians SET is_primary = 0 WHERE member_id = " . (int)$memberId);
+            $conn->query("UPDATE student_guardians SET is_primary = 0 WHERE student_id = " . (int)$studentId);
         }
         $uid = (int)($_SESSION['admin_id'] ?? 0);
         // Verification stamps only on explicit office decisions with a real
@@ -451,17 +451,17 @@ class GuardianService
         // byte-identical and never clears an existing stamp on re-link.
         $stamp = $officeVerified && $uid > 0;
         if ($stamp) {
-            $stmt = $conn->prepare("INSERT INTO member_guardians (member_id, guardian_id, relation, contact_priority, is_primary, created_by, verified_by, verified_at) VALUES (?,?,?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE relation=VALUES(relation), contact_priority=VALUES(contact_priority), is_primary=VALUES(is_primary), verified_by=VALUES(verified_by), verified_at=VALUES(verified_at)");
+            $stmt = $conn->prepare("INSERT INTO student_guardians (student_id, guardian_id, relation, contact_priority, is_primary, created_by, verified_by, verified_at) VALUES (?,?,?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE relation=VALUES(relation), contact_priority=VALUES(contact_priority), is_primary=VALUES(is_primary), verified_by=VALUES(verified_by), verified_at=VALUES(verified_at)");
         } else {
-            $stmt = $conn->prepare('INSERT INTO member_guardians (member_id, guardian_id, relation, contact_priority, is_primary, created_by) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE relation=VALUES(relation), contact_priority=VALUES(contact_priority), is_primary=VALUES(is_primary)');
+            $stmt = $conn->prepare('INSERT INTO student_guardians (student_id, guardian_id, relation, contact_priority, is_primary, created_by) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE relation=VALUES(relation), contact_priority=VALUES(contact_priority), is_primary=VALUES(is_primary)');
         }
         if (!$stmt) {
             throw new \RuntimeException('Link prepare failed: ' . $conn->error);
         }
         if ($stamp) {
-            $stmt->bind_param('iisiiii', $memberId, $guardianId, $relation, $priority, $pri, $uid, $uid);
+            $stmt->bind_param('iisiiii', $studentId, $guardianId, $relation, $priority, $pri, $uid, $uid);
         } else {
-            $stmt->bind_param('iisiii', $memberId, $guardianId, $relation, $priority, $pri, $uid);
+            $stmt->bind_param('iisiii', $studentId, $guardianId, $relation, $priority, $pri, $uid);
         }
         $ok = $stmt->execute();
         $stmt->close();
@@ -469,80 +469,80 @@ class GuardianService
             throw new \RuntimeException('Link failed.');
         }
         if ($pri === 1) {
-            self::syncLegacy($conn, $guardianId, $memberId);
+            self::syncLegacy($conn, $guardianId, $studentId);
         }
         if ($audit) {
-            self::audit($conn, 'Guardian Linked', "Member {$memberId} linked to guardian {$guardianId} ({$relation}, priority {$priority}" . ($pri ? ', primary' : '') . ($stamp ? ', verified' : '') . ').');
+            self::audit($conn, 'Guardian Linked', "Student {$studentId} linked to guardian {$guardianId} ({$relation}, priority {$priority}" . ($pri ? ', primary' : '') . ($stamp ? ', verified' : '') . ').');
         }
     }
 
     /** Stamp an existing link as office-verified (audited, re-stampable). */
-    public static function verifyLink(\mysqli $conn, int $guardianId, int $memberId, int $actorId): void
+    public static function verifyLink(\mysqli $conn, int $guardianId, int $studentId, int $actorId): void
     {
-        if ($guardianId <= 0 || $memberId <= 0 || $actorId <= 0) {
-            throw new \InvalidArgumentException('Guardian, member and verifier are required.');
+        if ($guardianId <= 0 || $studentId <= 0 || $actorId <= 0) {
+            throw new \InvalidArgumentException('Guardian, student and verifier are required.');
         }
         // Existence first: re-stamping the same verifier changes no bytes,
         // so affected_rows cannot distinguish "missing" from "unchanged".
-        $exists = $conn->prepare('SELECT member_id FROM member_guardians WHERE member_id = ? AND guardian_id = ?');
+        $exists = $conn->prepare('SELECT student_id FROM student_guardians WHERE student_id = ? AND guardian_id = ?');
         if (!$exists) {
             throw new \RuntimeException('Verify prepare failed: ' . $conn->error);
         }
-        $exists->bind_param('ii', $memberId, $guardianId);
+        $exists->bind_param('ii', $studentId, $guardianId);
         $exists->execute();
         $found = $exists->get_result()->fetch_assoc();
         $exists->close();
         if (!$found) {
-            throw new \InvalidArgumentException('That member is not linked to this guardian.');
+            throw new \InvalidArgumentException('That student is not linked to this guardian.');
         }
-        $stmt = $conn->prepare('UPDATE member_guardians SET verified_by = ?, verified_at = NOW() WHERE member_id = ? AND guardian_id = ?');
+        $stmt = $conn->prepare('UPDATE student_guardians SET verified_by = ?, verified_at = NOW() WHERE student_id = ? AND guardian_id = ?');
         if (!$stmt) {
             throw new \RuntimeException('Verify prepare failed: ' . $conn->error);
         }
-        $stmt->bind_param('iii', $actorId, $memberId, $guardianId);
+        $stmt->bind_param('iii', $actorId, $studentId, $guardianId);
         $stmt->execute();
         $stmt->close();
-        self::audit($conn, 'Guardian Link Verified', "Member {$memberId} ↔ guardian {$guardianId} verified by actor {$actorId}.");
+        self::audit($conn, 'Guardian Link Verified', "Student {$studentId} ↔ guardian {$guardianId} verified by actor {$actorId}.");
     }
 
     /** Clear verification (officer correction; the link itself stays). */
-    public static function clearVerification(\mysqli $conn, int $guardianId, int $memberId, int $actorId): void
+    public static function clearVerification(\mysqli $conn, int $guardianId, int $studentId, int $actorId): void
     {
-        if ($guardianId <= 0 || $memberId <= 0 || $actorId <= 0) {
-            throw new \InvalidArgumentException('Guardian, member and actor are required.');
+        if ($guardianId <= 0 || $studentId <= 0 || $actorId <= 0) {
+            throw new \InvalidArgumentException('Guardian, student and actor are required.');
         }
-        $exists = $conn->prepare('SELECT member_id FROM member_guardians WHERE member_id = ? AND guardian_id = ?');
+        $exists = $conn->prepare('SELECT student_id FROM student_guardians WHERE student_id = ? AND guardian_id = ?');
         if (!$exists) {
             throw new \RuntimeException('Unverify prepare failed: ' . $conn->error);
         }
-        $exists->bind_param('ii', $memberId, $guardianId);
+        $exists->bind_param('ii', $studentId, $guardianId);
         $exists->execute();
         $found = $exists->get_result()->fetch_assoc();
         $exists->close();
         if (!$found) {
-            throw new \InvalidArgumentException('That member is not linked to this guardian.');
+            throw new \InvalidArgumentException('That student is not linked to this guardian.');
         }
-        $stmt = $conn->prepare('UPDATE member_guardians SET verified_by = NULL, verified_at = NULL WHERE member_id = ? AND guardian_id = ?');
+        $stmt = $conn->prepare('UPDATE student_guardians SET verified_by = NULL, verified_at = NULL WHERE student_id = ? AND guardian_id = ?');
         if (!$stmt) {
             throw new \RuntimeException('Unverify prepare failed: ' . $conn->error);
         }
-        $stmt->bind_param('ii', $memberId, $guardianId);
+        $stmt->bind_param('ii', $studentId, $guardianId);
         $stmt->execute();
         $stmt->close();
-        self::audit($conn, 'Guardian Link Unverified', "Member {$memberId} ↔ guardian {$guardianId} verification cleared by actor {$actorId}.");
+        self::audit($conn, 'Guardian Link Unverified', "Student {$studentId} ↔ guardian {$guardianId} verification cleared by actor {$actorId}.");
     }
 
-    public static function unlinkMember(\mysqli $conn, int $guardianId, int $memberId): void
+    public static function unlinkMember(\mysqli $conn, int $guardianId, int $studentId): void
     {
-        $stmt = $conn->prepare('DELETE FROM member_guardians WHERE member_id = ? AND guardian_id = ?');
+        $stmt = $conn->prepare('DELETE FROM student_guardians WHERE student_id = ? AND guardian_id = ?');
         if (!$stmt) {
             throw new \RuntimeException('Unlink prepare failed.');
         }
-        $stmt->bind_param('ii', $memberId, $guardianId);
+        $stmt->bind_param('ii', $studentId, $guardianId);
         $stmt->execute();
         $stmt->close();
-        self::ensurePrimary($conn, $memberId);
-        self::audit($conn, 'Guardian Unlinked', "Member {$memberId} unlinked from guardian {$guardianId}.");
+        self::ensurePrimary($conn, $studentId);
+        self::audit($conn, 'Guardian Unlinked', "Student {$studentId} unlinked from guardian {$guardianId}.");
     }
 
     /** Merge $from into $to: move links, mark merged, audit. Reversible via merged_into. */
@@ -561,24 +561,24 @@ class GuardianService
         }
         $conn->begin_transaction();
         try {
-            // members touched by this merge (for primary repair + legacy sync)
+            // students touched by this merge (for primary repair + legacy sync)
             $touched = [];
-            $tr = $conn->query("SELECT DISTINCT member_id FROM member_guardians WHERE guardian_id IN ({$from}, {$to})");
+            $tr = $conn->query("SELECT DISTINCT student_id FROM student_guardians WHERE guardian_id IN ({$from}, {$to})");
             if ($tr) {
                 while ($x = $tr->fetch_assoc()) {
-                    $touched[] = (int)$x['member_id'];
+                    $touched[] = (int)$x['student_id'];
                 }
             }
-            // a colliding link (member linked to both) keeps the survivor's
+            // a colliding link (student linked to both) keeps the survivor's
             // row but inherits "primary" if the loser's link held it
-            $conn->query("UPDATE member_guardians ex
-                JOIN member_guardians mg ON mg.member_id = ex.member_id AND mg.guardian_id = {$from}
+            $conn->query("UPDATE student_guardians ex
+                JOIN student_guardians mg ON mg.student_id = ex.student_id AND mg.guardian_id = {$from}
                 SET ex.is_primary = 1
                 WHERE ex.guardian_id = {$to} AND mg.is_primary = 1");
-            $conn->query("DELETE mg FROM member_guardians mg
-                JOIN member_guardians ex ON ex.member_id = mg.member_id AND ex.guardian_id = {$to}
+            $conn->query("DELETE mg FROM student_guardians mg
+                JOIN student_guardians ex ON ex.student_id = mg.student_id AND ex.guardian_id = {$to}
                 WHERE mg.guardian_id = {$from}");
-            $conn->query("UPDATE member_guardians SET guardian_id = {$to} WHERE guardian_id = {$from}");
+            $conn->query("UPDATE student_guardians SET guardian_id = {$to} WHERE guardian_id = {$from}");
             // survivorship: keep the survivor's values, fill its blanks from the loser
             $sv = [];
             foreach (['city', 'sub_city', 'woreda', 'mender', 'block_number', 'house', 'photo_path'] as $k) {
@@ -631,12 +631,12 @@ class GuardianService
         self::audit($conn, 'Guardian Merged', "Guardian {$from} merged into {$to} by actor {$resolvedBy}; links moved, old row kept with status=merged for reversal.");
     }
 
-    public static function familyOfMember(\mysqli $conn, int $memberId): array
+    public static function familyOfMember(\mysqli $conn, int $studentId): array
     {
         $guardians = [];
-        $stmt = $conn->prepare('SELECT mg.relation, mg.contact_priority, mg.is_primary, g.* FROM member_guardians mg JOIN guardians g ON g.id = mg.guardian_id WHERE mg.member_id = ? ORDER BY mg.contact_priority ASC');
+        $stmt = $conn->prepare('SELECT mg.relation, mg.contact_priority, mg.is_primary, g.* FROM student_guardians mg JOIN guardians g ON g.id = mg.guardian_id WHERE mg.student_id = ? ORDER BY mg.contact_priority ASC');
         if ($stmt) {
-            $stmt->bind_param('i', $memberId);
+            $stmt->bind_param('i', $studentId);
             $stmt->execute();
             $r = $stmt->get_result();
             while ($g = $r->fetch_assoc()) {
@@ -648,12 +648,12 @@ class GuardianService
         return $guardians;
     }
 
-    public static function siblingsOf(\mysqli $conn, int $memberId): array
+    public static function siblingsOf(\mysqli $conn, int $studentId): array
     {
         $out = [];
-        $stmt = $conn->prepare('SELECT DISTINCT m.id, m.member_code, m.student_name, m.full_name_am, m.current_section FROM member_guardians mg JOIN member_guardians sg ON sg.guardian_id = mg.guardian_id AND sg.member_id != mg.member_id JOIN members m ON m.id = sg.member_id WHERE mg.member_id = ? AND m.status != \'archived\' ORDER BY m.student_name');
+        $stmt = $conn->prepare('SELECT DISTINCT m.id, m.student_code, m.student_name, m.full_name_am,  FROM student_guardians mg JOIN student_guardians sg ON sg.guardian_id = mg.guardian_id AND sg.student_id != mg.student_id JOIN students m ON m.id = sg.student_id WHERE mg.student_id = ? AND m.status != \'archived\' ORDER BY m.student_name');
         if ($stmt) {
-            $stmt->bind_param('i', $memberId);
+            $stmt->bind_param('i', $studentId);
             $stmt->execute();
             $r = $stmt->get_result();
             while ($s = $r->fetch_assoc()) {
@@ -721,11 +721,11 @@ class GuardianService
         return $out;
     }
 
-    /** Linked members of a guardian (id, name, code, section, relation, primary). */
+    /** Linked students of a guardian (id, name, code, section, relation, primary). */
     public static function childrenOf(\mysqli $conn, int $guardianId, int $limit = 50): array
     {
         $kids = [];
-        $s = $conn->prepare('SELECT m.id, m.member_code, m.student_name, m.full_name_am, m.current_section, m.status, m.gender, mg.relation, mg.contact_priority, mg.is_primary, mg.verified_by IS NOT NULL AS is_verified, mg.verified_at FROM member_guardians mg JOIN members m ON m.id = mg.member_id WHERE mg.guardian_id = ? ORDER BY m.student_name LIMIT ' . max(1, (int)$limit));
+        $s = $conn->prepare('SELECT m.id, m.student_code, m.student_name, m.full_name_am, , m.status, m.gender, mg.relation, mg.contact_priority, mg.is_primary, mg.verified_by IS NOT NULL AS is_verified, mg.verified_at FROM student_guardians mg JOIN students m ON m.id = mg.student_id WHERE mg.guardian_id = ? ORDER BY m.student_name LIMIT ' . max(1, (int)$limit));
         if ($s) {
             $s->bind_param('i', $guardianId);
             $s->execute();
@@ -748,12 +748,12 @@ class GuardianService
         };
         return [
             'guardians' => (int)$q("SELECT COUNT(*) FROM guardians WHERE status = 'active'"),
-            'families_multi' => (int)$q("SELECT COUNT(*) FROM (SELECT guardian_id FROM member_guardians GROUP BY guardian_id HAVING COUNT(*) >= 2) t"),
-            'members_linked' => (int)$q("SELECT COUNT(DISTINCT member_id) FROM member_guardians"),
-            'members_unlinked' => (int)$q("SELECT COUNT(*) FROM members m WHERE m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) != '' AND NOT EXISTS (SELECT 1 FROM member_guardians mg WHERE mg.member_id = m.id)"),
-            'members_no_guardian' => (int)$q("SELECT COUNT(*) FROM members m WHERE m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) = '' AND NOT EXISTS (SELECT 1 FROM member_guardians mg WHERE mg.member_id = m.id)"),
+            'families_multi' => (int)$q("SELECT COUNT(*) FROM (SELECT guardian_id FROM student_guardians GROUP BY guardian_id HAVING COUNT(*) >= 2) t"),
+            'members_linked' => (int)$q("SELECT COUNT(DISTINCT student_id) FROM student_guardians"),
+            'members_unlinked' => (int)$q("SELECT COUNT(*) FROM students m WHERE m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) != '' AND NOT EXISTS (SELECT 1 FROM student_guardians mg WHERE mg.student_id = m.id)"),
+            'members_no_guardian' => (int)$q("SELECT COUNT(*) FROM students m WHERE m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) = '' AND NOT EXISTS (SELECT 1 FROM student_guardians mg WHERE mg.student_id = m.id)"),
             'pending_reviews' => (int)$q("SELECT COUNT(*) FROM guardian_link_suggestions WHERE status = 'pending'"),
-            'links_unverified' => (int)$q("SELECT COUNT(*) FROM member_guardians WHERE verified_by IS NULL"),
+            'links_unverified' => (int)$q("SELECT COUNT(*) FROM student_guardians WHERE verified_by IS NULL"),
             'merged' => (int)$q("SELECT COUNT(*) FROM guardians WHERE status = 'merged'"),
             'last_rematch' => $q("SELECT COALESCE(MAX(created_at), '') FROM activity_logs WHERE action = 'Guardian Rematch'"),
         ];
@@ -813,7 +813,7 @@ class GuardianService
         }
         $w = implode(' AND ', $where);
         $base = "FROM guardians g WHERE {$w}";
-        $countSql = "SELECT COUNT(*) FROM (SELECT g.id, (SELECT COUNT(*) FROM member_guardians mg WHERE mg.guardian_id = g.id) AS children_count {$base} {$having}) t";
+        $countSql = "SELECT COUNT(*) FROM (SELECT g.id, (SELECT COUNT(*) FROM student_guardians mg WHERE mg.guardian_id = g.id) AS children_count {$base} {$having}) t";
         $st = $conn->prepare($countSql);
         if (!$st) {
             return ['rows' => [], 'total' => 0, 'page' => 1, 'pages' => 1];
@@ -828,8 +828,8 @@ class GuardianService
         $page = min($page, $pages);
         $off = ($page - 1) * $per;
         $sql = "SELECT g.id, g.display_name, g.phone_primary, g.phone_alt, g.city, g.sub_city, g.status, g.source, g.updated_at,
-                (SELECT COUNT(*) FROM member_guardians mg WHERE mg.guardian_id = g.id) AS children_count,
-                (SELECT GROUP_CONCAT(COALESCE(NULLIF(m.student_name,''), m.full_name_am) ORDER BY m.student_name SEPARATOR ', ') FROM member_guardians mg JOIN members m ON m.id = mg.member_id WHERE mg.guardian_id = g.id) AS children_names
+                (SELECT COUNT(*) FROM student_guardians mg WHERE mg.guardian_id = g.id) AS children_count,
+                (SELECT GROUP_CONCAT(COALESCE(NULLIF(m.student_name,''), m.full_name_am) ORDER BY m.student_name SEPARATOR ', ') FROM student_guardians mg JOIN students m ON m.id = mg.student_id WHERE mg.guardian_id = g.id) AS children_names
                 {$base} {$having} ORDER BY g.updated_at DESC, g.id DESC LIMIT {$per} OFFSET {$off}";
         $st = $conn->prepare($sql);
         $rows = [];
@@ -847,13 +847,13 @@ class GuardianService
         return ['rows' => $rows, 'total' => $total, 'page' => $page, 'pages' => $pages];
     }
 
-    /** Members that carry a legacy guardian name but have no guardian link yet. */
+    /** Students that carry a legacy guardian name but have no guardian link yet. */
     public static function unlinkedMembers(\mysqli $conn, int $page = 1, int $per = 25, int $afterId = 0, bool $ascending = false): array
     {
         $per = max(5, min(100, $per));
         $page = max(1, $page);
-        $cond = "m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) != '' AND NOT EXISTS (SELECT 1 FROM member_guardians mg WHERE mg.member_id = m.id)";
-        $r = $conn->query("SELECT COUNT(*) FROM members m WHERE {$cond}");
+        $cond = "m.status != 'archived' AND TRIM(COALESCE(m.guardian_name,'')) != '' AND NOT EXISTS (SELECT 1 FROM student_guardians mg WHERE mg.student_id = m.id)";
+        $r = $conn->query("SELECT COUNT(*) FROM students m WHERE {$cond}");
         $total = $r ? (int)$r->fetch_row()[0] : 0;
         $pages = max(1, (int)ceil($total / $per));
         $page = min($page, $pages);
@@ -865,7 +865,7 @@ class GuardianService
         $order = $asc ? 'ORDER BY m.id ASC' : 'ORDER BY m.id DESC';
         $limit = $asc ? "LIMIT {$per}" : "LIMIT {$per} OFFSET {$off}";
         $rows = [];
-        $res = $conn->query("SELECT m.id, m.member_code, m.student_name, m.full_name_am, m.current_section, m.guardian_name, m.guardian_phone1, m.guardian_phone2 FROM members m WHERE {$cond}{$extra} {$order} {$limit}");
+        $res = $conn->query("SELECT m.id, m.student_code, m.student_name, m.full_name_am, , m.guardian_name, m.guardian_phone1, m.guardian_phone2 FROM students m WHERE {$cond}{$extra} {$order} {$limit}");
         if ($res) {
             while ($x = $res->fetch_assoc()) {
                 $rows[] = $x;
@@ -875,15 +875,15 @@ class GuardianService
     }
 
     /**
-     * Bounded in-browser backfill: attach up to $limit unlinked members
-     * (match-or-create) within $budget seconds. Cursor-resumable by member id.
+     * Bounded in-browser backfill: attach up to $limit unlinked students
+     * (match-or-create) within $budget seconds. Cursor-resumable by student id.
      * @return array{processed:int, created:int, matched:int, failed:int, next_cursor:int, done:bool, remaining:int}
      */
     public static function attachBatch(\mysqli $conn, int $cursor = 0, int $limit = 40, float $budget = 15.0): array
     {
         $t0 = microtime(true);
         // Ascending from the cursor. (Before 2026-10-21 the first step read
-        // the NEWEST members, moved the cursor past every older one and
+        // the NEWEST students, moved the cursor past every older one and
         // reported done — "Link all" stopped after one step of 40.)
         $batch = self::unlinkedMembers($conn, 1, $limit, $cursor, true);
         $processed = $created = $matched = $failed = 0;
@@ -903,7 +903,7 @@ class GuardianService
                 }
             } catch (\Throwable $e) {
                 $failed++;
-                error_log('attachBatch member ' . $m['id'] . ': ' . $e->getMessage());
+                error_log('attachBatch student ' . $m['id'] . ': ' . $e->getMessage());
             }
         }
         $remaining = self::unlinkedMembers($conn, 1, 5, $last, true)['rows'];
@@ -927,18 +927,18 @@ class GuardianService
     }
 
     /** Change relation / primary flag of an existing link. */
-    public static function setRelation(\mysqli $conn, int $guardianId, int $memberId, string $relation, ?bool $isPrimary): void
+    public static function setRelation(\mysqli $conn, int $guardianId, int $studentId, string $relation, ?bool $isPrimary): void
     {
-        $st = $conn->prepare('SELECT relation, contact_priority, is_primary FROM member_guardians WHERE member_id = ? AND guardian_id = ?');
+        $st = $conn->prepare('SELECT relation, contact_priority, is_primary FROM student_guardians WHERE student_id = ? AND guardian_id = ?');
         if (!$st) {
             throw new \RuntimeException('prepare failed');
         }
-        $st->bind_param('ii', $memberId, $guardianId);
+        $st->bind_param('ii', $studentId, $guardianId);
         $st->execute();
         $row = $st->get_result()->fetch_assoc();
         $st->close();
         if (!$row) {
-            throw new \InvalidArgumentException('That member is not linked to this guardian.');
+            throw new \InvalidArgumentException('That student is not linked to this guardian.');
         }
         if (!in_array($relation, ['father', 'mother', 'other'], true)) {
             $relation = (string)$row['relation'];
@@ -946,13 +946,13 @@ class GuardianService
         $primary = $isPrimary === null ? ((int)$row['is_primary'] === 1) : $isPrimary;
         if (!$primary && (int)$row['is_primary'] === 1) {
             // demoting the only primary is not allowed; pick another explicitly
-            $cnt = (int)$conn->query('SELECT COUNT(*) FROM member_guardians WHERE member_id = ' . (int)$memberId)->fetch_row()[0];
+            $cnt = (int)$conn->query('SELECT COUNT(*) FROM student_guardians WHERE student_id = ' . (int)$studentId)->fetch_row()[0];
             if ($cnt <= 1) {
-                throw new \InvalidArgumentException('A member must keep one primary guardian. Mark another guardian as primary instead.');
+                throw new \InvalidArgumentException('A student must keep one primary guardian. Mark another guardian as primary instead.');
             }
         }
-        self::linkMember($conn, $guardianId, $memberId, $relation, (int)$row['contact_priority'], $primary, false);
-        self::ensurePrimary($conn, $memberId);
-        self::audit($conn, 'Guardian Linked', "Member {$memberId} ↔ guardian {$guardianId}: relation {$relation}" . ($primary ? ', primary' : '') . '.');
+        self::linkMember($conn, $guardianId, $studentId, $relation, (int)$row['contact_priority'], $primary, false);
+        self::ensurePrimary($conn, $studentId);
+        self::audit($conn, 'Guardian Linked', "Student {$studentId} ↔ guardian {$guardianId}: relation {$relation}" . ($primary ? ', primary' : '') . '.');
     }
 }

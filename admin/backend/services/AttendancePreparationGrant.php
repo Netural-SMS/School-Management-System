@@ -50,7 +50,7 @@ final class AttendancePreparationGrant
                     && $day['origin_matches_write_year'] && $day['base_roster_compatible']
                     && !$day['lesson_derived'] && $day['workflow_supported']
                     && ($day['teacher_workflow_open'] || $staff)
-                    && count($day['member_ids']) > 0 && count($day['member_ids']) <= AttendanceRecordService::MAX_RECORDS
+                    && count($day['student_ids']) > 0 && count($day['student_ids']) <= AttendanceRecordService::MAX_RECORDS
                     && $start->getTimestamp() <= $notAfter;
                 $workflow = ['packet'=>$day['packet'],'resolved_status'=>$day['resolved_status'],
                     'workflow_supported'=>$day['workflow_supported'],'lesson_derived'=>$day['lesson_derived'],
@@ -58,7 +58,7 @@ final class AttendancePreparationGrant
                     'origin_matches_write_year'=>$day['origin_matches_write_year']];
                 $context = $common + ['kind'=>'day','class_id'=>$class['class_id'],
                     'write_year_id'=>$class['write_year_id'],'roster_year_id'=>$class['roster_year_id'],
-                    'date'=>$day['date'],'roster_digest'=>self::digest($day['member_ids']),
+                    'date'=>$day['date'],'roster_digest'=>self::digest($day['student_ids']),
                     'base_digest'=>self::digest($day['records']),'workflow_digest'=>self::digest($workflow),
                     'calendar_code'=>$day['calendar_code'],'capture_eligible'=>$eligible,
                     'not_before'=>$start->getTimestamp(),'not_after'=>$notAfter];

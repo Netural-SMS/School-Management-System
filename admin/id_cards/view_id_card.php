@@ -5,27 +5,27 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/libs/eth_date_helper.php';
 require_once __DIR__ . '/../backend/services/IdCardLayout.php';
 
-// SECURITY (IDOR fix): this page renders member PII (photo, name, phone,
+// SECURITY (IDOR fix): this page renders student PII (photo, name, phone,
 // address, guardian). It used to rely on nothing but obscurity — anyone
-// could sweep ?member_id=1..N. Authenticated admin session is mandatory,
+// could sweep ?student_id=1..N. Authenticated admin session is mandatory,
 // mirroring the dashboard router convention.
 if (!isLoggedIn()) {
     header('Location: ' . ssms_app_url('admin/index.php'));
     exit;
 }
 
-$member_id = isset($_GET['member_id']) ? intval($_GET['member_id']) : 0;
+$student_id = isset($_GET['student_id']) ? intval($_GET['student_id']) : 0;
 $backDashboard = match ((string)($_SESSION['admin_role'] ?? '')) {
     'super_admin' => ssms_app_url('admin/dashboards/super-admin.php'),
     'school_admin' => ssms_app_url('admin/dashboards/school_admin.php'),
     default => ssms_app_url('admin/dashboards/hr-dept.php'),
 };
-$stmt = $conn->prepare("SELECT * FROM members WHERE id = ?");
-$stmt->bind_param("i", $member_id);
+$stmt = $conn->prepare("SELECT * FROM students WHERE id = ?");
+$stmt->bind_param("i", $student_id);
 $stmt->execute();
-$member = $stmt->get_result()->fetch_assoc();
+$student = $stmt->get_result()->fetch_assoc();
 
-if (!$member) die("Member not found");
+if (!$student) die("Student not found");
 
 // ASSETS — Load from system_branding table (managed via Super Admin > Branding)
 // with cache-busting ?v=mtime and theme-aware packaged fallbacks.
@@ -56,15 +56,15 @@ $DISPLAY['sig_admin_size'] = (int)$layout['sig_admin_size'];
 $DISPLAY['sig_admin_opacity'] = (int)$layout['sig_admin_opacity'];
 
 // --- ETHIOPIAN DATES ---
-$issueDateGregorian = $member['id_card_generated_at'] ?? date('Y-m-d');
+$issueDateGregorian = $student['id_card_generated_at'] ?? date('Y-m-d');
 $issueDateEth = toEthiopianDate($issueDateGregorian);
 $expiryDateGregorian = date('Y-m-d', strtotime($issueDateGregorian . ' + 4 years'));
 $expiryDateEth = toEthiopianDate($expiryDateGregorian);
-$isExpired = isExpired($member['id_card_generated_at']);
+$isExpired = isExpired($student['id_card_generated_at']);
 
 // DATA PREP
-$full_name = ($member['student_name'] ?? '') . ' ' . ($member['father_name'] ?? '') . ' ' . ($member['grandfather_name'] ?? '');
-$christian_name = !empty($member['baptismal_name']) ? $member['baptismal_name'] : '-----------';
+$full_name = ($student['student_name'] ?? '') . ' ' . ($student['father_name'] ?? '') . ' ' . ($student['grandfather_name'] ?? '');
+$christian_name = !empty($student['baptismal_name']) ? $student['baptismal_name'] : '-----------';
 
 // Age Calculation
 // Calculate current Ethiopian year dynamically
@@ -78,34 +78,34 @@ if ($gcMonth < 9 || ($gcMonth === 9 && $gcDay < 11)) {
 } else {
     $currentYearEth = $gcYear - 7;
 }
-if (!empty($member['dob_ec_year'])) {
-    $age = $currentYearEth - $member['dob_ec_year'];
-} elseif (!empty($member['date_of_birth'])) {
-    $age = date('Y') - date('Y', strtotime($member['date_of_birth']));
+if (!empty($student['dob_ec_year'])) {
+    $age = $currentYearEth - $student['dob_ec_year'];
+} elseif (!empty($student['date_of_birth'])) {
+    $age = date('Y') - date('Y', strtotime($student['date_of_birth']));
 } else {
     $age = '--';
 }
 
-$filename = "ID_" . $member['member_code'];
+$filename = "ID_" . $student['student_code'];
 
 // Address Construction
 $address_parts = [];
-if (!empty($member['city'])) $address_parts[] = $member['city'];
-if (!empty($member['sub_city'])) $address_parts[] = $member['sub_city'];
-if (!empty($member['woreda'])) $address_parts[] = 'Wor. ' . $member['woreda'];
-if (!empty($member['house_number'])) $address_parts[] = 'H.No ' . $member['house_number'];
+if (!empty($student['city'])) $address_parts[] = $student['city'];
+if (!empty($student['sub_city'])) $address_parts[] = $student['sub_city'];
+if (!empty($student['woreda'])) $address_parts[] = 'Wor. ' . $student['woreda'];
+if (!empty($student['house_number'])) $address_parts[] = 'H.No ' . $student['house_number'];
 
-$member['address'] = !empty($address_parts) ? implode(', ', $address_parts) : ($member['address'] ?? '---');
+$student['address'] = !empty($address_parts) ? implode(', ', $address_parts) : ($student['address'] ?? '---');
 
 // Fix Image Path for ID Card (needs to be relative to this file or absolute)
 // This file is in admin/id_cards/
-// Images are in admin/uploads/members/photos/
-// DB path is usually uploads/members/photos/...
-// So we need ../uploads/members/photos/...
+// Images are in admin/uploads/students/photos/
+// DB path is usually uploads/students/photos/...
+// So we need ../uploads/students/photos/...
 
-if (!empty($member['student_photo_path'])) {
+if (!empty($student['student_photo_path'])) {
     // 1. Normalize: remove leading slash
-    $p = ltrim($member['student_photo_path'], '/');
+    $p = ltrim($student['student_photo_path'], '/');
     
     // 2. Remove 'admin/' prefix if present (to get clean 'uploads/...')
     if (strpos($p, 'admin/') === 0) {
@@ -121,24 +121,24 @@ if (!empty($member['student_photo_path'])) {
     if (file_exists($absCheck)) {
         // Use absolute web URL for background-image (html2canvas resolves bg-images
         // from the page URL context, so absolute URLs are most reliable)
-        $member['student_photo_path'] = '/admin/' . $p;
+        $student['student_photo_path'] = '/admin/' . $p;
     } else {
         // File missing — clear the path so template shows empty placeholder
-        $member['student_photo_path'] = '';
+        $student['student_photo_path'] = '';
     }
 }
 
-// Fix QR Code Path and self-heal using the canonical qr_member_{id}.png filename
+// Fix QR Code Path and self-heal using the canonical qr_student_{id}.png filename
 // shared with generate_id_card.php and IdentityCodeService::regenerateQr().
-$canonicalQrFile = 'qr_member_' . (int)$member_id . '.png';
+$canonicalQrFile = 'qr_student_' . (int)$student_id . '.png';
 $canonicalQrRel = 'assets/qr/' . $canonicalQrFile;
 $canonicalQrWeb = '/admin/id_cards/' . $canonicalQrRel;
 $canonicalQrDisk = __DIR__ . '/' . $canonicalQrRel;
 $resolvedQrDisk = null;
 $resolvedQrRel = '';
 
-if (!empty($member['qr_code_path'])) {
-    $qp = ltrim((string)$member['qr_code_path'], '/');
+if (!empty($student['qr_code_path'])) {
+    $qp = ltrim((string)$student['qr_code_path'], '/');
     if (strpos($qp, 'admin/id_cards/') === 0) {
         $qp = substr($qp, strlen('admin/id_cards/'));
     } elseif (strpos($qp, 'admin/') === 0) {
@@ -156,17 +156,17 @@ if (!empty($member['qr_code_path'])) {
 if ($resolvedQrDisk === null && is_file($canonicalQrDisk) && filesize($canonicalQrDisk) >= 32) {
     $resolvedQrDisk = $canonicalQrDisk;
     $resolvedQrRel = $canonicalQrRel;
-    if (($member['qr_code_path'] ?? '') !== $canonicalQrWeb) {
-        $syncStmt = $conn->prepare('UPDATE members SET qr_code_path = ? WHERE id = ?');
+    if (($student['qr_code_path'] ?? '') !== $canonicalQrWeb) {
+        $syncStmt = $conn->prepare('UPDATE students SET qr_code_path = ? WHERE id = ?');
         if ($syncStmt) {
-            $syncStmt->bind_param('si', $canonicalQrWeb, $member_id);
+            $syncStmt->bind_param('si', $canonicalQrWeb, $student_id);
             $syncStmt->execute();
             $syncStmt->close();
         }
     }
 }
 
-if ($resolvedQrDisk === null && !empty($member['member_code'])) {
+if ($resolvedQrDisk === null && !empty($student['student_code'])) {
     require_once __DIR__ . '/libs/qr_loader.php';
     if (class_exists('QRcode') && extension_loaded('gd') && function_exists('imagepng')) {
         $qr_dir = __DIR__ . '/assets/qr';
@@ -174,7 +174,7 @@ if ($resolvedQrDisk === null && !empty($member['member_code'])) {
             @mkdir($qr_dir, 0755, true); // 0755, never world-writable
         }
         if (is_dir($qr_dir) && is_writable($qr_dir)) {
-            $qr_content = rtrim((string)SITE_URL, '/') . '/member.php?code=' . rawurlencode((string)$member['member_code']);
+            $qr_content = rtrim((string)SITE_URL, '/') . '/student.php?code=' . rawurlencode((string)$student['student_code']);
             $tmpQr = tempnam($qr_dir, '.qr-');
             if ($tmpQr !== false) {
                 try {
@@ -184,9 +184,9 @@ if ($resolvedQrDisk === null && !empty($member['member_code'])) {
                         if (@rename($tmpQr, $canonicalQrDisk) || @copy($tmpQr, $canonicalQrDisk)) {
                             $resolvedQrDisk = $canonicalQrDisk;
                             $resolvedQrRel = $canonicalQrRel;
-                            $update_stmt = $conn->prepare('UPDATE members SET qr_code_path = ? WHERE id = ?');
+                            $update_stmt = $conn->prepare('UPDATE students SET qr_code_path = ? WHERE id = ?');
                             if ($update_stmt) {
-                                $update_stmt->bind_param('si', $canonicalQrWeb, $member_id);
+                                $update_stmt->bind_param('si', $canonicalQrWeb, $student_id);
                                 $update_stmt->execute();
                                 $update_stmt->close();
                             }
@@ -211,21 +211,21 @@ if ($resolvedQrDisk !== null && $resolvedQrRel !== '') {
     $qrWebUrl = str_starts_with($resolvedQrRel, '../')
         ? ssms_app_url('admin/' . ltrim(substr($resolvedQrRel, 3), '/'))
         : ssms_app_url('admin/id_cards/' . ltrim($resolvedQrRel, '/'));
-    $member['qr_code_path'] = $qrWebUrl . ($qrVer > 0 ? ('?v=' . $qrVer) : '');
+    $student['qr_code_path'] = $qrWebUrl . ($qrVer > 0 ? ('?v=' . $qrVer) : '');
 } else {
-    $member['qr_code_path'] = '';
+    $student['qr_code_path'] = '';
 }
 
 // Map DB columns to Template variables
-$member['emergency_name'] = $member['guardian_name'] ?? '---';
-$member['emergency_phone'] = $member['guardian_phone1'] ?? '---';
+$student['emergency_name'] = $student['guardian_name'] ?? '---';
+$student['emergency_phone'] = $student['guardian_phone1'] ?? '---';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Card - <?php echo htmlspecialchars((string)$member['member_code'], ENT_QUOTES, 'UTF-8'); ?></title>
+    <title>ID Card - <?php echo htmlspecialchars((string)$student['student_code'], ENT_QUOTES, 'UTF-8'); ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
@@ -273,7 +273,7 @@ $member['emergency_phone'] = $member['guardian_phone1'] ?? '---';
             <!-- RENEW BUTTON -->
             <form method="post" action="generate_id_card.php" id="dcRenewCardForm">
                 <?= csrf_field() ?>
-                <input type="hidden" name="member_id" value="<?= (int)$member_id ?>">
+                <input type="hidden" name="student_id" value="<?= (int)$student_id ?>">
                 <input type="hidden" name="action" value="renew">
                 <button type="submit"
                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded shadow font-semibold flex items-center gap-2 text-sm">
@@ -372,7 +372,7 @@ $member['emergency_phone'] = $member['guardian_phone1'] ?? '---';
 (function () {
     var f = document.getElementById('dcRenewCardForm');
     if (f && window.DangerConfirm && window.DangerConfirm.guardForm) {
-        window.DangerConfirm.guardForm(f, { tier: 'medium', title: 'Renew this ID card?', summary: 'A renewed card replaces the current one.', intent: 'I want to renew this card', consequences: ['The issue date is reset to TODAY and a new expiry date is calculated.', 'The card that was printed before shows old dates; print and hand out the new card.'], keeps: ['The member code and QR code stay the same.', 'Member data is not changed.'], phrase: 'RENEW CARD', confirmLabel: 'Renew card' });
+        window.DangerConfirm.guardForm(f, { tier: 'medium', title: 'Renew this ID card?', summary: 'A renewed card replaces the current one.', intent: 'I want to renew this card', consequences: ['The issue date is reset to TODAY and a new expiry date is calculated.', 'The card that was printed before shows old dates; print and hand out the new card.'], keeps: ['The student code and QR code stay the same.', 'Student data is not changed.'], phrase: 'RENEW CARD', confirmLabel: 'Renew card' });
     } else if (f) {
         f.addEventListener('submit', function (e) { e.preventDefault(); alert('The confirmation dialog did not load. Reload the page and try again.'); });
     }

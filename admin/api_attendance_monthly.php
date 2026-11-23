@@ -7,7 +7,7 @@
  *   GET ?action=summary&department=&ec_year=&ec_month=  → band counts, below-threshold count, policy
  *   GET ?action=list&department=&ec_year=&ec_month=[&below=1&band=&group=&q=&limit=&offset=]
  *   GET ?action=groups&department=&ec_year=&ec_month=   → classes (Education) / sections (Mezmur) in the month
- *   GET ?action=member&department=&member_id=N          → the member's months (drill-down)
+ *   GET ?action=student&department=&student_id=N          → the student's months (drill-down)
  *   GET ?action=export&department=&ec_year=&ec_month=[&below=1&band=&group=&q=&format=xlsx|csv]
  *
  * Data comes from the derived table `attendance_month_rollup` (sql/074) which
@@ -68,7 +68,7 @@ if (!in_array($role, AttendanceWarningService::READ_ROLES, true)) {
 }
 $myDepartments = AttendanceWarningService::departmentsForRole($role);
 
-if (!in_array($action, ['months', 'summary', 'list', 'groups', 'member', 'export'], true)) {
+if (!in_array($action, ['months', 'summary', 'list', 'groups', 'student', 'export'], true)) {
     $fail(400, 'Unknown action');
 }
 
@@ -157,15 +157,15 @@ switch ($action) {
         $ok($meta + ['groups' => AttendanceMonthRollupService::groupsForMonth($conn, $department, $y, $m)]);
     }
 
-    case 'member': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'member_id required');
+    case 'student': {
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'student_id required');
         }
         if (!$available) {
-            $ok($meta + ['member_id' => $memberId, 'months' => []]);
+            $ok($meta + ['student_id' => $studentId, 'months' => []]);
         }
-        $ok($meta + ['member_id' => $memberId, 'months' => AttendanceMonthRollupService::memberMonths($conn, $department, $memberId, 13)]);
+        $ok($meta + ['student_id' => $studentId, 'months' => AttendanceMonthRollupService::memberMonths($conn, $department, $studentId, 13)]);
     }
 
     case 'export': {
@@ -190,7 +190,7 @@ switch ($action) {
 
         $format = (string)($_GET['format'] ?? 'xlsx') === 'csv' ? 'csv' : 'xlsx';
         $groupLabel = $department === 'edu' ? 'Class' : 'Section';
-        $headers = ['#', 'Member code', 'Name', 'Gender', $groupLabel, 'Dept. status', 'Sessions', 'Present', 'Late', 'Excused', 'Absent',
+        $headers = ['#', 'Student code', 'Name', 'Gender', $groupLabel, 'Dept. status', 'Sessions', 'Present', 'Late', 'Excused', 'Absent',
             'Present (weighted)', 'Rate %', 'Band', 'Below ' . rtrim(rtrim(number_format((float)$summary['threshold'], 2, '.', ''), '0'), '.') . '%', 'Open warnings'];
         $bandLabels = ['excellent' => 'Excellent', 'good' => 'Good', 'fair' => 'Fair', 'low' => 'Low', 'no_data' => 'No data'];
         $lines = [];
@@ -198,7 +198,7 @@ switch ($action) {
         foreach ($rows as $r) {
             $n++;
             $lines[] = [
-                $n, $r['member_code'], $r['name'], $r['gender'] === '' ? '—' : ucfirst((string)$r['gender']), $r['group'],
+                $n, $r['student_code'], $r['name'], $r['gender'] === '' ? '—' : ucfirst((string)$r['gender']), $r['group'],
                 ucfirst((string)$r['department_status']), $r['sessions'], $r['present'], $r['late'], $r['excused'], $r['absent'],
                 $r['present_eq'], $r['rate'] === null ? '—' : $r['rate'], $bandLabels[$r['band']] ?? $r['band'],
                 $r['below_threshold'] ? 'Yes' : 'No', $r['open_warnings'],

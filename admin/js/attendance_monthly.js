@@ -119,7 +119,7 @@
   function renderCards(s) {
     if (!s) { els.cards.innerHTML = ''; return; }
     var cards = [
-      { key: '', h: 'Members in month', big: s.members, sub: s.with_data + ' with sessions' },
+      { key: '', h: 'Students in month', big: s.students, sub: s.with_data + ' with sessions' },
       { key: 'below', h: 'Below ' + s.threshold + '%', big: s.below, sub: 'min ' + s.min_sessions + ' sessions' },
       { key: 'avg', h: 'Average rate', big: s.avg_rate == null ? '—' : s.avg_rate + '%', sub: 'weighted rate' },
       { key: 'excellent', h: 'Excellent ≥ 90%', big: s.bands.excellent, sub: '' },
@@ -150,22 +150,22 @@
   function renderList() {
     var isEdu = dept() === 'edu';
     if (!state.items.length) {
-      els.list.innerHTML = '<div class="am-empty">No members match for this month.</div>';
+      els.list.innerHTML = '<div class="am-empty">No students match for this month.</div>';
       return;
     }
     var html = '<table class="am-table"><thead><tr>' +
-      '<th>#</th><th>Member</th><th class="opt">' + (isEdu ? 'Class' : 'Section') + '</th>' +
+      '<th>#</th><th>Student</th><th class="opt">' + (isEdu ? 'Class' : 'Section') + '</th>' +
       '<th class="num">Sessions</th><th class="num opt">Present</th><th class="num opt">Late</th><th class="num opt">Excused</th><th class="num">Absent</th>' +
       '<th class="num">Rate</th><th>Band</th><th class="opt">Flags</th></tr></thead><tbody>';
     state.items.forEach(function (r, i) {
       var flags = [];
       if (r.below_threshold) { flags.push(pill('low', 'Below ' + (r.threshold_value != null ? r.threshold_value : '') + '%')); }
-      if (r.open_warnings > 0) { flags.push('<a href="' + esc((cfg.warningsUrl || '/admin/attendance_warnings.php') + '?department=' + dept() + '&member_id=' + r.member_id) + '">' + pill('warn', r.open_warnings + ' open warning' + (r.open_warnings > 1 ? 's' : '')) + '</a>'); }
+      if (r.open_warnings > 0) { flags.push('<a href="' + esc((cfg.warningsUrl || '/admin/attendance_warnings.php') + '?department=' + dept() + '&student_id=' + r.student_id) + '">' + pill('warn', r.open_warnings + ' open warning' + (r.open_warnings > 1 ? 's' : '')) + '</a>'); }
       if (r.department_status === 'inactive') { flags.push(pill('inactive', 'Inactive in dept.')); }
       var bar = r.rate == null ? '' : '<span class="am-bar"><i style="width:' + Math.max(0, Math.min(100, r.rate)) + '%"></i></span>';
-      html += '<tr class="' + (r.below_threshold ? 'below' : '') + '" data-id="' + r.member_id + '">' +
+      html += '<tr class="' + (r.below_threshold ? 'below' : '') + '" data-id="' + r.student_id + '">' +
         '<td>' + (state.offset + i + 1) + '</td>' +
-        '<td><a href="#" class="am-member" data-id="' + r.member_id + '"><strong>' + esc(r.name) + '</strong></a><div class="am-note">' + esc(r.member_code) + (r.gender ? ' · ' + esc(r.gender) : '') + '</div></td>' +
+        '<td><a href="#" class="am-student" data-id="' + r.student_id + '"><strong>' + esc(r.name) + '</strong></a><div class="am-note">' + esc(r.student_code) + (r.gender ? ' · ' + esc(r.gender) : '') + '</div></td>' +
         '<td class="opt">' + esc(r.group) + '</td>' +
         '<td class="num">' + r.sessions + '</td><td class="num opt">' + r.present + '</td><td class="num opt">' + r.late + '</td><td class="num opt">' + r.excused + '</td><td class="num">' + r.absent + '</td>' +
         '<td class="num">' + esc(fmtRate(r.rate)) + bar + '</td>' +
@@ -174,14 +174,14 @@
     });
     html += '</tbody></table>';
     els.list.innerHTML = html;
-    Array.prototype.forEach.call(els.list.querySelectorAll('.am-member'), function (a) {
+    Array.prototype.forEach.call(els.list.querySelectorAll('.am-student'), function (a) {
       a.addEventListener('click', function (ev) { ev.preventDefault(); openMember(parseInt(a.getAttribute('data-id'), 10)); });
     });
   }
   function renderFoot() {
     var from = state.total ? state.offset + 1 : 0;
     var to = Math.min(state.total, state.offset + state.items.length);
-    els.total.textContent = state.total ? state.total + ' member' + (state.total === 1 ? '' : 's') : '';
+    els.total.textContent = state.total ? state.total + ' student' + (state.total === 1 ? '' : 's') : '';
     els.meta.textContent = (state.total ? 'Showing ' + from + '–' + to + ' of ' + state.total : '') +
       (state.summary && state.summary.computed_at_ec ? ' · computed ' + state.summary.computed_at_ec + ' EC' : '');
     els.prev.disabled = state.offset <= 0;
@@ -219,16 +219,16 @@
     }).catch(function () { state.loading = false; els.list.innerHTML = ''; toast('Network error', 'err'); });
   }
 
-  // ── member drill-down ─────────────────────────────────────────
+  // ── student drill-down ─────────────────────────────────────────
   function closeModal() { els.modalRoot.innerHTML = ''; }
   function openMember(id) {
-    var row = state.items.filter(function (r) { return r.member_id === id; })[0];
-    get({ action: 'member', department: dept(), member_id: id }).then(function (j) {
-      if (j.status !== 'success') { toast(j.message || 'Could not load member', 'err'); return; }
+    var row = state.items.filter(function (r) { return r.student_id === id; })[0];
+    get({ action: 'student', department: dept(), student_id: id }).then(function (j) {
+      if (j.status !== 'success') { toast(j.message || 'Could not load student', 'err'); return; }
       var months = j.months || [];
       var html = '<div class="am-modal" role="dialog" aria-modal="true"><div class="am-dialog">' +
-        '<h2>' + esc(row ? row.name : 'Member #' + id) + '</h2>' +
-        '<div class="am-note">' + esc(row ? row.member_code + ' · ' + row.group : '') + ' · ' + esc(j.department_label || '') + '</div>';
+        '<h2>' + esc(row ? row.name : 'Student #' + id) + '</h2>' +
+        '<div class="am-note">' + esc(row ? row.student_code + ' · ' + row.group : '') + ' · ' + esc(j.department_label || '') + '</div>';
       if (!months.length) {
         html += '<div class="am-empty" style="margin-top:10px">No monthly data yet.</div>';
       } else {
@@ -239,8 +239,8 @@
         html += '</tbody></table>';
       }
       html += '<div class="am-actions">' +
-        '<a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc((cfg.warningsUrl || '/admin/attendance_warnings.php') + '?department=' + dept() + '&member_id=' + id + '&status=all') + '">Warnings</a>' +
-        (cfg.memberUrl && ['info_dept', 'hr_dept', 'super_admin', 'school_admin'].indexOf(cfg.role) >= 0 ? '<a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc(cfg.memberUrl + id) + '">Member profile</a>' : '') +
+        '<a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc((cfg.warningsUrl || '/admin/attendance_warnings.php') + '?department=' + dept() + '&student_id=' + id + '&status=all') + '">Warnings</a>' +
+        (cfg.studentUrl && ['info_dept', 'hr_dept', 'super_admin', 'school_admin'].indexOf(cfg.role) >= 0 ? '<a class="rc-btn rc-btn-ghost rc-btn-sm" href="' + esc(cfg.studentUrl + id) + '">Student profile</a>' : '') +
         '<button class="rc-btn rc-btn-sm" type="button" id="am-close">Close</button></div></div></div>';
       els.modalRoot.innerHTML = html;
       document.getElementById('am-close').addEventListener('click', closeModal);
@@ -285,6 +285,6 @@
   loadMonths(false).then(loadGroups).then(function () {
     return load();
   }).then(function () {
-    if (init.member_id > 0) { openMember(init.member_id); }
+    if (init.student_id > 0) { openMember(init.student_id); }
   });
 })();

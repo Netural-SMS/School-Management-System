@@ -302,7 +302,7 @@ try {
                 'total' => (int)$row['total'],
                 'active' => (int)$row['active'],
                 'categories' => (int)$row['categories'],
-                'members' => (int)($conn->query("SELECT COUNT(*) c FROM members WHERE status = 'active'")->fetch_assoc()['c'] ?? 0),
+                'students' => (int)($conn->query("SELECT COUNT(*) c FROM students WHERE status = 'active'")->fetch_assoc()['c'] ?? 0),
                 'category_list' => $cats,
                 'section_list' => MezmurAttendanceService::sectionList($conn),
                 'program_types' => MezmurAttendanceService::PROGRAM_TYPES,
@@ -979,7 +979,7 @@ try {
                         'date' => $date,
                         'section' => $section,
                         'status' => $packetStatus,
-                        'member_count' => $summary['marked'],
+                        'student_count' => $summary['marked'],
                         'present' => $counts['present'],
                         'late' => $counts['late'],
                         'absent' => $counts['absent'],
@@ -1004,7 +1004,7 @@ try {
                 // risk engine (drafts are not official). Never fails the save.
                 if ($packetStatus === MezmurSubmissionService::STATUS_SUBMITTED) {
                     \App\Services\AttendanceWarningService::safeEvaluateMany(
-                        $conn, 'mezmur', \App\Services\AttendanceWarningService::memberIdsFromRecords($records), $date, $adminId
+                        $conn, 'mezmur', \App\Services\AttendanceWarningService::studentIdsFromRecords($records), $date, $adminId
                     );
                 }
                 mezmur_respond([
@@ -1020,7 +1020,7 @@ try {
             // Legacy whole-day save has no packet: the system already treats such
             // rows as submitted (resolvedStatus), so the engine does too.
             \App\Services\AttendanceWarningService::safeEvaluateMany(
-                $conn, 'mezmur', \App\Services\AttendanceWarningService::memberIdsFromRecords($records), $date, $adminId
+                $conn, 'mezmur', \App\Services\AttendanceWarningService::studentIdsFromRecords($records), $date, $adminId
             );
             mezmur_respond(['status' => 'success', 'message' => 'Attendance saved.', 'summary' => $result]);
         }
@@ -1101,8 +1101,8 @@ try {
                 $stats = $conn->query("SELECT COUNT(*) total, COALESCE(SUM(status='active'),0) active FROM mezmur_hymns")->fetch_assoc() ?: [];
             } catch (\Throwable $e) { $stats = ['total' => 0, 'active' => 0]; }
             try {
-                $members = $conn->query("SELECT COUNT(*) c FROM members WHERE status = 'active'")->fetch_assoc()['c'] ?? 0;
-            } catch (\Throwable $e) { $members = 0; }
+                $students = $conn->query("SELECT COUNT(*) c FROM students WHERE status = 'active'")->fetch_assoc()['c'] ?? 0;
+            } catch (\Throwable $e) { $students = 0; }
             try {
                 $takers = MezmurAttendanceService::takersList($conn);
             } catch (\Throwable $e) { $takers = []; }
@@ -1122,7 +1122,7 @@ try {
             mezmur_respond([
                 'status' => 'success',
                 'hymns_total' => (int)($stats['total'] ?? 0),
-                'members' => (int)$members,
+                'students' => (int)$students,
                 'takers_active' => $takersActive,
                 'takers_total' => count($takers),
                 'month' => $aggWindow($conn, $monthStart, $today),

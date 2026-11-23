@@ -1,5 +1,5 @@
 /*
- * Bounded, server-backed ID-card member directory — shared PaginatedList engine.
+ * Bounded, server-backed ID-card student directory — shared PaginatedList engine.
  */
 (function () {
     'use strict';
@@ -17,12 +17,12 @@
         return issued.getTime() < Date.now();
     }
 
-    function actionForm(member, action, label, className) {
+    function actionForm(student, action, label, className) {
         var form = document.createElement('form');
         form.method = 'post';
         form.action = '/admin/id_cards/generate_id_card.php';
         form.className = 'inline-block ml-2';
-        [['member_id', member.id], ['action', action], ['csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '']]
+        [['student_id', student.id], ['action', action], ['csrf_token', document.querySelector('meta[name="csrf-token"]')?.content || '']]
             .forEach(function (entry) {
                 var input = document.createElement('input');
                 input.type = 'hidden'; input.name = entry[0]; input.value = String(entry[1]);
@@ -32,7 +32,7 @@
         btn.type = 'submit'; btn.className = className; btn.textContent = label;
         // Danger confirmation (MEDIUM, plan U6) via the shared dialog.
         if (action === 'renew' && window.DangerConfirm && window.DangerConfirm.guardForm) {
-            window.DangerConfirm.guardForm(form, { tier: 'medium', title: 'Renew this ID card?', summary: 'A renewed card replaces the current one.', intent: 'I want to renew this card', consequences: ['The issue date is reset to TODAY and a new expiry date is calculated.', 'The card that was printed before shows old dates; print and hand out the new card.'], keeps: ['The member code and QR code stay the same.', 'Member data is not changed.'], phrase: 'RENEW CARD', confirmLabel: 'Renew card' });
+            window.DangerConfirm.guardForm(form, { tier: 'medium', title: 'Renew this ID card?', summary: 'A renewed card replaces the current one.', intent: 'I want to renew this card', consequences: ['The issue date is reset to TODAY and a new expiry date is calculated.', 'The card that was printed before shows old dates; print and hand out the new card.'], keeps: ['The student code and QR code stay the same.', 'Student data is not changed.'], phrase: 'RENEW CARD', confirmLabel: 'Renew card' });
         } else if (action === 'renew') {
             form.addEventListener('submit', function (e) { e.preventDefault(); });
         }
@@ -40,10 +40,10 @@
         return form;
     }
 
-    function buildRow(member) {
-        var id = Number.parseInt(member.id, 10);
+    function buildRow(student) {
+        var id = Number.parseInt(student.id, 10);
         if (!Number.isSafeInteger(id) || id <= 0) return document.createDocumentFragment();
-        member.id = id;
+        student.id = id;
 
         var row = document.createElement('tr');
         row.className = 'hover:bg-slate-50 transition';
@@ -53,12 +53,12 @@
             td.textContent = text(v) || '—'; return td;
         }
 
-        row.appendChild(cell([text(member.student_name), text(member.father_name)].filter(Boolean).join(' '), 'px-4 py-3 font-medium'));
-        row.appendChild(cell(text(member.member_code) || 'Pending', 'px-4 py-3 text-xs font-mono'));
-        row.appendChild(cell(text(member.member_type === 'honorary' ? 'Honorary' : text(member.registration_type)), 'px-4 py-3 text-xs font-semibold text-slate-600'));
+        row.appendChild(cell([text(student.student_name), text(student.father_name)].filter(Boolean).join(' '), 'px-4 py-3 font-medium'));
+        row.appendChild(cell(text(student.student_code) || 'Pending', 'px-4 py-3 text-xs font-mono'));
+        row.appendChild(cell(text(student === 'honorary' ? 'Honorary' : text(student.registration_type)), 'px-4 py-3 text-xs font-semibold text-slate-600'));
 
-        var generated = member.id_card_status === 'generated';
-        var expired = generated && isExpired(member.id_card_generated_at);
+        var generated = student.id_card_status === 'generated';
+        var expired = generated && isExpired(student.id_card_generated_at);
         var statusTd = document.createElement('td'); statusTd.className = 'px-4 py-3 text-xs font-semibold ' + (expired ? 'text-red-700' : generated ? 'text-emerald-700' : 'text-amber-700');
         statusTd.textContent = expired ? 'EXPIRED' : generated ? 'Generated' : 'Not Created';
         row.appendChild(statusTd);
@@ -67,15 +67,15 @@
         actionsTd.className = 'px-4 py-3 text-right whitespace-nowrap';
         if (generated) {
             var viewLink = document.createElement('a');
-            viewLink.href = '/admin/id_cards/view_id_card.php?member_id=' + encodeURIComponent(id);
+            viewLink.href = '/admin/id_cards/view_id_card.php?student_id=' + encodeURIComponent(id);
             viewLink.target = '_blank'; viewLink.rel = 'noopener noreferrer';
             // P6: canonical row-action recipe (rounded-lg, 11px bold) + blue = view.
             viewLink.className = 'inline-flex items-center bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-[11px] font-bold transition';
             viewLink.textContent = 'View';
             actionsTd.appendChild(viewLink);
-            if (expired) actionsTd.appendChild(actionForm(member, 'renew', 'Renew', 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition ml-2'));
+            if (expired) actionsTd.appendChild(actionForm(student, 'renew', 'Renew', 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition ml-2'));
         } else {
-            actionsTd.appendChild(actionForm(member, 'generate', 'Generate', 'bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition'));
+            actionsTd.appendChild(actionForm(student, 'generate', 'Generate', 'bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition'));
         }
         row.appendChild(actionsTd);
         return row;
@@ -87,7 +87,7 @@
         if (!body) return;
 
         list = new PaginatedList({
-            endpoint: '/admin/api_list_members.php',
+            endpoint: '/admin/api_list_students.php',
             bodyElement: body,
             loadMoreHost: host,
             renderRow: buildRow,

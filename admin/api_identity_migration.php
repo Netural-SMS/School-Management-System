@@ -32,7 +32,7 @@ if (!validateCsrf($_POST['csrf_token'] ?? '')) {
 
 $mode = ($_POST['mode'] ?? '') === 'execute' ? 'execute' : 'dry_run';
 if ($mode === 'execute') {
-    // Danger confirmation (HIGH): re-issuing every member's identity code
+    // Danger confirmation (HIGH): re-issuing every student's identity code
     // needs the typed phrase from the 3-step dialog. The preview does not.
     require_once __DIR__ . '/backend/danger_confirm.php';
     dc_require_phrase('identity.renumber');
@@ -46,7 +46,7 @@ if ($conn->connect_error) {
 }
 $conn->set_charset('utf8mb4');
 
-$check = $conn->query("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'member_code_migrations'");
+$check = $conn->query("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'student_code_migrations'");
 if (!$check || (int)$check->fetch_assoc()['c'] === 0) {
     echo json_encode(['status' => 'error', 'message' => 'Run sql/017_identity_codes.sql in phpMyAdmin first.']); exit;
 }

@@ -1,6 +1,6 @@
 <?php
 /**
- * v2 — Telegram member registration conversation.
+ * v2 — Telegram student registration conversation.
  *
  * Implements the SSMS Registration Bot UX: one-question-at-a-time collection,
  * early duplicate detection on full-name entry, richer candidate cards with
@@ -174,7 +174,7 @@ final class TelegramRegistrationService
         // Global text commands
         if ($text === '/start' || $text === '/help') return $this->sendHome($chatId, $actor);
         if (in_array($text,['/cancel','❌ Cancel','❌ ሰርዝ','❌ ስርዝ'], true)) {
-            // Cancelling a member search must not destroy a paused draft:
+            // Cancelling a student search must not destroy a paused draft:
             // drop only the search marker and go home (the draft survives
             // with its resume hint). Plain cancel behaviour is unchanged.
             $searching = $this->sessionWithMenu((int)$actor['id'], $chatId, 'search_results') !== null;
@@ -721,7 +721,7 @@ final class TelegramRegistrationService
     private function beginNewRegistration(int $chatId, array $actor): array
     {
         $actorId = (int)$actor['id'];
-        // A stale member-search marker must not steal the new draft's input.
+        // A stale student-search marker must not steal the new draft's input.
         $this->clearInFlight($chatId, $actor);
         $active = $this->mostRecentActiveSession($actorId, $chatId);
         if ($active !== null) {
@@ -851,8 +851,8 @@ final class TelegramRegistrationService
         // Prepared statement handles quoting; escape only LIKE wildcards
         // (backslash is MySQL's default LIKE escape character).
         $q = '%' . addcslashes($query, '\\%_') . '%';
-        // Search by member code or name
-        $s = $this->conn->prepare("SELECT id,member_code,student_name,father_name,grandfather_name,baptismal_name,gender,dob_ec_day,dob_ec_month,dob_ec_year,current_section,status,phone_number,mother_name FROM members WHERE (member_code LIKE ? OR student_name LIKE ? OR father_name LIKE ? OR full_name_am LIKE ?) AND status IN ('active','warning') ORDER BY id DESC LIMIT 15");
+        // Search by student code or name
+        $s = $this->conn->prepare("SELECT id,student_code,student_name,father_name,grandfather_name,baptismal_name,gender,dob_ec_day,dob_ec_month,dob_ec_year, status,phone_number,mother_name FROM students WHERE (student_code LIKE ? OR student_name LIKE ? OR father_name LIKE ? OR full_name_am LIKE ?) AND status IN ('active','warning') ORDER BY id DESC LIMIT 15");
         $s->bind_param('ssss',$q,$q,$q,$q);
         $s->execute(); $res = $s->get_result();
         while ($row = $res->fetch_assoc()) $rows[] = $row;
@@ -863,7 +863,7 @@ final class TelegramRegistrationService
         $text = "🔎 የፍለጋ ውጤቶች (".count($rows).")\n\n";
         foreach ($rows as $i => $r) {
             $n = trim(($r['student_name']??'').' '.($r['father_name']??'').' '.($r['grandfather_name']??''));
-            $code = (string)($r['member_code'] ?? ('M'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT)));
+            $code = (string)($r['student_code'] ?? ('M'.str_pad((string)$r['id'],5,'0',STR_PAD_LEFT)));
             $sec = (string)($r['current_section'] ?? '—');
             $text .= ($i+1).". <b>".$this->esc($n)."</b> ({$code})\n   ክፍል: {$this->esc($sec)}";
             if (!empty($r['mother_name'])) $text .= " • እናት: ".$this->esc((string)$r['mother_name']);
@@ -879,7 +879,7 @@ final class TelegramRegistrationService
     {
         $rows = [];
         $aid=(int)$actor['id'];
-        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_member_id,s.revision_number,COALESCE(an.value_text,'') member_name,r.decision review_decision,r.session_revision review_revision FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' LEFT JOIN telegram_registration_reviews r ON r.id=(SELECT rr.id FROM telegram_registration_reviews rr WHERE rr.session_id=s.id ORDER BY rr.id DESC LIMIT 1) WHERE s.bot_user_id=? AND s.viewing_menu<>'search_results' ORDER BY s.id DESC LIMIT 15");
+        $q = $this->conn->prepare("SELECT s.public_id,s.status,s.profile_key,s.created_at,s.created_student_id,s.revision_number,COALESCE(an.value_text,'') student_name,r.decision review_decision,r.session_revision review_revision FROM telegram_registration_sessions s LEFT JOIN telegram_registration_answers an ON an.session_id=s.id AND an.field_key='full_name_am' LEFT JOIN telegram_registration_reviews r ON r.id=(SELECT rr.id FROM telegram_registration_reviews rr WHERE rr.session_id=s.id ORDER BY rr.id DESC LIMIT 1) WHERE s.bot_user_id=? AND s.viewing_menu<>'search_results' ORDER BY s.id DESC LIMIT 15");
         $q->bind_param('i',$aid); $q->execute(); $res=$q->get_result();
         while ($row = $res->fetch_assoc()) $rows[] = $row;
         $q->close();
@@ -897,7 +897,7 @@ final class TelegramRegistrationService
                 elseif ((string)($r['review_decision']??'')==='duplicate') $st='⛔ ድግግሞሽ ተገኝቷል';
             }
             $text .= "<b>".$this->esc((string)$r['public_id'])."</b> — {$st}\n";
-            if ((string)$r['member_name'] !== '') $text .= "ስም: ".$this->esc((string)$r['member_name'])."\n";
+            if ((string)$r['student_name'] !== '') $text .= "ስም: ".$this->esc((string)$r['student_name'])."\n";
             $text .= "\n";
         }
         return TelegramKeyboard::msg($chatId, $text, $this->homeKeyboard());
@@ -1007,8 +1007,7 @@ final class TelegramRegistrationService
             'city' => 'prompt_city',
             'sub_city' => 'prompt_sub_city',
             'woreda' => 'prompt_woreda',
-            'current_section' => 'prompt_current_section',
-            'education_level' => 'prompt_education_level',
+                        'education_level' => 'prompt_education_level',
             'spiritual_education' => 'prompt_spiritual_education',
             'student_photo' => 'prompt_student_photo',
             default => 'prompt_' . $key
@@ -1235,7 +1234,7 @@ final class TelegramRegistrationService
         if (!empty($cand['phone_masked'])) $t .= "• ስልክ፦ ".$this->esc((string)$cand['phone_masked'])."\n";
         $t .= "• ክፍል፦ ".$this->esc((string)($cand['current_section']??'—'))."\n";
         if (!empty($cand['education_level'])) $t .= "• የትምህርት ደረጃ፦ ".$this->esc((string)$cand['education_level'])."\n";
-        $t .= "• የአባል መለያ፦ <b>".$this->esc((string)$cand['member_code'])."</b>\n";
+        $t .= "• የአባል መለያ፦ <b>".$this->esc((string)$cand['student_code'])."</b>\n";
         $t .= "• ሁኔታ፦ ".$this->esc((string)$cand['status_label'])."\n\n";
         $t .= "<b>ተመሳሳይነት፦</b> {$bandLabel} (".(int)$cand['match_score']."%)\n";
         $t .= "<b>ምክንያት፦</b> ".$this->esc(implode('፣ ',$cand['match_reasons']??[]))."\n";
@@ -1494,7 +1493,7 @@ final class TelegramRegistrationService
             $cid = (int)($c['id']??0);
             $isHigh = $score >= 70 || in_array($band,['high','very_high','certain'],true);
             if ($isHigh && $cid > 0) {
-                // Per REG spec: same_person → cannot create new member;
+                // Per REG spec: same_person → cannot create new student;
                 // no decision → blocks submission (must verify);
                 // uncertain → warning (readiness service will warn, not block);
                 // different_person → ok to proceed.
@@ -1563,11 +1562,11 @@ final class TelegramRegistrationService
     {
         $sel = (int)($session['selected_candidate_id']??0);
         if ($sel > 0 && (string)($session['identity_verification_decision']??'') === 'same_person') {
-            // Show existing member confirmation
-            $q=$this->conn->prepare('SELECT member_code FROM members WHERE id=? LIMIT 1');
+            // Show existing student confirmation
+            $q=$this->conn->prepare('SELECT student_code FROM students WHERE id=? LIMIT 1');
             $q->bind_param('i',$sel); $q->execute(); $m = $q->get_result()->fetch_assoc(); $q->close();
-            $code = $m ? (string)$m['member_code'] : 'M'.str_pad((string)$sel,5,'0',STR_PAD_LEFT);
-            return $this->editOrSend($chatId,$editId,TelegramMessageService::get($this->conn,'same_person_confirmed',['member_code'=>$code]), TelegramKeyboard::inline([
+            $code = $m ? (string)$m['student_code'] : 'M'.str_pad((string)$sel,5,'0',STR_PAD_LEFT);
+            return $this->editOrSend($chatId,$editId,TelegramMessageService::get($this->conn,'same_person_confirmed',['student_code'=>$code]), TelegramKeyboard::inline([
                 [['ወደ ዋና ምናሌ', 'home']]
             ]));
         }
@@ -1787,7 +1786,7 @@ final class TelegramRegistrationService
     {
         if ($candidateId < 1) return;
         $sid=(int)$session['id'];
-        $q = $this->conn->prepare('INSERT INTO telegram_candidate_decisions (session_id,candidate_member_id,decision) VALUES (?,?,?)');
+        $q = $this->conn->prepare('INSERT INTO telegram_candidate_decisions (session_id,candidate_student_id,decision) VALUES (?,?,?)');
         $q->bind_param('iis',$sid,$candidateId,$decision); $q->execute(); $q->close();
     }
 
@@ -1796,7 +1795,7 @@ final class TelegramRegistrationService
         if ($candidateId < 1) return false;
         $in = implode(',', array_fill(0, count($decisions), '?'));
         $types = 'ii' . str_repeat('s', count($decisions));
-        $sql = "SELECT id FROM telegram_candidate_decisions WHERE session_id=? AND candidate_member_id=? AND decision IN ($in) LIMIT 1";
+        $sql = "SELECT id FROM telegram_candidate_decisions WHERE session_id=? AND candidate_student_id=? AND decision IN ($in) LIMIT 1";
         $q = $this->conn->prepare($sql);
         $params = array_merge([$sessionId,$candidateId],$decisions);
         $refs = []; foreach ($params as $i=>$v) $refs[] = &$params[$i];

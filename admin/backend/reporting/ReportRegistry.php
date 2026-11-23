@@ -53,7 +53,7 @@ final class ReportRegistry
     /** Hard budgets (the query service enforces them; tests pin them). */
     public const MAX_PAGE_SIZE   = 200;
     public const MAX_LIST_ROWS   = 2000;   // deepest offset+page the list may reach
-    public const MAX_EXPORT_ROWS = 5000;   // same ceiling as MemberReportService
+    public const MAX_EXPORT_ROWS = 5000;   // same ceiling as StudentReportService
     public const MAX_GROUPS      = 60;     // aggregate buckets before "other"
     public const MAX_FILTERS     = 20;
     public const MAX_IN_VALUES   = 50;
@@ -128,44 +128,44 @@ final class ReportRegistry
     public static function datasets(): array
     {
         return [
-            'members' => [
-                'label_en' => 'Members',
+            'students' => [
+                'label_en' => 'Students',
                 'label_am' => 'አባላት',
-                'base'     => '`members` m',
+                'base'     => '`students` m',
                 'pk'       => 'm.id',
                 'joins'    => [
                     // ── Education (read‑only): current / previous academic year enrolment ──
-                    // Each join is pinned to ONE row per member (MAX(id) sub‑select) so a
-                    // member can never be duplicated by a second enrolment row.
+                    // Each join is pinned to ONE row per student (MAX(id) sub‑select) so a
+                    // student can never be duplicated by a second enrolment row.
                     'ce'  => "LEFT JOIN `class_enrollments` ce ON ce.id = (SELECT MAX(e.id) FROM `class_enrollments` e "
-                           . "WHERE e.member_id = m.id AND e.status = 'active' AND e.academic_year_id = " . self::SQL_CURRENT_AY . ")",
+                           . "WHERE e.student_id = m.id AND e.status = 'active' AND e.academic_year_id = " . self::SQL_CURRENT_AY . ")",
                     'cl'  => "LEFT JOIN `classes` cl ON cl.id = ce.class_id",
                     // Class teacher = the flagged class/homeroom teacher, else the primary subject teacher of that class.
                     'ct'  => "LEFT JOIN (SELECT ta.class_id, SUBSTRING_INDEX(GROUP_CONCAT(u.full_name ORDER BY (ta.is_class_teacher = 1 OR ta.assignment_role = 'homeroom') DESC, ta.is_primary DESC, ta.id ASC SEPARATOR '\\n'), '\\n', 1) AS teacher_name "
                            . "FROM `teacher_assignments` ta JOIN `users` u ON u.id = ta.teacher_id "
                            . "WHERE ta.is_active = 1 AND ta.academic_year_id = " . self::SQL_CURRENT_AY . " GROUP BY ta.class_id) ct ON ct.class_id = ce.class_id",
                     'pe'  => "LEFT JOIN `class_enrollments` pe ON pe.id = (SELECT MAX(e.id) FROM `class_enrollments` e "
-                           . "WHERE e.member_id = m.id AND e.academic_year_id = " . self::SQL_PREVIOUS_AY . ")",
+                           . "WHERE e.student_id = m.id AND e.academic_year_id = " . self::SQL_PREVIOUS_AY . ")",
                     'pcl' => "LEFT JOIN `classes` pcl ON pcl.id = pe.class_id",
                     // ── Attendance bands (Education + Mezmur, read‑only), current academic‑year date range ──
                     // Attendance alerting Phase 4: the SAME weighted formula as AttendanceRiskService —
                     // attended = present + excused + 0.5·late over marked sessions (holidays never count).
                     // Scope note: this is the whole academic year, all rows (no packet/period scoping) —
                     // the official per‑month figures are in attendance_month_rollup / the Monthly attendance report.
-                    'ea'  => "LEFT JOIN (SELECT a.member_id, COUNT(*) AS sessions, " . self::SQL_ATTENDED_WEIGHTED_EDU . " AS attended, "
+                    'ea'  => "LEFT JOIN (SELECT a.student_id, COUNT(*) AS sessions, " . self::SQL_ATTENDED_WEIGHTED_EDU . " AS attended, "
                            . "SUM(a.status = 'absent') AS absent, MAX(CASE WHEN a.status IN ('present','late') THEN a.attendance_date END) AS last_present, "
                            . "SUM(a.status = 'absent' AND a.attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS absent_30d "
                            . "FROM `attendance` a WHERE a.status IN ('present','absent','late','excused') AND a.attendance_date BETWEEN " . self::SQL_CURRENT_AY_START . " AND " . self::SQL_CURRENT_AY_END . " "
-                           . "GROUP BY a.member_id) ea ON ea.member_id = m.id",
+                           . "GROUP BY a.student_id) ea ON ea.student_id = m.id",
                     // Mezmur rows are date‑based (sql/023); legacy rows may only carry a session_id.
-                    'ma'  => "LEFT JOIN (SELECT x.member_id, COUNT(*) AS sessions, " . self::SQL_ATTENDED_WEIGHTED_MEZMUR . " AS attended, "
+                    'ma'  => "LEFT JOIN (SELECT x.student_id, COUNT(*) AS sessions, " . self::SQL_ATTENDED_WEIGHTED_MEZMUR . " AS attended, "
                            . "MAX(CASE WHEN x.status IN ('present','late') THEN COALESCE(x.attendance_date, s.session_date) END) AS last_present "
                            . "FROM `mezmur_attendance` x LEFT JOIN `mezmur_sessions` s ON s.id = x.session_id "
                            . "WHERE (s.id IS NULL OR s.status = 'active') AND x.status IN ('present','absent','late','excused') AND COALESCE(x.attendance_date, s.session_date) BETWEEN " . self::SQL_CURRENT_AY_START . " AND " . self::SQL_CURRENT_AY_END . " "
-                           . "GROUP BY x.member_id) ma ON ma.member_id = m.id",
+                           . "GROUP BY x.student_id) ma ON ma.student_id = m.id",
                     // ── Family Link (HR data): the primary / first guardian record ──
-                    'mgp' => "LEFT JOIN `member_guardians` mgp ON mgp.member_id = m.id AND mgp.guardian_id = (SELECT mg.guardian_id FROM `member_guardians` mg "
-                           . "WHERE mg.member_id = m.id ORDER BY mg.is_primary DESC, mg.contact_priority ASC, mg.guardian_id ASC LIMIT 1)",
+                    'mgp' => "LEFT JOIN `student_guardians` mgp ON mgp.student_id = m.id AND mgp.guardian_id = (SELECT mg.guardian_id FROM `student_guardians` mg "
+                           . "WHERE mg.student_id = m.id ORDER BY mg.is_primary DESC, mg.contact_priority ASC, mg.guardian_id ASC LIMIT 1)",
                     'g'   => "LEFT JOIN `guardians` g ON g.id = mgp.guardian_id",
                 ],
                 'join_requires' => ['cl' => ['ce'], 'ct' => ['ce'], 'pcl' => ['pe'], 'g' => ['mgp']],
@@ -197,9 +197,9 @@ final class ReportRegistry
                 'sql' => 'm.id', 'view' => self::R_ALL, 'export' => [],
                 'filter' => false, 'group' => false, 'sort' => false, 'hidden' => true,
             ],
-            'member_code' => [
-                'label_en' => 'Member ID', 'label_am' => 'የአባል መለያ', 'type' => 'string',
-                'sql' => 'm.member_code', 'view' => self::R_ALL, 'export' => self::R_ALL,
+            'student_code' => [
+                'label_en' => 'Student ID', 'label_am' => 'የአባል መለያ', 'type' => 'string',
+                'sql' => 'm.student_code', 'view' => self::R_ALL, 'export' => self::R_ALL,
                 'search' => true, 'group' => false,
             ],
             'full_name_am' => [
@@ -231,9 +231,8 @@ final class ReportRegistry
                 'options' => ['under_7' => 'Under 7', '7_13' => '7–13', '14_17' => '14–17', '18_25' => '18–25', '26_35' => '26–35', '36_plus' => '36+', 'unknown' => 'Unknown'],
                 'view' => self::R_ALL, 'export' => self::R_ALL, 'sort' => false,
             ],
-            'age_group' => [
-                'label_en' => 'Section (age group)', 'label_am' => 'ክፍል', 'type' => 'enum',
-                'sql' => 'm.age_group',
+                            'label_en' => 'Section (age group)', 'label_am' => 'ክፍል', 'type' => 'enum',
+                'sql' => '',
                 'options' => ['7_13' => 'A · Children (7–13)', '14_17' => 'B · Intermediate (14–17)', '18_plus' => 'C · Youth (18+)'],
                 'view' => self::R_ALL, 'export' => self::R_ALL,
             ],
@@ -253,9 +252,8 @@ final class ReportRegistry
                 'options' => ['active' => 'Active', 'warning' => 'Warning', 'inactive' => 'Inactive', 'archived' => 'Archived'],
                 'view' => self::R_ALL, 'export' => self::R_ALL,
             ],
-            'member_type' => [
-                'label_en' => 'Member type', 'label_am' => 'የአባልነት ዓይነት', 'type' => 'enum',
-                'sql' => 'm.member_type',
+                            'label_en' => 'Student type', 'label_am' => 'የአባልነት ዓይነት', 'type' => 'enum',
+                'sql' => 'm',
                 'options' => ['regular' => 'Regular', 'special_regular' => 'Special regular', 'honorary' => 'Honorary'],
                 'view' => self::R_ALL, 'export' => self::R_ALL,
             ],
@@ -293,7 +291,7 @@ final class ReportRegistry
                 'label_en' => 'Eligible for permanent membership', 'label_am' => 'ለቋሚ አባልነት ብቁ', 'type' => 'bool',
                 'sql' => "(m.membership_tier = 'temporary' AND m.status <> 'archived' AND m.registered_at <= DATE_SUB(CURDATE(), INTERVAL 6 MONTH))",
                 'view' => self::R_ALL, 'export' => self::R_ALL,
-                'definition_en' => 'Temporary member, not archived, registered 6 or more months ago (same rule as the HR eligibility notification).',
+                'definition_en' => 'Temporary student, not archived, registered 6 or more months ago (same rule as the HR eligibility notification).',
             ],
             'promoted_at' => [
                 'label_en' => 'Promoted on', 'label_am' => 'ቋሚ የሆነበት ቀን', 'type' => 'date',
@@ -347,7 +345,7 @@ final class ReportRegistry
                 'label_en' => 'Class teacher', 'label_am' => 'የክፍል መምህር', 'type' => 'string',
                 'sql' => 'ct.teacher_name', 'requires' => ['ce', 'ct'],
                 'view' => self::R_ALL, 'export' => self::R_ALL,
-                'definition_en' => 'Class/homeroom teacher of the member\'s current class; if none is flagged, the primary subject teacher (Education data).',
+                'definition_en' => 'Class/homeroom teacher of the student\'s current class; if none is flagged, the primary subject teacher (Education data).',
             ],
             'previous_class' => [
                 'label_en' => 'Previous year class', 'label_am' => 'የባለፈው ዓመት ክፍል', 'type' => 'string',
@@ -372,7 +370,7 @@ final class ReportRegistry
                 'label_en' => 'Edu sessions marked', 'label_am' => 'የትምህርት ክትትል ቀናት', 'type' => 'int',
                 'sql' => 'COALESCE(ea.sessions, 0)', 'requires' => ['ea'],
                 'view' => self::R_ALL, 'export' => self::R_ALL, 'group' => false,
-                'definition_en' => 'Education attendance records for the member in the current academic year (holidays excluded).',
+                'definition_en' => 'Education attendance records for the student in the current academic year (holidays excluded).',
             ],
             'edu_attendance_rate' => [
                 'label_en' => 'Edu attendance %', 'label_am' => 'የትምህርት ክትትል %', 'type' => 'int',
@@ -477,7 +475,7 @@ final class ReportRegistry
             ],
             'guardian_links' => [
                 'label_en' => 'Linked guardians (Family Link)', 'label_am' => 'የተገናኙ አሳዳጊዎች', 'type' => 'int',
-                'sql' => '(SELECT COUNT(*) FROM `member_guardians` mg WHERE mg.member_id = m.id)',
+                'sql' => '(SELECT COUNT(*) FROM `student_guardians` mg WHERE mg.student_id = m.id)',
                 'view' => self::R_ALL, 'export' => self::R_ALL,
                 'definition_en' => 'Number of guardian records attached through Family Link (HR data).',
             ],
@@ -500,9 +498,9 @@ final class ReportRegistry
             ],
             'linked_siblings' => [
                 'label_en' => 'Linked siblings', 'label_am' => 'የተገናኙ እህት/ወንድሞች', 'type' => 'int',
-                'sql' => '(SELECT COUNT(DISTINCT mg2.member_id) FROM `member_guardians` mg1 JOIN `member_guardians` mg2 ON mg2.guardian_id = mg1.guardian_id AND mg2.member_id <> m.id WHERE mg1.member_id = m.id)',
+                'sql' => '(SELECT COUNT(DISTINCT mg2.student_id) FROM `student_guardians` mg1 JOIN `student_guardians` mg2 ON mg2.guardian_id = mg1.guardian_id AND mg2.student_id <> m.id WHERE mg1.student_id = m.id)',
                 'view' => self::R_ALL, 'export' => self::R_ALL,
-                'definition_en' => 'Other members who share at least one Family Link guardian with this member.',
+                'definition_en' => 'Other students who share at least one Family Link guardian with this student.',
             ],
 
             // ───────────── Record completeness / data quality ─────────────
@@ -531,7 +529,7 @@ final class ReportRegistry
                 'label_en' => 'Record completeness (0–5)', 'label_am' => 'የመረጃ ሙሉነት (0–5)', 'type' => 'int',
                 'sql' => "((NULLIF(m.student_photo_path,'') IS NOT NULL) + (COALESCE(NULLIF(m.phone_primary,''), NULLIF(m.phone_number,'')) IS NOT NULL) + (COALESCE(NULLIF(m.guardian_phone1,''), NULLIF(m.phone_guardian,'')) IS NOT NULL) + (COALESCE(NULLIF(m.doc_signed_form_path,''), NULLIF(m.signed_form_path,'')) IS NOT NULL) + (m.date_of_birth IS NOT NULL))",
                 'view' => self::R_ALL, 'export' => self::R_ALL,
-                'definition_en' => 'One point each for: photo, member phone, guardian phone, signed form, date of birth.',
+                'definition_en' => 'One point each for: photo, student phone, guardian phone, signed form, date of birth.',
             ],
 
             // ───────────── Roles / staff ─────────────
@@ -545,12 +543,12 @@ final class ReportRegistry
             ],
             'staff_positions' => [
                 'label_en' => 'Staff positions', 'label_am' => 'የኃላፊነት ቦታዎች', 'type' => 'int',
-                'sql' => '(SELECT COUNT(*) FROM `member_staff_positions` msp WHERE msp.member_id = m.id)',
+                'sql' => '(SELECT COUNT(*) FROM `student_staff_positions` msp WHERE msp.student_id = m.id)',
                 'view' => self::R_ALL, 'export' => self::R_ALL,
             ],
             'staff_position_titles' => [
                 'label_en' => 'Position titles', 'label_am' => 'የኃላፊነት መጠሪያዎች', 'type' => 'string',
-                'sql' => "(SELECT GROUP_CONCAT(COALESCE(NULLIF(sp.title_am,''), sp.title_en) ORDER BY sp.sort_order SEPARATOR ', ') FROM `member_staff_positions` msp2 JOIN `staff_positions` sp ON sp.id = msp2.position_id WHERE msp2.member_id = m.id)",
+                'sql' => "(SELECT GROUP_CONCAT(COALESCE(NULLIF(sp.title_am,''), sp.title_en) ORDER BY sp.sort_order SEPARATOR ', ') FROM `student_staff_positions` msp2 JOIN `staff_positions` sp ON sp.id = msp2.position_id WHERE msp2.student_id = m.id)",
                 'view' => self::R_ALL, 'export' => self::R_ALL, 'group' => false, 'sort' => false,
             ],
 
@@ -573,7 +571,7 @@ final class ReportRegistry
         foreach ($f as $key => &$def) {
             $def['key']     = $key;
             $def['cat']     = $def['cat'] ?? self::categoryOf($key);
-            $def['dataset'] = 'members';
+            $def['dataset'] = 'students';
             $def['pii']     = (bool)($def['pii'] ?? false);
             $def['filter']  = (bool)($def['filter'] ?? true);
             $def['group']   = (bool)($def['group'] ?? in_array($def['type'], ['enum', 'derived_enum', 'bool', 'string', 'int'], true));
@@ -595,9 +593,9 @@ final class ReportRegistry
     private static function categoryOf(string $key): string
     {
         static $map = [
-            'id' => 'identity', 'member_code' => 'identity', 'full_name_am' => 'identity', 'full_name_en' => 'identity', 'baptismal_name' => 'identity',
-            'gender' => 'identity', 'age' => 'identity', 'age_band' => 'identity', 'age_group' => 'identity', 'date_of_birth' => 'identity', 'dob_ec_year' => 'identity',
-            'status' => 'membership', 'member_type' => 'membership', 'membership_tier' => 'membership', 'registration_type' => 'membership',
+            'id' => 'identity', 'student_code' => 'identity', 'full_name_am' => 'identity', 'full_name_en' => 'identity', 'baptismal_name' => 'identity',
+            'gender' => 'identity', 'age' => 'identity', 'age_band' => 'identity',  'date_of_birth' => 'identity', 'dob_ec_year' => 'identity',
+            'status' => 'membership',  'membership_tier' => 'membership', 'registration_type' => 'membership',
             'registered_at' => 'membership', 'registered_month' => 'membership', 'registered_ec_year' => 'membership', 'tenure_months' => 'membership',
             'promotion_eligible' => 'membership', 'promoted_at' => 'membership', 'waiting_since' => 'membership', 'id_card_status' => 'membership',
             'academic_status' => 'education', 'education_level' => 'education', 'spiritual_education' => 'education', 'work_profession' => 'education',
@@ -627,29 +625,29 @@ final class ReportRegistry
     {
         return [
             'count' => [
-                'label_en' => 'Members', 'label_am' => 'አባላት',
+                'label_en' => 'Students', 'label_am' => 'አባላት',
                 'sql' => 'COUNT(*)',
-                'definition_en' => 'Number of member records matching the current filters (archived included unless filtered out).',
+                'definition_en' => 'Number of student records matching the current filters (archived included unless filtered out).',
             ],
             'active' => [
                 'label_en' => 'Active', 'label_am' => 'ንቁ',
                 'sql' => "SUM(m.status = 'active')",
-                'definition_en' => "Members whose status is exactly 'active'.",
+                'definition_en' => "Students whose status is exactly 'active'.",
             ],
             'not_archived' => [
-                'label_en' => 'Current members', 'label_am' => 'የአሁኑ አባላት',
+                'label_en' => 'Current students', 'label_am' => 'የአሁኑ አባላት',
                 'sql' => "SUM(m.status <> 'archived')",
-                'definition_en' => 'All members except archived ones (active + warning + inactive).',
+                'definition_en' => 'All students except archived ones (active + warning + inactive).',
             ],
             'female_pct' => [
                 'label_en' => 'Female %', 'label_am' => 'ሴት %',
                 'sql' => "ROUND(100 * SUM(m.gender = 'female') / NULLIF(COUNT(*), 0), 1)",
-                'definition_en' => 'Female members as a percentage of the population.',
+                'definition_en' => 'Female students as a percentage of the population.',
             ],
             'temporary' => [
                 'label_en' => 'Temporary', 'label_am' => 'ጊዜያዊ',
                 'sql' => "SUM(m.membership_tier = 'temporary')",
-                'definition_en' => "Members whose membership tier is 'temporary'.",
+                'definition_en' => "Students whose membership tier is 'temporary'.",
             ],
             'promotion_eligible' => [
                 'label_en' => 'Eligible for permanent', 'label_am' => 'ለቋሚነት ብቁ',
@@ -664,7 +662,7 @@ final class ReportRegistry
             'missing_phone' => [
                 'label_en' => 'Without any phone', 'label_am' => 'ስልክ የሌላቸው',
                 'sql' => "SUM(COALESCE(NULLIF(m.phone_primary,''), NULLIF(m.phone_number,''), NULLIF(m.alt_phone_number,''), NULLIF(m.guardian_phone1,''), NULLIF(m.phone_guardian,'')) IS NULL)",
-                'definition_en' => 'No member, alternative or guardian phone on record.',
+                'definition_en' => 'No student, alternative or guardian phone on record.',
             ],
             'missing_photo' => [
                 'label_en' => 'Without photo', 'label_am' => 'ፎቶ የሌላቸው',
@@ -674,7 +672,7 @@ final class ReportRegistry
             'avg_age' => [
                 'label_en' => 'Average age', 'label_am' => 'አማካይ ዕድሜ',
                 'sql' => 'ROUND(AVG(m.age), 1)',
-                'definition_en' => 'Mean of the stored age column (members without age are ignored).',
+                'definition_en' => 'Mean of the stored age column (students without age are ignored).',
             ],
             'registered_30d' => [
                 'label_en' => 'Registered last 30 days', 'label_am' => 'ባለፉት 30 ቀናት የተመዘገቡ',
@@ -685,7 +683,7 @@ final class ReportRegistry
             'enrolled' => [
                 'label_en' => 'Enrolled this year', 'label_am' => 'በዚህ ዓመት የተመዘገቡ',
                 'sql' => 'SUM(ce.id IS NOT NULL)', 'requires' => ['ce'],
-                'definition_en' => 'Members with an active class enrolment in the current academic year (Education data).',
+                'definition_en' => 'Students with an active class enrolment in the current academic year (Education data).',
             ],
             'not_re_enrolled' => [
                 'label_en' => 'Not re‑enrolled', 'label_am' => 'ዳግም ያልተመዘገቡ',
@@ -695,17 +693,17 @@ final class ReportRegistry
             'avg_edu_attendance' => [
                 'label_en' => 'Avg edu attendance %', 'label_am' => 'አማካይ የትምህርት ክትትል %',
                 'sql' => 'ROUND(AVG(100 * ea.attended / NULLIF(ea.sessions, 0)), 1)', 'requires' => ['ea'],
-                'definition_en' => 'Mean education attendance rate of members with at least one marked session this academic year.',
+                'definition_en' => 'Mean education attendance rate of students with at least one marked session this academic year.',
             ],
             'low_attendance' => [
                 'label_en' => 'Low attendance (<50%)', 'label_am' => 'ዝቅተኛ ክትትል (<50%)',
                 'sql' => 'SUM(ea.sessions > 0 AND 100 * ea.attended / ea.sessions < ' . self::BAND_FAIR . ')', 'requires' => ['ea'],
-                'definition_en' => 'Members whose education attendance this academic year is below 50% (at least one marked session).',
+                'definition_en' => 'Students whose education attendance this academic year is below 50% (at least one marked session).',
             ],
             'with_family_link' => [
                 'label_en' => 'With Family Link', 'label_am' => 'የቤተሰብ አገናኝ ያላቸው',
-                'sql' => 'SUM((SELECT COUNT(*) FROM `member_guardians` mgc WHERE mgc.member_id = m.id) > 0)',
-                'definition_en' => 'Members with at least one guardian linked through Family Link.',
+                'sql' => 'SUM((SELECT COUNT(*) FROM `student_guardians` mgc WHERE mgc.student_id = m.id) > 0)',
+                'definition_en' => 'Students with at least one guardian linked through Family Link.',
             ],
         ];
     }
@@ -746,14 +744,14 @@ final class ReportRegistry
      */
     public static function starters(): array
     {
-        $base = ['dataset' => 'members'];
+        $base = ['dataset' => 'students'];
         return [
             [
                 'key' => 'eligible_for_permanent', 'roles' => self::R_ALL, 'group' => 'promotion',
                 'title_en' => 'Eligible for permanent membership', 'title_am' => 'ለቋሚ አባልነት ብቁ የሆኑ',
                 'definition' => $base + [
                     'filters' => [['field' => 'promotion_eligible', 'op' => 'is_true']],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'registered_at', 'tenure_months', 'has_signed_form', 'phone_primary'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'registered_at', 'tenure_months', 'has_signed_form', 'phone_primary'],
                     'sort' => [['field' => 'registered_at', 'dir' => 'asc']],
                 ],
             ],
@@ -766,7 +764,7 @@ final class ReportRegistry
                         ['field' => 'status', 'op' => 'neq', 'value' => 'archived'],
                         ['field' => 'has_guardian_contact', 'op' => 'is_false'],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'current_class', 'guardian_name', 'guardian_phone', 'guardian_links'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'current_class', 'guardian_name', 'guardian_phone', 'guardian_links'],
                 ],
             ],
             [
@@ -777,19 +775,19 @@ final class ReportRegistry
                         ['field' => 'status', 'op' => 'neq', 'value' => 'archived'],
                         ['field' => 'completeness_score', 'op' => 'lt', 'value' => 5],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'completeness_score', 'has_photo', 'has_phone', 'has_guardian_contact', 'has_signed_form', 'date_of_birth'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'completeness_score', 'has_photo', 'has_phone', 'has_guardian_contact', 'has_signed_form', 'date_of_birth'],
                     'sort' => [['field' => 'completeness_score', 'dir' => 'asc']],
                 ],
             ],
             [
                 'key' => 'not_enrolled', 'roles' => self::R_ALL, 'group' => 'follow_up',
-                'title_en' => 'Active members not enrolled this year', 'title_am' => 'በዚህ ዓመት ያልተመዘገቡ ንቁ አባላት',
+                'title_en' => 'Active students not enrolled this year', 'title_am' => 'በዚህ ዓመት ያልተመዘገቡ ንቁ አባላት',
                 'definition' => $base + [
                     'filters' => [
                         ['field' => 'status', 'op' => 'eq', 'value' => 'active'],
                         ['field' => 'is_enrolled', 'op' => 'is_false'],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'age', 'phone_primary', 'registered_at'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'age', 'phone_primary', 'registered_at'],
                 ],
             ],
             [
@@ -797,7 +795,7 @@ final class ReportRegistry
                 'title_en' => 'Registered this Ethiopian year', 'title_am' => 'በዚህ ዓ.ም. የተመዘገቡ',
                 'definition' => $base + [
                     'filters' => [['field' => 'registered_at', 'op' => 'this_ec_year']],
-                    'columns' => ['member_code', 'full_name_am', 'gender', 'age_group', 'registration_type', 'membership_tier', 'registered_at'],
+                    'columns' => ['student_code', 'full_name_am', 'gender', 'age_group', 'registration_type', 'membership_tier', 'registered_at'],
                     'group_by' => 'age_group',
                 ],
             ],
@@ -810,7 +808,7 @@ final class ReportRegistry
                         ['field' => 'is_enrolled', 'op' => 'is_true'],
                         ['field' => 'edu_attendance_band', 'op' => 'eq', 'value' => 'low'],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'current_class', 'class_teacher', 'edu_sessions', 'edu_attendance_rate', 'edu_last_present', 'phone_primary', 'guardian_phone'],
+                    'columns' => ['student_code', 'full_name_am', 'current_class', 'class_teacher', 'edu_sessions', 'edu_attendance_rate', 'edu_last_present', 'phone_primary', 'guardian_phone'],
                     'sort' => [['field' => 'edu_attendance_rate', 'dir' => 'asc']],
                 ],
             ],
@@ -819,7 +817,7 @@ final class ReportRegistry
                 'title_en' => 'Absent 3+ times in the last 30 days', 'title_am' => 'ባለፉት 30 ቀናት 3+ ጊዜ የቀሩ',
                 'definition' => $base + [
                     'filters' => [['field' => 'edu_absent_30d', 'op' => 'gte', 'value' => 3]],
-                    'columns' => ['member_code', 'full_name_am', 'current_class', 'class_teacher', 'edu_absent_30d', 'edu_last_present', 'edu_attendance_rate', 'phone_primary', 'guardian_phone'],
+                    'columns' => ['student_code', 'full_name_am', 'current_class', 'class_teacher', 'edu_absent_30d', 'edu_last_present', 'edu_attendance_rate', 'phone_primary', 'guardian_phone'],
                     'sort' => [['field' => 'edu_absent_30d', 'dir' => 'desc']],
                 ],
             ],
@@ -831,7 +829,7 @@ final class ReportRegistry
                         ['field' => 'status', 'op' => 'neq', 'value' => 'archived'],
                         ['field' => 'progression', 'op' => 'eq', 'value' => 'not_re_enrolled'],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'previous_class', 'status', 'phone_primary', 'guardian_phone'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'previous_class', 'status', 'phone_primary', 'guardian_phone'],
                 ],
             ],
             [
@@ -842,7 +840,7 @@ final class ReportRegistry
                         ['field' => 'promotion_eligible', 'op' => 'is_true'],
                         ['field' => 'completeness_score', 'op' => 'lt', 'value' => 5],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'registered_at', 'completeness_score', 'has_photo', 'has_phone', 'has_guardian_contact', 'has_signed_form', 'date_of_birth'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'registered_at', 'completeness_score', 'has_photo', 'has_phone', 'has_guardian_contact', 'has_signed_form', 'date_of_birth'],
                     'sort' => [['field' => 'completeness_score', 'dir' => 'asc']],
                 ],
             ],
@@ -855,18 +853,18 @@ final class ReportRegistry
                         ['field' => 'status', 'op' => 'neq', 'value' => 'archived'],
                         ['field' => 'guardian_links', 'op' => 'eq', 'value' => 0],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'current_class', 'guardian_name', 'guardian_phone', 'linked_siblings'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'current_class', 'guardian_name', 'guardian_phone', 'linked_siblings'],
                 ],
             ],
             [
                 'key' => 'no_id_card', 'roles' => self::R_HR, 'group' => 'membership',
-                'title_en' => 'Active members without ID card', 'title_am' => 'መታወቂያ የሌላቸው ንቁ አባላት',
+                'title_en' => 'Active students without ID card', 'title_am' => 'መታወቂያ የሌላቸው ንቁ አባላት',
                 'definition' => $base + [
                     'filters' => [
                         ['field' => 'status', 'op' => 'eq', 'value' => 'active'],
                         ['field' => 'id_card_status', 'op' => 'neq', 'value' => 'generated'],
                     ],
-                    'columns' => ['member_code', 'full_name_am', 'age_group', 'has_photo', 'id_card_status', 'registered_at'],
+                    'columns' => ['student_code', 'full_name_am', 'age_group', 'has_photo', 'id_card_status', 'registered_at'],
                 ],
             ],
         ];
@@ -875,7 +873,7 @@ final class ReportRegistry
     /** Default list columns per role (the UI column picker starts from these). */
     public static function defaultColumns(string $role): array
     {
-        $cols = ['member_code', 'full_name_am', 'gender', 'age_group', 'status', 'membership_tier', 'phone_primary', 'sub_city', 'registered_at'];
+        $cols = ['student_code', 'full_name_am', 'gender', 'age_group', 'status', 'membership_tier', 'phone_primary', 'sub_city', 'registered_at'];
         return array_values(array_filter($cols, static fn (string $k): bool => self::canView($k, $role)));
     }
 
@@ -940,7 +938,7 @@ final class ReportRegistry
             }
         }
         return [
-            'datasets'        => ['members' => ['label_en' => 'Members', 'label_am' => 'አባላት']],
+            'datasets'        => ['students' => ['label_en' => 'Students', 'label_am' => 'አባላት']],
             'categories'      => self::CATEGORIES,
             'starter_groups'  => self::STARTER_GROUPS,
             'fields'          => $fields,

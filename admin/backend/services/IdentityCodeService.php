@@ -2,7 +2,7 @@
 /**
  * Identity code allocation — FORMAT v2 (ANALYSIS/08).
  *
- * Every member code is `{PREFIX}-{5-digit tail}` where the tail is a
+ * Every student code is `{PREFIX}-{5-digit tail}` where the tail is a
  * RANDOM UNIQUE number (10000-99999). Sequential per-category numbers
  * were retired by leadership decision; random tails never leak internal
  * database ids (the enumeration-safe practice used for public
@@ -19,7 +19,7 @@
  *   1. FREE positions (department_id NULL) in the order the Super Admin
  *      defines (sort_order, id);
  *   2. the PRIMARY department segment: department code + H when the
- *      member holds that department's head position, N otherwise
+ *      student holds that department's head position, N otherwise
  *      (N is rendered smaller on cards/verification page);
  *   3. remaining department position letters (primary dept's non-head
  *      roles first, then other departments, each in defined order).
@@ -30,7 +30,7 @@
  *
  * Security & scale:
  *  - every value reaching SQL comes from ascii config tables or a
- *    validated A–Z token; uniqueness enforced by the members.member_code
+ *    validated A–Z token; uniqueness enforced by the students.student_code
  *    UNIQUE key with bounded retries over an indexed probe (O(1));
  *  - no sequence tables and no table scans — the
  *    retired per-letter sequence machinery (sql/018) remains in the
@@ -41,7 +41,7 @@ namespace App\Services;
 
 use RuntimeException;
 
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 
 final class IdentityCodeService
 {
@@ -139,7 +139,7 @@ final class IdentityCodeService
     /** Student code: category letter + random unique 5-digit tail. */
     public static function allocateStudent(\mysqli $conn, string $letter): string
     {
-        if (!in_array($letter, MemberCategory::letters(), true)) {
+        if (!in_array($letter, StudentCategory::letters(), true)) {
             throw new RuntimeException('Invalid category letter.');
         }
         return self::allocateWithPrefix($conn, $letter);
@@ -157,7 +157,7 @@ final class IdentityCodeService
 
     private static function allocateWithPrefix(\mysqli $conn, string $prefix): string
     {
-        $statement = $conn->prepare('SELECT 1 FROM members WHERE member_code = ? LIMIT 1');
+        $statement = $conn->prepare('SELECT 1 FROM students WHERE student_code = ? LIMIT 1');
         if (!$statement) {
             throw new RuntimeException('Could not prepare code uniqueness probe.');
         }
@@ -179,33 +179,33 @@ final class IdentityCodeService
     }
 
     /* ================================================================
-     * RESOLUTION — member's active positions → prefix segments
+     * RESOLUTION — student's active positions → prefix segments
      * ================================================================ */
 
     /**
-     * Build the prefix segment list for a member from their active
+     * Build the prefix segment list for a student from their active
      * position assignments (v2 order: free → dept segment → dept extras).
      *
      * @return list<string>|null Segments ready for allocateStaff()
      */
-    public static function resolveStaffSegments(\mysqli $conn, int $memberId): ?array
+    public static function resolveStaffSegments(\mysqli $conn, int $studentId): ?array
     {
-        if ($memberId <= 0) {
+        if ($studentId <= 0) {
             return null;
         }
         $statement = $conn->prepare(
             "SELECT sp.role_code, sp.department_id, d.code AS dept_code, d.sort_order AS dept_sort
-             FROM member_staff_positions msp
+             FROM student_staff_positions msp
              JOIN staff_positions sp ON sp.id = msp.position_id AND sp.is_active = 1
              LEFT JOIN departments d ON d.id = sp.department_id AND d.is_active = 1
-             WHERE msp.member_id = ?
+             WHERE msp.student_id = ?
              ORDER BY (sp.department_id IS NULL) DESC, d.sort_order ASC,
                       sp.sort_order ASC, sp.id ASC"
         );
         if (!$statement) {
             throw new RuntimeException('Could not prepare staff code lookup.');
         }
-        $statement->bind_param('i', $memberId);
+        $statement->bind_param('i', $studentId);
         $statement->execute();
         $result = $statement->get_result();
 
@@ -276,23 +276,23 @@ final class IdentityCodeService
      * ================================================================ */
 
     /**
-     * Regenerate the QR PNG for one member. Returns true when a fresh
+     * Regenerate the QR PNG for one student. Returns true when a fresh
      * PNG exists at the canonical path so QR art never drifts from the
      * stored code.
      */
-    public static function regenerateQr(\mysqli $conn, int $memberId): bool
+    public static function regenerateQr(\mysqli $conn, int $studentId): bool
     {
         $statement = $conn->prepare(
-            'SELECT member_code, id_card_status, qr_code_path FROM members WHERE id = ? LIMIT 1'
+            'SELECT student_code, id_card_status, qr_code_path FROM students WHERE id = ? LIMIT 1'
         );
         if (!$statement) {
             return false;
         }
-        $statement->bind_param('i', $memberId);
+        $statement->bind_param('i', $studentId);
         $statement->execute();
         $row = $statement->get_result()->fetch_assoc();
         $statement->close();
-        $code = (string)($row['member_code'] ?? '');
+        $code = (string)($row['student_code'] ?? '');
         if ($code === '') {
             return false;
         }
@@ -306,7 +306,7 @@ final class IdentityCodeService
         if (!is_dir($dir) || !is_writable($dir)) {
             return false;
         }
-        $filename = 'qr_member_' . $memberId . '.png';
+        $filename = 'qr_student_' . $studentId . '.png';
         $path = $dir . '/' . $filename;
         $webPath = '/admin/id_cards/assets/qr/' . $filename;
         $tmp = tempnam($dir, '.qr-');
@@ -316,7 +316,7 @@ final class IdentityCodeService
         try {
             \QRcode::png(
                 (defined('SITE_URL') ? rtrim((string)SITE_URL, '/') : '')
-                    . '/member.php?code=' . rawurlencode($code),
+                    . '/student.php?code=' . rawurlencode($code),
                 $tmp,
                 QR_ECLEVEL_L,
                 4,
@@ -333,9 +333,9 @@ final class IdentityCodeService
                 ($row['id_card_status'] ?? '') === 'generated'
                 || trim((string)($row['qr_code_path'] ?? '')) !== ''
             ) && ($row['qr_code_path'] ?? '') !== $webPath) {
-                $sync = $conn->prepare('UPDATE members SET qr_code_path = ? WHERE id = ?');
+                $sync = $conn->prepare('UPDATE students SET qr_code_path = ? WHERE id = ?');
                 if ($sync) {
-                    $sync->bind_param('si', $webPath, $memberId);
+                    $sync->bind_param('si', $webPath, $studentId);
                     $sync->execute();
                     $sync->close();
                 }

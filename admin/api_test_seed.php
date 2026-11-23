@@ -1,13 +1,13 @@
 <?php
 /**
- * Load or remove the practice member roster (TEST-FKSS).
+ * Load or remove the practice student roster (TEST-FKSS).
  * Disabled by default; when deployment-enabled, Super Admin only.
  */
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
 
 use App\Services\SecurityAuditService;
-use App\Services\TestMemberSeed;
+use App\Services\TestStudentSeed;
 
 if (!defined('ENABLE_TEST_DATA_TOOLS') || ENABLE_TEST_DATA_TOOLS !== true) {
     http_response_code(404);
@@ -15,7 +15,7 @@ if (!defined('ENABLE_TEST_DATA_TOOLS') || ENABLE_TEST_DATA_TOOLS !== true) {
     exit;
 }
 require_once __DIR__ . '/backend/services/SecurityAuditService.php';
-require_once __DIR__ . '/backend/services/TestMemberSeed.php';
+require_once __DIR__ . '/backend/services/TestStudentSeed.php';
 require_once __DIR__ . '/backend/danger_confirm.php';
 
 if (empty($_SESSION['admin_id'])) {
@@ -55,7 +55,7 @@ if ($requestMethod === 'POST' && in_array($action, ['load', 'clear'], true)
 
 try {
     if ($action === 'status') {
-        echo json_encode(['status' => 'success', 'data' => TestMemberSeed::status($conn)], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['status' => 'success', 'data' => TestStudentSeed::status($conn)], JSON_UNESCAPED_UNICODE);
         exit;
     }
     if ($action === 'load') {
@@ -64,7 +64,7 @@ try {
             echo json_encode(['status' => 'error', 'message' => 'POST required.']);
             exit;
         }
-        $result = TestMemberSeed::load($conn, $adminId);
+        $result = TestStudentSeed::load($conn, $adminId);
         SecurityAuditService::record($conn, 'Test Data Loaded', [
             'inserted' => (int)($result['inserted'] ?? 0),
             'updated' => (int)($result['updated'] ?? 0),
@@ -85,7 +85,7 @@ try {
             exit;
         }
         dc_require_phrase('test_seed.clear');
-        $result = TestMemberSeed::clear($conn);
+        $result = TestStudentSeed::clear($conn);
         SecurityAuditService::record($conn, 'Test Data Cleared', [
             'removed' => (int)($result['removed'] ?? 0),
         ], 'test_data');

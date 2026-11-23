@@ -35,29 +35,29 @@ final class HrAttendanceService
 
     // ── roster & sections ──────────────────────────────────────
 
-    /** Sections with active-member counts (for pickers/filters). */
+    /** Sections with active-student counts (for pickers/filters). */
     public static function sectionListWithCounts(\mysqli $conn): array
     {
         $out = [];
         $res = $conn->query(
-            "SELECT COALESCE(NULLIF(TRIM(current_section), ''), '—') AS section, COUNT(*) AS members
-             FROM members WHERE status = 'active'
+            "SELECT COALESCE(NULLIF(TRIM(current_section), ''), '—') AS section, COUNT(*) AS students
+             FROM students WHERE status = 'active'
              GROUP BY section ORDER BY section LIMIT 200"
         );
         if ($res) {
             while ($r = $res->fetch_assoc()) {
-                $out[] = ['section' => $r['section'], 'members' => (int)$r['members']];
+                $out[] = ['section' => $r['section'], 'students' => (int)$r['students']];
             }
         }
         return $out;
     }
 
-    /** @return list<array{id:int,member_code:?string,student_name:string,father_name:?string}> */
+    /** @return list<array{id:int,student_code:?string,student_name:string,father_name:?string}> */
     public static function sectionRoster(\mysqli $conn, string $section): array
     {
         $stmt = $conn->prepare(
-            "SELECT id, member_code, student_name, father_name
-             FROM members
+            "SELECT id, student_code, student_name, father_name
+             FROM students
              WHERE status = 'active'
                AND COALESCE(NULLIF(TRIM(current_section), ''), '—') = ?
              ORDER BY student_name, father_name
@@ -90,7 +90,7 @@ final class HrAttendanceService
         $marks = [];
         try {
             $stmt = $conn->prepare(
-                "SELECT member_id, status, notes FROM hr_attendance
+                "SELECT student_id, status, notes FROM hr_attendance
                  WHERE attendance_date = ? AND section = ?"
             );
             if ($stmt) {
@@ -98,7 +98,7 @@ final class HrAttendanceService
                 $stmt->execute();
                 $r = $stmt->get_result();
                 while ($row = $r->fetch_assoc()) {
-                    $marks[(int)$row['member_id']] = [
+                    $marks[(int)$row['student_id']] = [
                         'status' => $row['status'],
                         'notes' => (string)($row['notes'] ?? ''),
                     ];
@@ -109,12 +109,12 @@ final class HrAttendanceService
             $marks = [];
         }
 
-        $members = [];
+        $students = [];
         foreach (self::sectionRoster($conn, $section) as $m) {
             $mark = $marks[$m['id']] ?? null;
             $m['mark'] = $mark['status'] ?? null;
             $m['notes'] = $mark['notes'] ?? '';
-            $members[] = $m;
+            $students[] = $m;
         }
 
         $packetStatus = HrSubmissionService::resolvedStatus($conn, $date, $section);
@@ -127,8 +127,8 @@ final class HrAttendanceService
         return [
             'date' => $date,
             'section' => $section,
-            'members' => $members,
-            'count' => count($members),
+            'students' => $students,
+            'count' => count($students),
             'submission_status' => $packetStatus,
             'locked' => $locked,
             'review_notes' => $review['review_notes'] ?? null,
@@ -140,11 +140,11 @@ final class HrAttendanceService
     // ── sheet write (transactional replace) ───────────────────
 
     /**
-     * Replace the section's marks for the date. Submitted member set
+     * Replace the section's marks for the date. Submitted student set
      * must exactly equal the live section roster (prevents stale
      * sheets overwriting roster changes).
      *
-     * @param list<array{member_id:int|string,status:string,notes?:string}> $records
+     * @param list<array{student_id:int|string,status:string,notes?:string}> $records
      * @return array{marked:int,present:int,late:int,absent:int,excused:int}
      */
     public static function saveSectionSheet(\mysqli $conn, string $date, string $section, array $records, int $userId, bool $ownTransaction = true): array
@@ -164,13 +164,13 @@ final class HrAttendanceService
         $submitted = [];
         $notesByMember = [];
         foreach ($records as $rec) {
-            $mid = (int)($rec['member_id'] ?? 0);
+            $mid = (int)($rec['student_id'] ?? 0);
             $status = (string)($rec['status'] ?? '');
             if ($mid <= 0 || !in_array($status, self::STATUSES, true)) {
                 throw new \DomainException('Sheet contains an invalid record.');
             }
             if (isset($submitted[$mid])) {
-                throw new \DomainException('Duplicate member in sheet.');
+                throw new \DomainException('Duplicate student in sheet.');
             }
             $submitted[$mid] = $status;
             $note = trim((string)($rec['notes'] ?? $rec['note'] ?? ''));
@@ -203,7 +203,7 @@ final class HrAttendanceService
             $del->close();
 
             $ins = $conn->prepare(
-                "INSERT INTO hr_attendance (attendance_date, member_id, section, status, notes, marked_by)
+                "INSERT INTO hr_attendance (attendance_date, student_id, section, status, notes, marked_by)
                  VALUES (?,?,?,?,?,?)"
             );
             foreach ($submitted as $mid => $status) {

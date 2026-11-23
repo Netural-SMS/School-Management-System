@@ -1,6 +1,6 @@
 <?php
 /**
- * Sample ID card for the designer. Dummy names only — no real member PII.
+ * Sample ID card for the designer. Dummy names only — no real student PII.
  */
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/libs/eth_date_helper.php';
@@ -27,9 +27,9 @@ $CONFIG = [
     'sig_admin' => \App\Services\BrandingAssetService::assetUrl($conn, 'sig_admin', '', true),
 ];
 
-$member = [
+$student = [
     'gender' => 'male',
-    'member_code' => '69711',
+    'student_code' => '69711',
     'phone_number' => '+251911000000',
     'address' => 'Addis Ababa, Bole',
     'student_photo_path' => '',

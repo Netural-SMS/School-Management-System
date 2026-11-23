@@ -160,7 +160,7 @@ async function ceAsk(o){
 }
 const CE_KEEP_SITE='The rest of the website is not changed.';
 async function deleteSub(id){
-  if(!(await ceAsk({title:'Delete this registration submission?',summary:'A form someone sent from the website is removed.',intent:'I want to delete this submission',consequences:['The submission and its contact details are deleted permanently.','It disappears from the Registrations list and its counts.'],keeps:['Members already registered in the system are not affected.'],phrase:'DELETE SUBMISSION',confirmLabel:'Delete submission'})))return;
+  if(!(await ceAsk({title:'Delete this registration submission?',summary:'A form someone sent from the website is removed.',intent:'I want to delete this submission',consequences:['The submission and its contact details are deleted permanently.','It disappears from the Registrations list and its counts.'],keeps:['Students already registered in the system are not affected.'],phrase:'DELETE SUBMISSION',confirmLabel:'Delete submission'})))return;
   const fd=new FormData();fd.append('id',id);
   const d=await api('sub_delete',fd);
   if(d&&d.status==='success'){toast(d.message);closeModal();loadRegistrations(currentRegFilter);}

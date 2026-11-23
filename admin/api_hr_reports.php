@@ -24,8 +24,8 @@
  *
  * Actions:
  *   GET monthly_summary ?month=YYYY-MM
- *   GET member_search   ?q=…            (name or member code, ≥2 chars)
- *   GET member_detail   ?member_id=N&month=YYYY-MM
+ *   GET student_search   ?q=…            (name or student code, ≥2 chars)
+ *   GET student_detail   ?student_id=N&month=YYYY-MM
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -67,7 +67,7 @@ $action = (string)($_REQUEST['action'] ?? '');
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     hr_reports_respond(['status' => 'error', 'message' => 'This endpoint is read-only.']);
 }
-if (!in_array($action, ['monthly_summary', 'member_search', 'member_detail'], true)) {
+if (!in_array($action, ['monthly_summary', 'student_search', 'student_detail'], true)) {
     hr_reports_respond(['status' => 'error', 'message' => 'Unknown action.']);
 }
 
@@ -141,7 +141,7 @@ switch ($action) {
         ]);
     }
 
-    case 'member_search': {
+    case 'student_search': {
         $q = trim((string)($_GET['q'] ?? ''));
         if (mb_strlen($q) < 2) {
             hr_reports_respond(['status' => 'error', 'message' => 'Type at least 2 characters to search.']);
@@ -149,9 +149,9 @@ switch ($action) {
         $like = '%' . $q . '%';
         try {
             $stmt = $conn->prepare(
-                'SELECT id, student_name, father_name, member_code, current_section
-                 FROM members
-                 WHERE (student_name LIKE ? OR member_code LIKE ?)
+                'SELECT id, student_name, father_name, student_code
+                 FROM students
+                 WHERE (student_name LIKE ? OR student_code LIKE ?)
                  ORDER BY student_name
                  LIMIT 20'
             );
@@ -166,34 +166,34 @@ switch ($action) {
             $stmt->close();
             hr_reports_respond(['status' => 'success', 'items' => $items]);
         } catch (\Throwable $e) {
-            hr_reports_respond(['status' => 'error', 'message' => 'Could not search members. Please try again.']);
+            hr_reports_respond(['status' => 'error', 'message' => 'Could not search students. Please try again.']);
         }
     }
 
-    case 'member_detail': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            hr_reports_respond(['status' => 'error', 'message' => 'A member is required.']);
+    case 'student_detail': {
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            hr_reports_respond(['status' => 'error', 'message' => 'A student is required.']);
         }
         $month = hr_reports_month((string)($_GET['month'] ?? ''));
         $like = $month . '-%';
 
         try {
             $stmt = $conn->prepare(
-                'SELECT id, student_name, father_name, member_code, current_section
-                 FROM members WHERE id = ? LIMIT 1'
+                'SELECT id, student_name, father_name, student_code
+                 FROM students WHERE id = ? LIMIT 1'
             );
-            $stmt->bind_param('i', $memberId);
+            $stmt->bind_param('i', $studentId);
             $stmt->execute();
-            $member = $stmt->get_result()->fetch_assoc();
+            $student = $stmt->get_result()->fetch_assoc();
             $stmt->close();
         } catch (\Throwable $e) {
-            $member = null;
+            $student = null;
         }
-        if (!$member) {
-            hr_reports_respond(['status' => 'error', 'message' => 'Member not found.']);
+        if (!$student) {
+            hr_reports_respond(['status' => 'error', 'message' => 'Student not found.']);
         }
-        $member['id'] = (int)$member['id'];
+        $student['id'] = (int)$student['id'];
 
         // Education rows: date + status + class label.
         $education = [];
@@ -202,10 +202,10 @@ switch ($action) {
                 'SELECT a.attendance_date, a.status, c.class_name
                  FROM attendance a
                  LEFT JOIN classes c ON c.id = a.class_id
-                 WHERE a.member_id = ? AND a.attendance_date LIKE ?
+                 WHERE a.student_id = ? AND a.attendance_date LIKE ?
                  ORDER BY a.attendance_date'
             );
-            $stmt->bind_param('is', $memberId, $like);
+            $stmt->bind_param('is', $studentId, $like);
             $stmt->execute();
             $res = $stmt->get_result();
             while ($row = $res->fetch_assoc()) {
@@ -220,17 +220,17 @@ switch ($action) {
             $education = [];
         }
 
-        // Mezmur rows: date + status (section is the member's current
+        // Mezmur rows: date + status (section is the student's current
         // section — historical per-day section is not stored per row).
         $mezmur = [];
         try {
             $stmt = $conn->prepare(
                 'SELECT attendance_date, status
                  FROM mezmur_attendance
-                 WHERE member_id = ? AND attendance_date LIKE ?
+                 WHERE student_id = ? AND attendance_date LIKE ?
                  ORDER BY attendance_date'
             );
-            $stmt->bind_param('is', $memberId, $like);
+            $stmt->bind_param('is', $studentId, $like);
             $stmt->execute();
             $res = $stmt->get_result();
             while ($row = $res->fetch_assoc()) {
@@ -247,7 +247,7 @@ switch ($action) {
         hr_reports_respond([
             'status' => 'success',
             'month' => $month,
-            'member' => $member,
+            'student' => $student,
             'education' => $education,
             'mezmur' => $mezmur,
         ]);

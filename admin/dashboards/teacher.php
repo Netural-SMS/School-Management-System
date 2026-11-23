@@ -939,9 +939,9 @@ $csrfToken = generateCsrfToken();
                 <tr>
                     <td>${i + 1}</td>
                     <td class="font-medium">${escapeHtml(s.student_name + ' ' + s.father_name)}</td>
-                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code || '—')}</code></td>
-                    <td><input type="number" class="grade-input" oninput="updateTeacherLiveGrading()" data-member-id="${s.member_id}" value="${s.score !== null ? s.score : ''}" min="0" max="${maxScore}" step="0.5" placeholder="—"></td>
-                    <td><input type="text" class="form-input remarks-input" style="width:150px" data-member-id="${s.member_id}" value="${escapeHtml(s.remarks || '')}" placeholder="Remarks"></td>
+                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code || '—')}</code></td>
+                    <td><input type="number" class="grade-input" oninput="updateTeacherLiveGrading()" data-student-id="${s.student_id}" value="${s.score !== null ? s.score : ''}" min="0" max="${maxScore}" step="0.5" placeholder="—"></td>
+                    <td><input type="text" class="form-input remarks-input" style="width:150px" data-student-id="${s.student_id}" value="${escapeHtml(s.remarks || '')}" placeholder="Remarks"></td>
                 </tr>
             `).join('');
             // Score limit (2026-10-22): nobody can type more than the max.
@@ -973,11 +973,11 @@ $csrfToken = generateCsrfToken();
             }
             const grades = [];
             document.querySelectorAll('#gradeEntryBody .grade-input').forEach(input => {
-                const memberId = input.dataset.memberId;
+                const studentId = input.dataset.studentId;
                 const score = input.value;
-                const remarksInput = document.querySelector(`.remarks-input[data-member-id="${memberId}"]`);
+                const remarksInput = document.querySelector(`.remarks-input[data-student-id="${studentId}"]`);
                 const remarks = remarksInput ? remarksInput.value : '';
-                grades.push({ member_id: memberId, score, remarks });
+                grades.push({ student_id: studentId, score, remarks });
             });
             
             const formData = new FormData();
@@ -1123,26 +1123,26 @@ $csrfToken = generateCsrfToken();
                 // is never inferred — absent is the conservative default.
                 const status = AttendanceSheet.normalizeStatus(s.status) || 'absent';
                 return `
-                <tr data-member-id="${s.member_id || s.id}">
+                <tr data-student-id="${s.student_id || s.id}">
                     <td>${i + 1}</td>
                     <td class="font-medium">${escapeHtml((s.student_name || '') + ' ' + (s.father_name || ''))}${s.warning && s.warning.kind ? ' <span class="badge badge-warning" title="Open attendance warning (read-only)">' + escapeHtml(s.warning.kind === 'low_month' ? 'Low month' : (s.warning.stage || 'warning')) + '</span>' : ''}</td>
-                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code || '—')}</code></td>
+                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code || '—')}</code></td>
                     <td class="text-center">
                         <div class="flex justify-center gap-2">
-                            <button type="button" class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-attendance-status="present" onclick="setAttStatus(this, ${s.member_id || s.id}, 'present')" title="Present">✓</button>
-                            <button type="button" class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-attendance-status="absent" onclick="setAttStatus(this, ${s.member_id || s.id}, 'absent')" title="Absent">✗</button>
-                            <button type="button" class="att-btn att-late ${status === 'late' ? 'active' : ''}" data-attendance-status="late" onclick="setAttStatus(this, ${s.member_id || s.id}, 'late')" title="Late">L</button>
-                            <button type="button" class="att-btn att-excused ${status === 'excused' ? 'active' : ''}" data-attendance-status="excused" onclick="setAttStatus(this, ${s.member_id || s.id}, 'excused')" title="Excused">E</button>
+                            <button type="button" class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-attendance-status="present" onclick="setAttStatus(this, ${s.student_id || s.id}, 'present')" title="Present">✓</button>
+                            <button type="button" class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-attendance-status="absent" onclick="setAttStatus(this, ${s.student_id || s.id}, 'absent')" title="Absent">✗</button>
+                            <button type="button" class="att-btn att-late ${status === 'late' ? 'active' : ''}" data-attendance-status="late" onclick="setAttStatus(this, ${s.student_id || s.id}, 'late')" title="Late">L</button>
+                            <button type="button" class="att-btn att-excused ${status === 'excused' ? 'active' : ''}" data-attendance-status="excused" onclick="setAttStatus(this, ${s.student_id || s.id}, 'excused')" title="Excused">E</button>
                         </div>
                     </td>
-                    <td><input type="text" class="form-input att-note" style="width:120px" maxlength="500" data-member-id="${s.member_id || s.id}" value="${escapeHtml(s.note || '')}" placeholder="Note"></td>
+                    <td><input type="text" class="form-input att-note" style="width:120px" maxlength="500" data-student-id="${s.student_id || s.id}" value="${escapeHtml(s.note || '')}" placeholder="Note"></td>
                 </tr>
             `}).join('');
         }
         
-        function setAttStatus(btn, memberId, status) {
+        function setAttStatus(btn, studentId, status) {
             if (!AttendanceSheet.setStatus(btn, status)) return;
-            const idx = attendanceData.findIndex(s => (s.member_id || s.id) == memberId);
+            const idx = attendanceData.findIndex(s => (s.student_id || s.id) == studentId);
             if (idx !== -1) attendanceData[idx].status = status;
         }
         
@@ -1155,7 +1155,7 @@ $csrfToken = generateCsrfToken();
         // Danger confirmation (T1): saved statuses at load time; changing them asks first.
         let attSaved = {};
         function attNameOf(mid) {
-            const s = attendanceData.find(x => (x.member_id || x.id) == mid);
+            const s = attendanceData.find(x => (x.student_id || x.id) == mid);
             return s ? ((s.student_name || '') + ' ' + (s.father_name || '')).trim() : '';
         }
         async function saveAttendance() {
@@ -1237,7 +1237,7 @@ $csrfToken = generateCsrfToken();
                     <td>${i + 1}</td>
                     <td class="font-medium">${escapeHtml(s.student_name || '')}</td>
                     <td>${escapeHtml(s.father_name || '')}</td>
-                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code || '—')}</code></td>
+                    <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code || '—')}</code></td>
                     <td><span class="chip ${s.gender === 'male' ? 'chip-info' : 'chip-success'}">${s.gender === 'male' ? 'M' : 'F'}</span></td>
                 </tr>
             `).join('');
@@ -1334,9 +1334,9 @@ $csrfToken = generateCsrfToken();
                             <tr>
                                 <td>${i+1}</td>
                                 <td class="font-medium">${escapeHtml((s.student_name||'')+ ' '+(s.father_name||''))}</td>
-                                <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code||'—')}</code></td>
-                                <td><input type="number" class="grade-input submit-score" data-mid="${s.member_id}" data-name="${escapeHtml(((s.student_name||'')+' '+(s.father_name||'')).trim())}" min="0" max="${maxScore}" step="0.5" value="${s.score!==null&&s.score!==undefined?s.score:''}" placeholder="—"></td>
-                                <td><input type="text" class="form-input submit-remark" data-mid="${s.member_id}" style="width:120px" value="${escapeHtml(s.remarks||'')}" placeholder="Remark"></td>
+                                <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code||'—')}</code></td>
+                                <td><input type="number" class="grade-input submit-score" data-mid="${s.student_id}" data-name="${escapeHtml(((s.student_name||'')+' '+(s.father_name||'')).trim())}" min="0" max="${maxScore}" step="0.5" value="${s.score!==null&&s.score!==undefined?s.score:''}" placeholder="—"></td>
+                                <td><input type="text" class="form-input submit-remark" data-mid="${s.student_id}" style="width:120px" value="${escapeHtml(s.remarks||'')}" placeholder="Remark"></td>
                             </tr>
                         `).join('') : '<tr><td colspan="5" class="text-center text-slate-400 py-8">No students</td></tr>';
                         // The disable above ran on the OLD rows; apply it to the new ones too.
@@ -1364,7 +1364,7 @@ $csrfToken = generateCsrfToken();
             document.querySelectorAll('.submit-score').forEach(inp => {
                 const mid = inp.dataset.mid;
                 const remarkInp = document.querySelector(`.submit-remark[data-mid="${mid}"]`);
-                grades.push({ member_id: mid, score: inp.value, remark: remarkInp?.value || '' });
+                grades.push({ student_id: mid, score: inp.value, remark: remarkInp?.value || '' });
             });
             
             if (grades.filter(g => g.score !== '').length === 0) return showToast('Enter at least one score', 'error');
@@ -1374,7 +1374,7 @@ $csrfToken = generateCsrfToken();
             }
             // Blank = the student did not take this test (shown on the review and report card).
             const blankNames = [];
-            document.querySelectorAll('.submit-score').forEach(inp => { if (String(inp.value).trim() === '') blankNames.push(inp.dataset.name || ('Member #' + inp.dataset.mid)); });
+            document.querySelectorAll('.submit-score').forEach(inp => { if (String(inp.value).trim() === '') blankNames.push(inp.dataset.name || ('Student #' + inp.dataset.mid)); });
 
             // Danger confirmation (T2, MEDIUM): submitting locks the marks for review.
             if (!(window.DangerConfirm && window.DangerConfirm.ask)) return showToast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.', 'error');
@@ -1505,7 +1505,7 @@ $csrfToken = generateCsrfToken();
                             return `<tr>
                                 <td><span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${s.rank<=3?'bg-amber-100 text-amber-800':'bg-slate-100 text-slate-600'}">${s.rank}</span></td>
                                 <td class="font-medium">${escapeHtml((s.student_name||'')+' '+(s.father_name||''))}</td>
-                                <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.member_code||'—')}</code></td>
+                                <td><code class="text-xs bg-slate-100 px-2 py-1 rounded">${escapeHtml(s.student_code||'—')}</code></td>
                                 <td class="font-bold">${pct}%</td>
                                 <td><span class="px-2 py-0.5 rounded-md text-xs font-bold ${gCls}">${s.grade_letter||'—'}</span></td>
                                 <td><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-slate-100 rounded-full"><div class="h-full rounded-full ${attBar>=80?'bg-emerald-500':attBar>=60?'bg-amber-500':'bg-red-500'}" style="width:${attBar}%"></div></div><span class="text-xs text-slate-500">${attBar}%</span></div></td>
@@ -1516,14 +1516,14 @@ $csrfToken = generateCsrfToken();
                 });
         }
         
-        function viewReportCard(memberId, classId) {
+        function viewReportCard(studentId, classId) {
             const modal = document.getElementById('reportCardModal');
             const content = document.getElementById('reportCardContent');
             modal.style.display = 'block';
             modal.classList.add('show');
             content.innerHTML = '<div class="p-8 text-center text-slate-400" style="background:#fff;border-radius:8px"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2">Opening report card…</p></div>';
             
-            fetch(`/admin/api_communication.php?action=get_report_card&member_id=${memberId}&class_id=${classId}`)
+            fetch(`/admin/api_communication.php?action=get_report_card&student_id=${studentId}&class_id=${classId}`)
                 .then(r => r.json())
                 .then(d => {
                     if (d.status !== 'success') { content.innerHTML = `<div class="p-8 text-center text-red-500" style="background:#fff;border-radius:8px">${escapeHtml(d.message||'Could not open this report card.')}</div>`; return; }
@@ -1551,7 +1551,7 @@ $csrfToken = generateCsrfToken();
                                 <div><strong style="color:#64748b">Name:</strong> ${escapeHtml(s?.student_name||'')}</div>
                                 <div><strong style="color:#64748b">Father:</strong> ${escapeHtml(s?.father_name||'')}</div>
                                 <div><strong style="color:#64748b">Class:</strong> ${escapeHtml(cl?.class_name||'')}</div>
-                                <div><strong style="color:#64748b">Code:</strong> ${escapeHtml(s?.member_code||'')}</div>
+                                <div><strong style="color:#64748b">Code:</strong> ${escapeHtml(s?.student_code||'')}</div>
                             </div>
                             
                             <!-- Summary Cards -->

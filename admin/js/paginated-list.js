@@ -1,7 +1,7 @@
 /*
- * Shared paginated list engine — one pager for every member list.
+ * Shared paginated list engine — one pager for every student list.
  *
- *   Showing 51–100 of 440 members          Per page [25|50|100|200]
+ *   Showing 51–100 of 440 students          Per page [25|50|100|200]
  *   ‹ Previous  1 2 [3] 4 … 9  Next ›      [Load more (340 left)]
  *
  * - Previous / page numbers / Next REPLACE the rows (jump to a page).
@@ -9,11 +9,11 @@
  * - The per-page choice is remembered per screen (localStorage).
  *
  * Uses simple OFFSET paging (?page=N&limit=M) which the API supports natively
- * (MemberDirectoryService: default 50, max 200). Callers are unchanged: the
+ * (StudentDirectoryService: default 50, max 200). Callers are unchanged: the
  * constructor options are the same as before; new ones are optional:
  *   pageSizes  [25, 50, 100, 200]
  *   storageKey 'fkss_pp_<tbody id>'   (remembered per-page choice)
- *   noun       'members'
+ *   noun       'students'
  *
  * Phase 3 (owner request 2026-10-22): per-page, Previous/Next, "51–100" range.
  */
@@ -35,7 +35,7 @@
         this.renderRow = opts.renderRow;
         this.getParams = opts.getParams || function () { return {}; };
         this.pageSizes = Array.isArray(opts.pageSizes) && opts.pageSizes.length ? opts.pageSizes : SIZES;
-        this.noun = opts.noun || 'members';
+        this.noun = opts.noun || 'students';
         this.loadMoreHost = opts.loadMoreHost || null;
         this.pageNavHost = opts.pageNavHost || this.loadMoreHost;
         var id = (this.body && this.body.id) || (this.loadMoreHost && this.loadMoreHost.id) || 'list';
@@ -90,18 +90,18 @@
                 throw new Error(data.message || 'Failed to load (HTTP ' + response.status + ').');
             }
 
-            var members = Array.isArray(data.members) ? data.members : [];
+            var students = Array.isArray(data.students) ? data.students : [];
             if (data.total != null) this.total = Number(data.total) || 0;
             if (data.pages != null) this.pages = Math.max(1, Number(data.pages) || 1);
             this.page = Math.min(Math.max(1, Number(data.page) || page || 1), this.pages);
 
             if (append) {
-                this._appendRows(members);
-                this.loadedCount += members.length;
+                this._appendRows(students);
+                this.loadedCount += students.length;
             } else {
                 this.firstPage = this.page;
-                this._replaceRows(members);
-                this.loadedCount = members.length;
+                this._replaceRows(students);
+                this.loadedCount = students.length;
             }
             this._renderControls();
         } catch (err) {
@@ -141,21 +141,21 @@
 
     /* ── Rendering ── */
 
-    PaginatedList.prototype._replaceRows = function (members) {
+    PaginatedList.prototype._replaceRows = function (students) {
         if (!this.body) return;
         this.body.replaceChildren();
-        if (!members.length) { this._setBodyMessage('No results found.', false); return; }
+        if (!students.length) { this._setBodyMessage('No results found.', false); return; }
         var self = this;
         // 2nd argument = the row's position in the whole list (1-based).
         var base = (this.firstPage - 1) * this.pageSize;
-        members.forEach(function (m, i) { self.body.appendChild(self.renderRow(m, base + i + 1)); });
+        students.forEach(function (m, i) { self.body.appendChild(self.renderRow(m, base + i + 1)); });
     };
 
-    PaginatedList.prototype._appendRows = function (members) {
+    PaginatedList.prototype._appendRows = function (students) {
         if (!this.body) return;
         var self = this;
         var base = (this.firstPage - 1) * this.pageSize + this.loadedCount;
-        members.forEach(function (m, i) { self.body.appendChild(self.renderRow(m, base + i + 1)); });
+        students.forEach(function (m, i) { self.body.appendChild(self.renderRow(m, base + i + 1)); });
     };
 
     PaginatedList.prototype._setBodyMessage = function (msg, isError) {
@@ -189,7 +189,7 @@
         var self = this;
         var r = this.range();
 
-        // ── Row 1: "Showing 51–100 of 440 members" + Per page ──
+        // ── Row 1: "Showing 51–100 of 440 students" + Per page ──
         var top = document.createElement('div');
         top.className = 'fk-pager flex items-center justify-between mt-3 px-4 py-2 flex-wrap gap-2';
         top.setAttribute('data-fk-pager', '');

@@ -13,7 +13,7 @@
  * → default Unicode-word split (Ethiopic letters are \p{L}, kept as tokens).
  *
  * NOTE: this file extends a vendor class. Load it only after
- * vendor/autoload.php (MemberSearchService::available() guards this).
+ * vendor/autoload.php (StudentSearchService::available() guards this).
  */
 namespace App\Services;
 

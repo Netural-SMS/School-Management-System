@@ -27,7 +27,7 @@ if (!in_array($role, AcmPolicy::consoleRoles(), true)) {
 $canCreate = AcmPolicy::can($role, 'person', 'create');
 $canEdit = AcmPolicy::can($role, 'person', 'edit');
 $canTicket = AcmPolicy::can($role, 'ticket', 'create');
-// S7: per-account suspend/reactivate (member/parent rows only;
+// S7: per-account suspend/reactivate (student/parent rows only;
 // the service re-guards role + state, so hidden buttons are
 // convenience, never security).
 $canSuspend = AcmPolicy::can($role, 'account', 'suspend');
@@ -102,14 +102,14 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
     <div class="acm-empty"><i class="fa-solid fa-user-xmark"></i> No persons match. <?= $canCreate ? 'Register one with the button above.' : '' ?></div>
     <?php else: ?>
     <div class="tw"><table>
-        <thead><tr><th>Name</th><th>Father</th><th>Phone</th><th>Member</th><th>Guardian</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Father</th><th>Phone</th><th>Student</th><th>Guardian</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($results as $row): ?>
             <tr>
                 <td><span class="amharic"><?= e((string)($row['full_name_am'] ?? '')) ?></span></td>
                 <td><?= e((string)($row['father_name'] ?? '—')) ?></td>
                 <td><?= e((string)($row['phone'] ?? '—')) ?></td>
-                <td><?= !empty($row['member_id']) ? '#' . (int)$row['member_id'] : '—' ?></td>
+                <td><?= !empty($row['student_id']) ? '#' . (int)$row['student_id'] : '—' ?></td>
                 <td><?= !empty($row['guardian_id']) ? '#' . (int)$row['guardian_id'] : '—' ?></td>
                 <td><a href="/admin/acm_person.php?id=<?= (int)$row['id'] ?>">Open</a></td>
             </tr>
@@ -137,7 +137,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
         <div><label class="flbl" for="f_email">Email</label><input class="inp" id="f_email" name="email" type="email" maxlength="100"></div>
         <div><label class="flbl" for="f_doctype">ID document type</label><input class="inp" id="f_doctype" name="id_doc_type" maxlength="40" placeholder="Kebele ID / Passport / …"></div>
         <div><label class="flbl" for="f_docref">ID document ref</label><input class="inp" id="f_docref" name="id_doc_ref" maxlength="100"></div>
-        <div><label class="flbl" for="f_member">Linked member ID (members.id)</label><input class="inp" id="f_member" name="member_id" inputmode="numeric" placeholder="optional"></div>
+        <div><label class="flbl" for="f_member">Linked student ID (students.id)</label><input class="inp" id="f_member" name="student_id" inputmode="numeric" placeholder="optional"></div>
         <div><label class="flbl" for="f_guardian">Linked guardian ID (guardians.id)</label><input class="inp" id="f_guardian" name="guardian_id" inputmode="numeric" placeholder="optional"></div>
         <div class="full"><label class="flbl" for="f_notes">Notes</label><textarea class="inp" id="f_notes" name="notes" rows="2" maxlength="2000"></textarea></div>
         <div class="acm-btn-row full"><button class="btn bp" id="acmPersonSave"><i class="fa-solid fa-floppy-disk"></i> Save person</button></div>
@@ -158,7 +158,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
             <dt>Phone</dt><dd><?= e((string)($person['phone'] ?? '—')) ?></dd>
             <dt>Email</dt><dd><?= e((string)($person['email'] ?? '—')) ?></dd>
             <dt>ID document</dt><dd><?= e(trim((string)($person['id_doc_type'] ?? '') . ' ' . (string)($person['id_doc_ref'] ?? '')) ?: '—') ?></dd>
-            <dt>Links</dt><dd>member <?= !empty($person['member_id']) ? '#' . (int)$person['member_id'] : '—' ?> · guardian <?= !empty($person['guardian_id']) ? '#' . (int)$person['guardian_id'] : '—' ?></dd>
+            <dt>Links</dt><dd>student <?= !empty($person['student_id']) ? '#' . (int)$person['student_id'] : '—' ?> · guardian <?= !empty($person['guardian_id']) ? '#' . (int)$person['guardian_id'] : '—' ?></dd>
         </dl>
         <?php if (!empty($dups['same_phone']) || !empty($dups['same_name_dob'])): ?>
         <div class="acm-alert warn" style="margin-top:.7rem"><i class="fa-solid fa-triangle-exclamation"></i> Possible duplicates:
@@ -192,7 +192,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
                     <td><?= e((string)($acc['last_login'] ?? 'never')) ?></td>
                     <?php if ($canLifecycle): ?>
                     <td>
-                        <?php if (in_array((string)($acc['role'] ?? ''), ['member', 'parent'], true)): ?>
+                        <?php if (in_array((string)($acc['role'] ?? ''), ['student', 'parent'], true)): ?>
                             <?php if (($acc['status'] ?? '') === 'active' && (int)($acc['is_active'] ?? 1) === 1 && $canSuspend): ?>
                             <button class="btn bd" data-acm-lifecycle="account_suspend" data-acm-user="<?= (int)($acc['user_id'] ?? 0) ?>">Suspend</button>
                             <?php elseif ((($acc['status'] ?? '') === 'suspended' || ((string)($acc['status'] ?? '') === 'active' && (int)($acc['is_active'] ?? 1) !== 1)) && $canReactivate): ?>
@@ -234,11 +234,11 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
     <div class="ct"><i class="fa-solid fa-paper-plane"></i> Submit activation ticket</div>
     <form id="acmTicketForm" class="acm-form" onsubmit="return false">
         <div><label class="flbl" for="t_type">Account type *</label>
-            <select class="inp" id="t_type" name="account_type"><option value="member">Member</option><option value="parent">Parent</option></select></div>
+            <select class="inp" id="t_type" name="account_type"><option value="student">Student</option><option value="parent">Parent</option></select></div>
         <div><label class="flbl" for="t_note">Submitter note</label><input class="inp" id="t_note" name="note" maxlength="500" placeholder="optional context for the reviewer"></div>
         <div class="acm-btn-row full"><button class="btn bp" id="acmTicketSubmit"><i class="fa-solid fa-paper-plane"></i> Submit for review</button></div>
     </form>
-    <div style="font-size:.75rem;color:var(--dim)">Member accounts need a linked member record; parent accounts need a linked guardian record (see links above).</div>
+    <div style="font-size:.75rem;color:var(--dim)">Student accounts need a linked student record; parent accounts need a linked guardian record (see links above).</div>
 </div>
 <?php endif; ?>
 <?php endif; ?>

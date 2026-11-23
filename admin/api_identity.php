@@ -3,7 +3,7 @@
  * Identity & Codes hub API — Super Admin only.
  *
  * Manages departments, staff positions, and the assignment of positions to
- * members (which drives their code). Follows the same JSON contract and
+ * students (which drives their code). Follows the same JSON contract and
  * security posture as api_settings.php: session auth, CSRF on POST,
  * prepared statements, audit logging.
  */
@@ -12,11 +12,11 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/backend/services/SecurityAuditService.php';
 require_once __DIR__ . '/backend/services/IdentityCodeService.php';
-require_once __DIR__ . '/backend/services/MemberTypeService.php';
+require_once __DIR__ . '/backend/services/StudentTypeService.php';
 require_once __DIR__ . '/backend/services/PositionSyncService.php';
 
 use App\Services\IdentityCodeService;
-use App\Services\MemberTypeService;
+use App\Services\StudentTypeService;
 use App\Services\PositionSyncService;
 use App\Services\SecurityAuditService;
 
@@ -196,7 +196,7 @@ try {
                 echo json_encode(['status' => 'error', 'message' => 'Position code must be 1-4 uppercase A-Z letters.']); exit;
             }
             if ($roleCode === IdentityCodeService::ORDINARY_MARKER) {
-                echo json_encode(['status' => 'error', 'message' => "'N' is reserved for ordinary members."]); exit;
+                echo json_encode(['status' => 'error', 'message' => "'N' is reserved for ordinary students."]); exit;
             }
             if ($deptId === null && !PositionSyncService::departmentNullable($conn)) {
                 echo json_encode(['status' => 'error', 'message' => 'Free positions (no department) require sql/020 to be applied first.']); exit;
@@ -265,22 +265,22 @@ try {
 
         /* ── Membership types (labels editable by Super Admin) ──────── */
 
-        case 'list_member_types':
-            $labels = MemberTypeService::labels($conn);
+        case 'list_student_types':
+            $labels = StudentTypeService::labels($conn);
             $rows = [];
-            foreach (MemberTypeService::KEYS as $key) {
+            foreach (StudentTypeService::KEYS as $key) {
                 $rows[] = [
                     'type_key' => $key,
                     'label_am' => $labels[$key]['am'],
                     'label_en' => $labels[$key]['en'],
                 ];
             }
-            echo json_encode(['status' => 'success', 'member_types' => $rows], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['status' => 'success', 'student_types' => $rows], JSON_UNESCAPED_UNICODE);
             break;
 
-        case 'save_member_type':
+        case 'save_student_type':
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit; }
-            $result = MemberTypeService::saveLabel(
+            $result = StudentTypeService::saveLabel(
                 $conn,
                 (string)($_POST['type_key'] ?? ''),
                 (string)($_POST['label_am'] ?? ''),
@@ -288,7 +288,7 @@ try {
             );
             if ($result['status'] === 'success') {
                 SecurityAuditService::record($conn, 'Membership Type Updated',
-                    ['type_key' => $_POST['type_key'] ?? ''], 'member_type');
+                    ['type_key' => $_POST['type_key'] ?? ''], 'student_type');
             }
             echo json_encode($result, JSON_UNESCAPED_UNICODE);
             break;

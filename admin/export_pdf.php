@@ -1,22 +1,22 @@
 <?php
 /**
- * Bounded, constant-memory member report controller.
+ * Bounded, constant-memory student report controller.
  *
  * Supported compatibility formats:
  * - pdf: print-ready HTML that opens the browser print dialog
  * - docx: Word-compatible HTML downloaded with the historical .doc extension
- * - csv: bounded report CSV (complete roster CSV lives at api_export_members.php)
+ * - csv: bounded report CSV (complete roster CSV lives at api_export_students.php)
  */
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/backend/ethiopian_date.php';
-require_once __DIR__ . '/backend/services/MemberReportService.php';
-require_once __DIR__ . '/backend/services/MemberReportRenderer.php';
+require_once __DIR__ . '/backend/services/StudentReportService.php';
+require_once __DIR__ . '/backend/services/StudentReportRenderer.php';
 require_once __DIR__ . '/backend/services/SecurityAuditService.php';
-require_once __DIR__ . '/backend/services/MemberTypeService.php';
+require_once __DIR__ . '/backend/services/StudentTypeService.php';
 
-use App\Services\MemberReportRenderer;
-use App\Services\MemberReportService;
-use App\Services\MemberTypeService;
+use App\Services\StudentReportRenderer;
+use App\Services\StudentReportService;
+use App\Services\StudentTypeService;
 use App\Services\SecurityAuditService;
 
 $role = (string)($_SESSION['admin_role'] ?? '');
@@ -47,7 +47,7 @@ if ($format === 'pdf' && !feature_enabled('export_pdf')) {
 }
 
 try {
-    $report = new MemberReportService($pdo, $_GET);
+    $report = new StudentReportService($pdo, $_GET);
     $summary = $report->summary();
 
     $requestedTitle = $_GET['title'] ?? '';
@@ -64,18 +64,18 @@ try {
     }
     $title = $report->presetTitle() !== ''
         ? $report->presetTitle()
-        : ($requestedTitle !== '' ? $requestedTitle : SCHOOL_NAME_SHORT . ' Member Report');
+        : ($requestedTitle !== '' ? $requestedTitle : SCHOOL_NAME_SHORT . ' Student Report');
 
-    $truncated = $summary['total'] > MemberReportService::MAX_ROWS;
+    $truncated = $summary['total'] > StudentReportService::MAX_ROWS;
     $filterValue = $_GET['filter'] ?? 'all';
     $filter = is_string($filterValue) ? $filterValue : 'invalid';
-    $auditRecorded = SecurityAuditService::record($pdo, 'Member Report Requested', [
+    $auditRecorded = SecurityAuditService::record($pdo, 'Student Report Requested', [
         'format' => $format,
         'filter' => $filter,
         'matching_rows' => $summary['total'],
-        'row_limit' => MemberReportService::MAX_ROWS,
+        'row_limit' => StudentReportService::MAX_ROWS,
         'truncated' => $truncated,
-    ], 'member_report');
+    ], 'student_report');
     if (!$auditRecorded) {
         http_response_code(503);
         exit('The report cannot start because its audit event could not be recorded.');
@@ -86,17 +86,17 @@ try {
     $rows = $report->openRows($format);
     $now = new DateTime('now', new DateTimeZone('Africa/Addis_Ababa'));
     $generatedAt = ethio_date_format($now, 'F j, Y') . ' ' . $now->format('g:i A');
-    $baseFilename = EXPORT_PREFIX . '_member_report_' . date('Y-m-d');
+    $baseFilename = EXPORT_PREFIX . '_student_report_' . date('Y-m-d');
 
     if ($format === 'csv') {
         // Editable membership-type labels (Super Admin → Identity & Codes).
         $memberTypeLabels = [];
         if (isset($conn) && $conn instanceof mysqli) {
-            foreach (MemberTypeService::labels($conn) as $typeKey => $pair) {
+            foreach (StudentTypeService::labels($conn) as $typeKey => $pair) {
                 $memberTypeLabels[$typeKey] = $pair['am'] . ' (' . $pair['en'] . ')';
             }
         }
-        MemberReportRenderer::streamCsv(
+        StudentReportRenderer::streamCsv(
             $rows,
             $summary,
             $baseFilename . '.csv',
@@ -107,7 +107,7 @@ try {
     }
 
     if ($format === 'docx') {
-        MemberReportRenderer::streamWord(
+        StudentReportRenderer::streamWord(
             $rows,
             $summary,
             $title,
@@ -127,7 +127,7 @@ try {
         }
     }
     $csvUrl = '/admin/export_pdf.php?' . http_build_query($csvQuery, '', '&', PHP_QUERY_RFC3986);
-    MemberReportRenderer::streamPrintPage(
+    StudentReportRenderer::streamPrintPage(
         $rows,
         $summary,
         $title,
@@ -148,7 +148,7 @@ try {
     }
     exit;
 } catch (Throwable $error) {
-    reportInternalError('Member report failed', $error);
+    reportInternalError('Student report failed', $error);
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: text/plain; charset=utf-8');

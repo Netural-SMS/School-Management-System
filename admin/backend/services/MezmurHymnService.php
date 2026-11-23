@@ -466,7 +466,7 @@ final class MezmurHymnService
         static $map = null;
         if ($map === null) {
             $map = [];
-            // Each group: every form folds to the first member. The
+            // Each group: every form folds to the first student. The
             // seventh-order vowels line up index-for-index.
             // Ethiopic syllables are (consonant, vowel-order) pairs. Fold
             // the homophonous CONSONANT families onto one representative

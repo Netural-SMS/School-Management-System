@@ -71,7 +71,7 @@ if (!validateCsrf($csrfToken)) {
     respond('error', 'Security token expired. Please refresh the page and try again.');
 }
 
-foreach (['full_name','username','email','role','password','confirm_password','user_id','is_active','member_id'] as $field) {
+foreach (['full_name','username','email','role','password','confirm_password','user_id','is_active','student_id'] as $field) {
     if (isset($_POST[$field]) && !is_string($_POST[$field])) respond('error', 'Invalid user data.');
 }
 
@@ -84,7 +84,7 @@ $role             = isset($_POST['role']) ? trim($_POST['role']) : '';
 $password         = isset($_POST['password']) ? $_POST['password'] : '';
 $confirmPassword  = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
 $isActive         = isset($_POST['is_active']) ? (int)$_POST['is_active'] : 1;
-$memberId         = isset($_POST['member_id']) && $_POST['member_id'] !== '' ? (int)$_POST['member_id'] : null;
+$studentId         = isset($_POST['student_id']) && $_POST['student_id'] !== '' ? (int)$_POST['student_id'] : null;
 
 // Valid roles and who can create them
 $validRoles = [
@@ -107,7 +107,7 @@ $validRoles = [
     // through api_dept_takers.php; admins may also create them here.
     'mezmur_attendance_taker',
     'hr_attendance_taker',
-    // ACM console seat (S1): super_admin creates these here; member and
+    // ACM console seat (S1): super_admin creates these here; student and
     // parent login roles are deliberately NOT listed — they are
     // provisioned only by approved activation tickets.
     'accounts_office',
@@ -242,8 +242,8 @@ try {
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
         $stmt = $pdo->prepare("
-            INSERT INTO users (username, email, full_name, role, password_hash, is_active, member_id)
-            VALUES (:username, :email, :full_name, :role, :password_hash, :is_active, :member_id)
+            INSERT INTO users (username, email, full_name, role, password_hash, is_active, student_id)
+            VALUES (:username, :email, :full_name, :role, :password_hash, :is_active, :student_id)
         ");
 
         $stmt->execute([
@@ -253,7 +253,7 @@ try {
             ':role'          => $role,
             ':password_hash' => $passwordHash,
             ':is_active'     => $isActive,
-            ':member_id'     => $memberId,
+            ':student_id'     => $studentId,
         ]);
 
         $newUserId = $pdo->lastInsertId();
@@ -300,13 +300,13 @@ try {
             $emailDb,
             $role,
             $isActive,
-            $memberId,
+            $studentId,
             $userId
         ): void {
             $statement = $conn->prepare(
                 'UPDATE users
                     SET full_name = ?, username = ?, email = ?, role = ?,
-                        is_active = ?, member_id = ?
+                        is_active = ?, student_id = ?
                   WHERE id = ?'
             );
             if (!$statement) {
@@ -321,7 +321,7 @@ try {
                 $emailDb,
                 $role,
                 $isActive,
-                $memberId,
+                $studentId,
                 $userId
             );
             $updated = $statement->execute();
@@ -400,13 +400,13 @@ try {
             );
         }
 
-        // Preserve the established teacher/member convergence after the atomic
+        // Preserve the established teacher/student convergence after the atomic
         // account+credential commit. syncMemberTeacherFlag may invoke its own
         // transaction, so it must not run inside the credential transaction.
         $wasActive = (int)($prevRow['is_active'] ?? 1) === 1;
         if ($role === 'teacher' && isset($conn) && ($conn instanceof mysqli)) {
             require_once __DIR__ . '/services/AssignmentService.php';
-            require_once __DIR__ . '/member_sync.php';
+            require_once __DIR__ . '/student_sync.php';
             if ($isActive === 1 && !$wasActive) {
                 $ids = \App\Services\AssignmentService::latestSuspensionSnapshot(
                     $conn,
@@ -424,8 +424,8 @@ try {
                     'user',
                     (int)$userId
                 );
-                if ($memberId) {
-                    syncMemberTeacherFlag($conn, (int)$memberId, true);
+                if ($studentId) {
+                    syncMemberTeacherFlag($conn, (int)$studentId, true);
                 }
             } elseif ($isActive === 0 && $wasActive) {
                 $ids = \App\Services\AssignmentService::suspendTeacherAssignments(
@@ -439,8 +439,8 @@ try {
                     'user',
                     (int)$userId
                 );
-                if ($memberId) {
-                    syncMemberTeacherFlag($conn, (int)$memberId, false);
+                if ($studentId) {
+                    syncMemberTeacherFlag($conn, (int)$studentId, false);
                 }
             }
         }

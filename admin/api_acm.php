@@ -225,7 +225,7 @@ try {
             $created = $persons->create($_POST, $actorId);
             acm_audit($pdo, 'acm.person.created', [
                 'person_id' => $created['id'],
-                'has_member_link' => !empty($_POST['member_id']) ? 1 : 0,
+                'has_student_link' => !empty($_POST['student_id']) ? 1 : 0,
                 'has_guardian_link' => !empty($_POST['guardian_id']) ? 1 : 0,
             ], 'acm_person', (int)$created['id']);
             acm_ok(['person' => $persons->find((int)$created['id'])]);

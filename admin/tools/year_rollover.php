@@ -71,7 +71,7 @@ function countActiveEnrolments($conn, $yearId) {
     $stmt = $conn->prepare("
         SELECT COUNT(*) AS c
         FROM class_enrollments ce
-        JOIN members m ON m.id = ce.member_id
+        JOIN students m ON m.id = ce.student_id
         WHERE ce.academic_year_id = ?
           AND ce.status = 'active'
           AND m.status <> 'archived'
@@ -158,7 +158,7 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // transactional. Hold metadata locks until commit; fail before any writes.
         try {
             // Migration 048's teacher-assignment trigger also updates users.
-            $tables = ['academic_terms', 'academic_years', 'class_enrollments', 'members', 'teacher_assignments', 'users'];
+            $tables = ['academic_terms', 'academic_years', 'class_enrollments', 'students', 'teacher_assignments', 'users'];
             if ($mode === 'promote') $tables[] = 'classes';
             sort($tables, SORT_STRING);
             foreach ($tables as $table) \App\Services\AttendancePreparationReadBoundary::requireTransactionalTable($conn, $table);
@@ -226,10 +226,10 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             //     SAME class. INSERT IGNORE skips anyone already enrolled there.
             $st = $conn->prepare("
                 INSERT IGNORE INTO class_enrollments
-                    (member_id, class_id, academic_year_id, enrolled_at, status, enrolled_by)
-                SELECT ce.member_id, ce.class_id, ?, CURDATE(), 'active', ?
+                    (student_id, class_id, academic_year_id, enrolled_at, status, enrolled_by)
+                SELECT ce.student_id, ce.class_id, ?, CURDATE(), 'active', ?
                 FROM class_enrollments ce
-                JOIN members m ON m.id = ce.member_id
+                JOIN students m ON m.id = ce.student_id
                 WHERE ce.academic_year_id = ?
                   AND ce.status = 'active'
                   AND m.status <> 'archived'
@@ -239,7 +239,7 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $carried = $st->affected_rows;
             _rollover_check_ignore_warnings($conn, 'Enrollment copy');
             $st->close();
-            $check = $conn->prepare("SELECT COUNT(*) AS missing FROM class_enrollments src JOIN members m ON m.id=src.member_id WHERE src.academic_year_id=? AND src.status='active' AND m.status <> 'archived' AND NOT EXISTS (SELECT 1 FROM class_enrollments dest WHERE dest.member_id=src.member_id AND dest.class_id=src.class_id AND dest.academic_year_id=? AND dest.status='active')");
+            $check = $conn->prepare("SELECT COUNT(*) AS missing FROM class_enrollments src JOIN students m ON m.id=src.student_id WHERE src.academic_year_id=? AND src.status='active' AND m.status <> 'archived' AND NOT EXISTS (SELECT 1 FROM class_enrollments dest WHERE dest.student_id=src.student_id AND dest.class_id=src.class_id AND dest.academic_year_id=? AND dest.status='active')");
             if (!$check || !$check->bind_param('ii', $oldYearId, $newYearId) || !$check->execute()) throw new RuntimeException('Enrollment verification failed.');
             $checked = $check->get_result();
             if (!$checked || !($checkRow = $checked->fetch_assoc()) || (int)$checkRow['missing'] !== 0) throw new DomainException('Some destination enrollments are inactive or missing. Review the target year enrollments before retrying.');
@@ -249,9 +249,9 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             // 2b. Promote one level. If none higher → graduate. If ambiguous
             //     (several classes at the next level) → skip for manual placement.
             $sel = $conn->prepare("
-                SELECT ce.member_id, ce.class_id, c.level_order
+                SELECT ce.student_id, ce.class_id, c.level_order
                 FROM class_enrollments ce
-                JOIN members m ON m.id = ce.member_id
+                JOIN students m ON m.id = ce.student_id
                 JOIN classes c ON c.id = ce.class_id
                 WHERE ce.academic_year_id = ?
                   AND ce.status = 'active'
@@ -264,14 +264,14 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $insEnr = $conn->prepare("
                 INSERT IGNORE INTO class_enrollments
-                    (member_id, class_id, academic_year_id, enrolled_at, status, promoted_from, enrolled_by)
+                    (student_id, class_id, academic_year_id, enrolled_at, status, promoted_from, enrolled_by)
                 VALUES (?, ?, ?, CURDATE(), 'active', ?, ?)
             ");
-            $updMember  = $conn->prepare("UPDATE members SET current_class_id = ?, promoted_at = CURDATE() WHERE id = ?");
-            $gradMember = $conn->prepare("UPDATE members SET academic_status = 'graduated' WHERE id = ?");
+            $updMember  = $conn->prepare("UPDATE students SET current_class_id = ?, promoted_at = CURDATE() WHERE id = ?");
+            $gradMember = $conn->prepare("UPDATE students SET academic_status = 'graduated' WHERE id = ?");
 
             while ($row = $rows->fetch_assoc()) {
-                $memberId  = (int)$row['member_id'];
+                $studentId  = (int)$row['student_id'];
                 $fromClass = (int)$row['class_id'];
                 $level     = (int)$row['level_order'];
 
@@ -286,22 +286,22 @@ if ($action === 'run' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (count($targets) === 1) {
                     $toClass = $targets[0];
-                    $insEnr->bind_param("iiiii", $memberId, $toClass, $newYearId, $fromClass, $adminId);
+                    $insEnr->bind_param("iiiii", $studentId, $toClass, $newYearId, $fromClass, $adminId);
                     $insEnr->execute();
                     $inserted = $insEnr->affected_rows;
                     _rollover_check_ignore_warnings($conn, 'Promotion enrollment');
                     if ($inserted === 0) {
-                        $check = $conn->prepare("SELECT 1 FROM class_enrollments WHERE member_id=? AND class_id=? AND academic_year_id=? AND status='active' LIMIT 1");
-                        if (!$check || !$check->bind_param('iii', $memberId, $toClass, $newYearId) || !$check->execute()) throw new RuntimeException('Promotion enrollment verification failed.');
+                        $check = $conn->prepare("SELECT 1 FROM class_enrollments WHERE student_id=? AND class_id=? AND academic_year_id=? AND status='active' LIMIT 1");
+                        if (!$check || !$check->bind_param('iii', $studentId, $toClass, $newYearId) || !$check->execute()) throw new RuntimeException('Promotion enrollment verification failed.');
                         $checked = $check->get_result();
                         if (!$checked || !$checked->fetch_assoc()) throw new DomainException('A destination enrollment is inactive or missing. Review the target year enrollments before retrying.');
                         $checked->free(); $check->close();
                     }
-                    $updMember->bind_param("ii", $toClass, $memberId);
+                    $updMember->bind_param("ii", $toClass, $studentId);
                     $updMember->execute();
                     $promoted++;
                 } elseif (count($targets) === 0) {
-                    $gradMember->bind_param("i", $memberId);
+                    $gradMember->bind_param("i", $studentId);
                     $gradMember->execute();
                     $graduated++;
                 } else {

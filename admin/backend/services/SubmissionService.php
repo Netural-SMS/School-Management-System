@@ -61,8 +61,8 @@ class SubmissionService
      * skipped an invalid row silently, still answered "success" and could
      * lock the packet without that student; (float)"abc" also saved as 0.
      *
-     * @param mixed $grades list of ['member_id'=>..,'score'=>..]
-     * @return list<array{member_id:int,value:string,reason:string,message:string}>
+     * @param mixed $grades list of ['student_id'=>..,'score'=>..]
+     * @return list<array{student_id:int,value:string,reason:string,message:string}>
      */
     public static function invalidScores(\mysqli $conn, $grades, float $maxScore): array
     {
@@ -75,7 +75,7 @@ class SubmissionService
             if (!is_array($g)) {
                 continue;
             }
-            $mid = (int)($g['member_id'] ?? 0);
+            $mid = (int)($g['student_id'] ?? 0);
             if ($mid <= 0 || !array_key_exists('score', $g)) {
                 continue;
             }
@@ -84,7 +84,7 @@ class SubmissionService
                 continue;
             }
             if (is_bool($raw) || is_array($raw) || !is_scalar($raw)) {
-                $bad[] = ['member_id' => $mid, 'value' => '?', 'reason' => 'not_a_number'];
+                $bad[] = ['student_id' => $mid, 'value' => '?', 'reason' => 'not_a_number'];
                 continue;
             }
             $txt = is_float($raw) || is_int($raw) ? self::scoreLabel((float)$raw) : trim((string)$raw);
@@ -92,20 +92,20 @@ class SubmissionService
                 continue;
             }
             if (!preg_match('/^\d{1,4}(\.\d{1,2})?$/', $txt)) {
-                $bad[] = ['member_id' => $mid, 'value' => mb_substr($txt, 0, 12), 'reason' => 'not_a_number'];
+                $bad[] = ['student_id' => $mid, 'value' => mb_substr($txt, 0, 12), 'reason' => 'not_a_number'];
                 continue;
             }
             $v = (float)$txt;
             if ($v > $maxScore + 1e-9) {
-                $bad[] = ['member_id' => $mid, 'value' => $txt, 'reason' => 'over_max'];
+                $bad[] = ['student_id' => $mid, 'value' => $txt, 'reason' => 'over_max'];
             }
         }
         if (!$bad) {
             return [];
         }
-        $names = self::memberLabels($conn, array_column($bad, 'member_id'));
+        $names = self::memberLabels($conn, array_column($bad, 'student_id'));
         foreach ($bad as &$b) {
-            $who = $names[$b['member_id']] ?? ('Member #' . $b['member_id']);
+            $who = $names[$b['student_id']] ?? ('Student #' . $b['student_id']);
             $b['message'] = $b['reason'] === 'over_max'
                 ? "{$who}: {$b['value']} is more than the maximum {$maxLabel}"
                 : "{$who}: \"{$b['value']}\" is not a valid score (use a number from 0 to {$maxLabel})";
@@ -140,14 +140,14 @@ class SubmissionService
         $out = [];
         try {
             $ph = implode(',', array_fill(0, count($ids), '?'));
-            $st = $conn->prepare("SELECT id, student_name, father_name, member_code FROM members WHERE id IN ($ph)");
+            $st = $conn->prepare("SELECT id, student_name, father_name, student_code FROM students WHERE id IN ($ph)");
             if ($st) {
                 $st->bind_param(str_repeat('i', count($ids)), ...$ids);
                 $st->execute();
                 $r = $st->get_result();
                 while ($row = $r->fetch_assoc()) {
                     $nm = trim((string)$row['student_name'] . ' ' . (string)($row['father_name'] ?? ''));
-                    $out[(int)$row['id']] = $nm . (!empty($row['member_code']) ? ' (' . $row['member_code'] . ')' : '');
+                    $out[(int)$row['id']] = $nm . (!empty($row['student_code']) ? ' (' . $row['student_code'] . ')' : '');
                 }
                 $st->close();
             }
@@ -760,14 +760,14 @@ class SubmissionService
         return ReviewTransitionPolicy::error($current, $target, 'list', 'teacher');
     }
 
-    /** True when the member has any enrolment row (active or historical) in the class. */
-    public static function memberBelongsToClass(\mysqli $conn, int $memberId, int $classId): bool
+    /** True when the student has any enrolment row (active or historical) in the class. */
+    public static function memberBelongsToClass(\mysqli $conn, int $studentId, int $classId): bool
     {
-        $stmt = $conn->prepare('SELECT 1 FROM class_enrollments WHERE member_id = ? AND class_id = ? LIMIT 1');
+        $stmt = $conn->prepare('SELECT 1 FROM class_enrollments WHERE student_id = ? AND class_id = ? LIMIT 1');
         if (!$stmt) {
             return true; // never block grading on a lookup failure; the sheet itself is roster-built
         }
-        $stmt->bind_param('ii', $memberId, $classId);
+        $stmt->bind_param('ii', $studentId, $classId);
         $stmt->execute();
         $ok = (bool)$stmt->get_result()->fetch_row();
         $stmt->close();
@@ -779,8 +779,8 @@ class SubmissionService
     {
         self::hardenUniques($conn);
         $assessmentId = (int)($row['assessment_id'] ?? 0);
-        $memberId = (int)($row['member_id'] ?? 0);
-        if ($assessmentId <= 0 || $memberId <= 0) {
+        $studentId = (int)($row['student_id'] ?? 0);
+        if ($assessmentId <= 0 || $studentId <= 0) {
             return 0;
         }
         $score = array_key_exists('score', $row) ? $row['score'] : null;
@@ -794,22 +794,22 @@ class SubmissionService
         $submissionId = isset($row['submission_id']) ? (int)$row['submission_id'] : null;
 
         $find = $conn->prepare(
-            "SELECT id FROM academic_records WHERE assessment_id = ? AND member_id = ? ORDER BY id DESC LIMIT 1"
+            "SELECT id FROM academic_records WHERE assessment_id = ? AND student_id = ? ORDER BY id DESC LIMIT 1"
         );
         $existing = 0;
         if ($find) {
-            $find->bind_param('ii', $assessmentId, $memberId);
+            $find->bind_param('ii', $assessmentId, $studentId);
             $find->execute();
             $got = $find->get_result()->fetch_assoc();
             $find->close();
             $existing = (int)($got['id'] ?? 0);
         }
-        // Audit 2026-10-20: a NEW mark may only be created for a member who is
+        // Audit 2026-10-20: a NEW mark may only be created for a student who is
         // (or was) enrolled in the assessment's class. Neither the web nor the
-        // mobile sheet checked this, so a stray member_id would have created an
+        // mobile sheet checked this, so a stray student_id would have created an
         // academic_records row for a student who never sat in the class.
         // Re-saves of an existing row are untouched (history stays editable).
-        if ($existing <= 0 && $classId > 0 && !self::memberBelongsToClass($conn, $memberId, $classId)) {
+        if ($existing <= 0 && $classId > 0 && !self::memberBelongsToClass($conn, $studentId, $classId)) {
             return 0;
         }
         if ($existing > 0) {
@@ -828,7 +828,7 @@ class SubmissionService
         }
         $ins = $conn->prepare(
             "INSERT INTO academic_records
-                (member_id, class_id, subject_id, academic_year_id, term_id, assessment_id, submission_id, score, max_score, remarks, recorded_by)
+                (student_id, class_id, subject_id, academic_year_id, term_id, assessment_id, submission_id, score, max_score, remarks, recorded_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         if (!$ins) {
@@ -836,7 +836,7 @@ class SubmissionService
         }
         $ins->bind_param(
             'iiiiiiiddsi',
-            $memberId,
+            $studentId,
             $classId,
             $subjectId,
             $yearId,
@@ -1091,7 +1091,7 @@ class SubmissionService
      *  - every non-approve decision needs a reason of >= 3 characters;
      *  - every transition is audited (SecurityAuditService), appended to
      *    attendance_submission_events, and — for attendance packets — the
-     *    members on the sheet are re-evaluated so reopened / rejected rows
+     *    students on the sheet are re-evaluated so reopened / rejected rows
      *    stop counting and open warnings are flagged, never deleted.
      *
      * @return array{ok:bool,message:string,code?:string,http?:int,new_status?:string,previous_status?:string,recalc?:array}
@@ -1301,7 +1301,7 @@ class SubmissionService
     }
 
     /**
-     * Re-evaluate attendance warnings for every member on one class/day
+     * Re-evaluate attendance warnings for every student on one class/day
      * sheet (Phase 2 evaluator; no-op when the feature is off or tables are
      * missing). Best-effort: errors are logged, never thrown.
      *
@@ -1316,7 +1316,7 @@ class SubmissionService
             if (!class_exists('\App\Services\AttendanceWarningService')) {
                 require_once __DIR__ . '/AttendanceWarningService.php';
             }
-            $ids = AttendanceWarningService::memberIdsFromRecords(self::attendanceRows($conn, $classId, $date));
+            $ids = AttendanceWarningService::studentIdsFromRecords(self::attendanceRows($conn, $classId, $date));
             return AttendanceWarningService::safeEvaluateMany($conn, 'edu', $ids, $date, $actorId);
         } catch (\Throwable $e) {
             error_log('Attendance warning recalculation failed: ' . $e->getMessage());
@@ -1924,9 +1924,9 @@ class SubmissionService
             return [];
         }
         $stmt = $conn->prepare(
-            "SELECT a.id, a.member_id, a.status, a.notes, m.student_name, m.father_name, m.member_code
+            "SELECT a.id, a.student_id, a.status, a.notes, m.student_name, m.father_name, m.student_code
              FROM attendance a
-             JOIN members m ON m.id = a.member_id
+             JOIN students m ON m.id = a.student_id
              WHERE a.class_id = ? AND a.attendance_date = ?
              ORDER BY a.id ASC"
         );
@@ -1938,12 +1938,12 @@ class SubmissionService
         $byMember = [];
         $r = $stmt->get_result();
         while ($row = $r->fetch_assoc()) {
-            $mid = (int)$row['member_id'];
+            $mid = (int)$row['student_id'];
             $byMember[$mid] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'student_name' => $row['student_name'] ?? '',
                 'father_name' => $row['father_name'] ?? '',
-                'member_code' => $row['member_code'] ?? '',
+                'student_code' => $row['student_code'] ?? '',
                 'status' => $row['status'] ?? '',
                 'notes' => $row['notes'] ?? '',
             ];
@@ -1962,10 +1962,10 @@ class SubmissionService
             return [];
         }
         $stmt = $conn->prepare(
-            "SELECT ar.id, ar.member_id, ar.score, ar.max_score, ar.remarks,
-                    m.student_name, m.father_name, m.member_code
+            "SELECT ar.id, ar.student_id, ar.score, ar.max_score, ar.remarks,
+                    m.student_name, m.father_name, m.student_code
              FROM academic_records ar
-             JOIN members m ON m.id = ar.member_id
+             JOIN students m ON m.id = ar.student_id
              WHERE ar.assessment_id = ?
              ORDER BY ar.id ASC"
         );
@@ -1977,14 +1977,14 @@ class SubmissionService
         $byMember = [];
         $r = $stmt->get_result();
         while ($row = $r->fetch_assoc()) {
-            $mid = (int)$row['member_id'];
+            $mid = (int)$row['student_id'];
             $score = $row['score'] !== null ? (float)$row['score'] : null;
             $max = $row['max_score'] !== null ? (float)$row['max_score'] : null;
             $byMember[$mid] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'student_name' => $row['student_name'] ?? '',
                 'father_name' => $row['father_name'] ?? '',
-                'member_code' => $row['member_code'] ?? '',
+                'student_code' => $row['student_code'] ?? '',
                 'score' => $score,
                 'max_score' => $max,
                 'remarks' => $row['remarks'] ?? '',
@@ -1995,15 +1995,15 @@ class SubmissionService
         // the same roster the teacher grades (/grades/students). A student
         // without a row used to be invisible to the reviewer.
         foreach (self::assessmentRoster($conn, $assessmentId) as $m) {
-            $mid = (int)$m['member_id'];
+            $mid = (int)$m['student_id'];
             if (isset($byMember[$mid])) {
                 continue;
             }
             $byMember[$mid] = [
-                'member_id' => $mid,
+                'student_id' => $mid,
                 'student_name' => $m['student_name'] ?? '',
                 'father_name' => $m['father_name'] ?? '',
-                'member_code' => $m['member_code'] ?? '',
+                'student_code' => $m['student_code'] ?? '',
                 'score' => null,
                 'max_score' => $m['max_score'] !== null ? (float)$m['max_score'] : null,
                 'remarks' => '',
@@ -2028,11 +2028,11 @@ class SubmissionService
         $out = [];
         try {
             $st = $conn->prepare(
-                "SELECT ce.member_id, m.student_name, m.father_name, m.member_code, a.max_score
+                "SELECT ce.student_id, m.student_name, m.father_name, m.student_code, a.max_score
                  FROM assessments a
                  JOIN class_enrollments ce ON ce.class_id = a.class_id
                       AND ce.academic_year_id = a.academic_year_id AND ce.status = 'active'
-                 JOIN members m ON m.id = ce.member_id
+                 JOIN students m ON m.id = ce.student_id
                  WHERE a.id = ?
                  ORDER BY m.student_name"
             );
@@ -2063,9 +2063,9 @@ class SubmissionService
      *
      * @return array{status:string, message?:string, student?:array, subject?:array, results?:list<array>, totals?:array}
      */
-    public static function studentResults(\mysqli $conn, int $assessmentId, int $memberId): array
+    public static function studentResults(\mysqli $conn, int $assessmentId, int $studentId): array
     {
-        if ($assessmentId <= 0 || $memberId <= 0) {
+        if ($assessmentId <= 0 || $studentId <= 0) {
             return ['status' => 'error', 'code' => 'invalid', 'message' => 'Choose a student and a test.'];
         }
         $st = $conn->prepare(
@@ -2088,12 +2088,12 @@ class SubmissionService
             return ['status' => 'error', 'code' => 'not_found', 'message' => 'Test not found.'];
         }
         $classId = (int)$a['class_id'];
-        if (!self::memberBelongsToClass($conn, $memberId, $classId)) {
+        if (!self::memberBelongsToClass($conn, $studentId, $classId)) {
             return ['status' => 'error', 'code' => 'not_found', 'message' => 'This student is not in this class.'];
         }
 
-        $st = $conn->prepare('SELECT id, student_name, father_name, member_code FROM members WHERE id = ?');
-        $st->bind_param('i', $memberId);
+        $st = $conn->prepare('SELECT id, student_name, father_name, student_code FROM students WHERE id = ?');
+        $st->bind_param('i', $studentId);
         $st->execute();
         $m = $st->get_result()->fetch_assoc();
         $st->close();
@@ -2106,10 +2106,10 @@ class SubmissionService
         $sql = "SELECT a.id, a.assessment_name, a.assessment_type, a.max_score, a.weight_percentage, a.due_date,
                        ar.score, ar.remarks
                 FROM assessments a
-                LEFT JOIN academic_records ar ON ar.assessment_id = a.id AND ar.member_id = ?
+                LEFT JOIN academic_records ar ON ar.assessment_id = a.id AND ar.student_id = ?
                 WHERE a.class_id = ? AND a.subject_id = ? AND a.academic_year_id = ?";
         $types = 'iiii';
-        $params = [$memberId, $classId, (int)$a['subject_id'], (int)$a['academic_year_id']];
+        $params = [$studentId, $classId, (int)$a['subject_id'], (int)$a['academic_year_id']];
         if ($termId > 0) {
             $sql .= ' AND (a.term_id = ? OR a.term_id IS NULL OR a.term_id = 0)';
             $types .= 'i';
@@ -2165,10 +2165,10 @@ class SubmissionService
         return [
             'status' => 'success',
             'student' => [
-                'member_id' => (int)$m['id'],
+                'student_id' => (int)$m['id'],
                 'student_name' => (string)$m['student_name'],
                 'father_name' => (string)($m['father_name'] ?? ''),
-                'member_code' => (string)($m['member_code'] ?? ''),
+                'student_code' => (string)($m['student_code'] ?? ''),
             ],
             'subject' => [
                 'class_id' => $classId,

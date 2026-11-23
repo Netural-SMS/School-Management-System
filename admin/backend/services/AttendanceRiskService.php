@@ -6,9 +6,9 @@
  * monthly reports). Pure PHP + prepared statements, shared-hosting safe.
  *
  * Rules (ATTENDANCE_ALERTING_IMPLEMENTATION_PLAN_2026-10-19 §5 Phase 2):
- *   1. Eligible sessions for (member, department, from, to) are rows of the
+ *   1. Eligible sessions for (student, department, from, to) are rows of the
  *      department's attendance table whose date lies inside one of the
- *      member's ACTIVE periods (DepartmentStatusService), inside the window,
+ *      student's ACTIVE periods (DepartmentStatusService), inside the window,
  *      whose status is not `holiday`, and whose packet is `submitted` or
  *      `approved`. Packets in draft / incomplete / revision_needed / rejected
  *      are NOT eligible. Rows without any packet are treated the way the rest
@@ -27,7 +27,7 @@
  *      0.5·late, rate = present_eq / sessions × 100; sessions = 0 => NULL
  *      ("No data", never at risk). Bands: ≥90 excellent, ≥75 good, ≥50 fair,
  *      else low.
- *   5. Departments are fully independent; `members.status` is never read for
+ *   5. Departments are fully independent; `students.status` is never read for
  *      eligibility and never written.
  *
  * Dates in and out of this class are Gregorian `Y-m-d` (DB convention). The
@@ -36,7 +36,7 @@
 namespace App\Services;
 
 require_once __DIR__ . '/DepartmentStatusService.php';
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 if (!function_exists('gregorian_to_ethiopian')) {
     require_once dirname(__DIR__) . '/ethiopian_date.php';
 }
@@ -136,18 +136,18 @@ final class AttendanceRiskService
      * Eligible rows (see rule 1), ascending by date.
      * @return array<int,array{date:string,status:string,ref:int|string|null}>
      */
-    public static function eligibleRows(\mysqli $conn, string $dept, int $memberId, string $from, string $to): array
+    public static function eligibleRows(\mysqli $conn, string $dept, int $studentId, string $from, string $to): array
     {
-        if (!in_array($dept, self::DEPARTMENTS, true) || $memberId <= 0 || $from > $to) {
+        if (!in_array($dept, self::DEPARTMENTS, true) || $studentId <= 0 || $from > $to) {
             return [];
         }
         $rows = $dept === 'edu'
-            ? self::eduRows($conn, $memberId, $from, $to)
-            : self::mezmurRows($conn, $memberId, $from, $to);
+            ? self::eduRows($conn, $studentId, $from, $to)
+            : self::mezmurRows($conn, $studentId, $from, $to);
         if ($rows === []) {
             return [];
         }
-        $periods = DepartmentStatusService::activePeriods($conn, $memberId, $dept, $from, $to);
+        $periods = DepartmentStatusService::activePeriods($conn, $studentId, $dept, $from, $to);
         if ($periods === []) {
             return [];
         }
@@ -164,7 +164,7 @@ final class AttendanceRiskService
     }
 
     /** @return array<int,array{date:string,status:string,ref:int}> */
-    private static function eduRows(\mysqli $conn, int $memberId, string $from, string $to): array
+    private static function eduRows(\mysqli $conn, int $studentId, string $from, string $to): array
     {
         $packetFilter = self::legacyRowsEligible()
             ? "(gs.id IS NULL OR gs.status IN ('submitted','approved'))"
@@ -176,33 +176,33 @@ final class AttendanceRiskService
                     WHERE g2.class_id = a.class_id AND g2.attendance_date = a.attendance_date
                       AND g2.submission_type = 'attendance'
                     ORDER BY g2.id DESC LIMIT 1)
-                WHERE a.member_id = ? AND a.attendance_date BETWEEN ? AND ?
+                WHERE a.student_id = ? AND a.attendance_date BETWEEN ? AND ?
                   AND a.status IN ('present','absent','late','excused')
                   AND $packetFilter
                 ORDER BY a.attendance_date ASC, a.class_id ASC";
-        return self::fetchRows($conn, $sql, 'iss', [$memberId, $from, $to]);
+        return self::fetchRows($conn, $sql, 'iss', [$studentId, $from, $to]);
     }
 
     /** @return array<int,array{date:string,status:string,ref:int|string|null}> */
-    private static function mezmurRows(\mysqli $conn, int $memberId, string $from, string $to): array
+    private static function mezmurRows(\mysqli $conn, int $studentId, string $from, string $to): array
     {
-        $sectionExpr = MemberCategory::sqlSectionExpr('m');
+        $sectionExpr = StudentCategory::sqlSectionExpr('m');
         $packetFilter = self::legacyRowsEligible()
             ? "(ms.id IS NULL OR ms.status IN ('submitted','approved'))"
             : "(ms.id IS NOT NULL AND ms.status IN ('submitted','approved'))";
         $sql = "SELECT COALESCE(x.attendance_date, s.session_date) AS d, x.status AS s, x.session_id AS ref
                 FROM mezmur_attendance x
-                JOIN members m ON m.id = x.member_id
+                JOIN students m ON m.id = x.student_id
                 LEFT JOIN mezmur_sessions s ON s.id = x.session_id
                 LEFT JOIN mezmur_submissions ms
                        ON ms.attendance_date = COALESCE(x.attendance_date, s.session_date)
                       AND ms.section = $sectionExpr
-                WHERE x.member_id = ?
+                WHERE x.student_id = ?
                   AND COALESCE(x.attendance_date, s.session_date) BETWEEN ? AND ?
                   AND x.status IN ('present','absent','late','excused')
                   AND $packetFilter
                 ORDER BY d ASC, x.id ASC";
-        return self::fetchRows($conn, $sql, 'iss', [$memberId, $from, $to]);
+        return self::fetchRows($conn, $sql, 'iss', [$studentId, $from, $to]);
     }
 
     /** @return array<int,array{date:string,status:string,ref:mixed}> */
@@ -330,15 +330,15 @@ final class AttendanceRiskService
      * @param array{year:int,month:int}|null $ecMonth month to report (default: month of $asOf)
      * @return array<string,mixed> {department,status,window,streak,month,year,open_warning}
      */
-    public static function riskFor(\mysqli $conn, string $dept, int $memberId, ?string $asOf = null, ?array $ecMonth = null): array
+    public static function riskFor(\mysqli $conn, string $dept, int $studentId, ?string $asOf = null, ?array $ecMonth = null): array
     {
         $asOf = $asOf ?: date('Y-m-d');
         $window = self::yearWindow($conn, $asOf);
-        $status = DepartmentStatusService::currentStatus($conn, $memberId, $dept);
-        $rows = self::eligibleRows($conn, $dept, $memberId, $window['from'], min($window['to'], $asOf));
+        $status = DepartmentStatusService::currentStatus($conn, $studentId, $dept);
+        $rows = self::eligibleRows($conn, $dept, $studentId, $window['from'], min($window['to'], $asOf));
 
         // Streak floor: start of the current active period inside the window.
-        $periods = DepartmentStatusService::activePeriods($conn, $memberId, $dept, $window['from'], min($window['to'], $asOf));
+        $periods = DepartmentStatusService::activePeriods($conn, $studentId, $dept, $window['from'], min($window['to'], $asOf));
         $floor = $periods === [] ? null : $periods[count($periods) - 1]['from'];
         $days = self::dayOutcomes($rows);
         $streak = $status['status'] === 'inactive'
@@ -355,7 +355,7 @@ final class AttendanceRiskService
         return [
             'department' => $dept,
             'label' => self::LABELS[$dept],
-            'member_id' => $memberId,
+            'student_id' => $studentId,
             'as_of' => $asOf,
             'status' => $status['status'],
             'status_since' => $status['since'],

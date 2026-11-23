@@ -54,7 +54,7 @@
   class AdvancedAnalyticsCenter {
     /**
      * @param {Object} options Configuration object
-     * @param {Function} [options.onStudentClick] Callback when a student node is clicked (memberId, classId)
+     * @param {Function} [options.onStudentClick] Callback when a student node is clicked (studentId, classId)
      * @param {Function} [options.onTierClick] Callback when a triage tier badge is clicked (tierKey)
      * @param {Object} [options.customPalette] Optional color overrides
      */
@@ -429,7 +429,7 @@
                   const eDays = s.excused_days || 0;
                   const breakdown = raw.hasAtt ? ` (${pDays}P · ${aDays}A${lDays > 0 ? ' · ' + lDays + 'L' : ''}${eDays > 0 ? ' · ' + eDays + 'E' : ''})` : '';
                   return [
-                    `Class: ${s.class_name || '—'} · Code: ${s.member_code || '—'}`,
+                    `Class: ${s.class_name || '—'} · Code: ${s.student_code || '—'}`,
                     `Grade Average: ${raw.y}% (Grade ${raw.letter})`,
                     `Attendance: ${attText}${breakdown}`,
                     '👉 Click node to open full Report Card'

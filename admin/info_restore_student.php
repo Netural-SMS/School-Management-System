@@ -1,0 +1,104 @@
+<?php
+/**
+ * Restore Student - Move student back from archive to active
+ * AJAX endpoint
+ */
+
+header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/config.php';
+
+// Check auth
+if (empty($_SESSION['admin_username'])) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+    exit;
+}
+
+// Get JSON input
+$input = json_decode(file_get_contents('php://input'), true);
+
+// Validate CSRF token (from JSON body)
+$csrfToken = $input['csrf_token'] ?? '';
+if (empty($csrfToken) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $csrfToken)) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Security token expired. Please refresh and try again.']);
+    exit;
+}
+
+$id = isset($input['id']) ? (int)$input['id'] : 0;
+
+if ($id <= 0) {
+    echo json_encode(['status' => 'error', 'message' => 'Invalid student ID']);
+    exit;
+}
+
+// Verify student exists and is archived
+$checkStmt = $conn->prepare("SELECT id, student_name, father_name, status, status_before_archive FROM students WHERE id = ?");
+$checkStmt->bind_param("i", $id);
+$checkStmt->execute();
+$result = $checkStmt->get_result();
+$student = $result->fetch_assoc();
+$checkStmt->close();
+
+if (!$student) {
+    echo json_encode(['status' => 'error', 'message' => 'Student not found']);
+    exit;
+}
+
+if ($student['status'] !== 'archived') {
+    echo json_encode(['status' => 'error', 'message' => 'Student is not in archive']);
+    exit;
+}
+
+// Archive metadata columns are deployment-managed by migration 013.
+// M7: restore the pre-archive status kept by migration 095. NULL (rows
+// archived before 095) or anything unexpected falls back to 'active',
+// which was the old unconditional behavior — no regression either way.
+$restoreTo = (string)($student['status_before_archive'] ?? '');
+if (!in_array($restoreTo, ['active', 'warning', 'inactive'], true)) {
+    $restoreTo = 'active';
+}
+$restoredBy = (string)$_SESSION['admin_username'];
+$stmt = $conn->prepare(
+    "UPDATE students
+     SET status=?, status_before_archive=NULL, archived_at=NULL, archived_by=NULL, archive_reason=NULL,
+         archive_notes=NULL, archive_type=NULL, restored_at=NOW(), restored_by=?
+     WHERE id=?"
+);
+if ($stmt) {
+    $stmt->bind_param('ssi', $restoreTo, $restoredBy, $id);
+    if ($stmt->execute()) {
+        $memberName = $student['student_name'] . ' ' . $student['father_name'];
+        // H5: restoring must leave an audit trail. Best-effort: the UPDATE
+        // above already committed (no transaction here), so a logging
+        // failure is reported, not user-facing.
+        try {
+            require_once __DIR__ . '/backend/services/SecurityAuditService.php';
+            $auditOk = \App\Services\SecurityAuditService::record(
+                $conn,
+                'Student Restored',
+                ['restored_to' => $restoreTo],
+                'student',
+                $id
+            );
+            if (!$auditOk) {
+                error_log('Student restore audit recording failed for student ' . $id . '.');
+            }
+        } catch (Throwable $auditErr) {
+            error_log('Student restore audit error: ' . $auditErr->getMessage());
+        }
+        echo json_encode([
+            'status' => 'success',
+            'message' => $memberName . ' has been restored to ' . $restoreTo . ' students'
+        ]);
+    } else {
+        error_log('Student restore update failed.');
+        echo json_encode(['status' => 'error', 'message' => 'Unable to restore the student.']);
+    }
+    $stmt->close();
+} else {
+    error_log('Student restore prepare failed. Verify migration 013.');
+    echo json_encode(['status' => 'error', 'message' => 'Archive storage is temporarily unavailable.']);
+}
+
+$conn->close();

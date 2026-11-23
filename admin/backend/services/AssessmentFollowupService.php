@@ -5,10 +5,10 @@
  * ============================================================
  * Requirements §11–§12 (owner-approved, locked) + plan §Phase 5 (T-8):
  *
- *   • When a member's EDUCATION department status returns to `active`
+ *   • When a student's EDUCATION department status returns to `active`
  *     (HR / Info reactivation after a manual or automatic deactivation),
- *     find the assessments of the member's class(es) that fell inside the
- *     inactive period and for which the member has NO score, and open one
+ *     find the assessments of the student's class(es) that fell inside the
+ *     inactive period and for which the student has NO score, and open one
  *     `assessment_followups` row each (decision = pending).
  *   • Nothing is auto-scored: there is NO automatic zero. The responsible
  *     teacher (teacher_assignments, class + subject) or the Education
@@ -18,7 +18,7 @@
  *     table linked to the follow-up and (when present) to the ORIGINAL
  *     academic_records row, which is never overwritten (T-8, §12 "nothing
  *     erased").
- *   • Idempotent: UNIQUE(member_id, period_id, assessment_id) means a
+ *   • Idempotent: UNIQUE(student_id, period_id, assessment_id) means a
  *     repeated reactivation of the same period never duplicates rows.
  *   • Bell: the responsible teachers (per user) and the Education
  *     department (role) are notified in-app only (§7 — no e-mail/SMS).
@@ -104,10 +104,10 @@ final class AssessmentFollowupService
      *
      * @return array{created:int,assessments:list<int>}
      */
-    public static function safeOnEducationReactivation(\mysqli $conn, int $memberId, int $inactivePeriodId, ?int $actorId, ?SecurityAuditActor $auditActor = null): array
+    public static function safeOnEducationReactivation(\mysqli $conn, int $studentId, int $inactivePeriodId, ?int $actorId, ?SecurityAuditActor $auditActor = null): array
     {
         try {
-            return self::onEducationReactivation($conn, $memberId, $inactivePeriodId, $actorId, $auditActor);
+            return self::onEducationReactivation($conn, $studentId, $inactivePeriodId, $actorId, $auditActor);
         } catch (\Throwable $e) {
             error_log('Assessment follow-up detection failed: ' . $e->getMessage());
             return ['created' => 0, 'assessments' => []];
@@ -120,19 +120,19 @@ final class AssessmentFollowupService
      *
      * @return array{created:int,assessments:list<int>}
      */
-    public static function onEducationReactivation(\mysqli $conn, int $memberId, int $inactivePeriodId, ?int $actorId, ?SecurityAuditActor $auditActor = null): array
+    public static function onEducationReactivation(\mysqli $conn, int $studentId, int $inactivePeriodId, ?int $actorId, ?SecurityAuditActor $auditActor = null): array
     {
         $none = ['created' => 0, 'assessments' => []];
-        if (!self::available($conn) || $memberId <= 0 || $inactivePeriodId <= 0) {
+        if (!self::available($conn) || $studentId <= 0 || $inactivePeriodId <= 0) {
             return $none;
         }
         $period = self::period($conn, $inactivePeriodId);
-        if (!$period || $period['department'] !== 'edu' || $period['status'] !== 'inactive' || (int)$period['member_id'] !== $memberId) {
+        if (!$period || $period['department'] !== 'edu' || $period['status'] !== 'inactive' || (int)$period['student_id'] !== $studentId) {
             return $none;
         }
         $from = substr((string)$period['started_at'], 0, 10);
         $to = $period['ended_at'] !== null ? substr((string)$period['ended_at'], 0, 10) : date('Y-m-d');
-        $missed = self::detectMissed($conn, $memberId, $from, $to);
+        $missed = self::detectMissed($conn, $studentId, $from, $to);
         if (!$missed) {
             return $none;
         }
@@ -140,7 +140,7 @@ final class AssessmentFollowupService
         $created = [];
         $ins = $conn->prepare(
             'INSERT IGNORE INTO ' . self::TABLE .
-            ' (member_id, period_id, assessment_id, class_id, subject_id, teacher_id, decision, created_at)
+            ' (student_id, period_id, assessment_id, class_id, subject_id, teacher_id, decision, created_at)
               VALUES (?, ?, ?, ?, ?, ?, \'pending\', NOW())'
         );
         if (!$ins) {
@@ -152,7 +152,7 @@ final class AssessmentFollowupService
             $aid = (int)$a['id'];
             $cid = (int)$a['class_id'];
             $sid = (int)$a['subject_id'];
-            $ins->bind_param('iiiiii', $memberId, $inactivePeriodId, $aid, $cid, $sid, $primary);
+            $ins->bind_param('iiiiii', $studentId, $inactivePeriodId, $aid, $cid, $sid, $primary);
             $ins->execute();
             if ($ins->affected_rows > 0) {
                 $created[] = ['id' => (int)$conn->insert_id, 'assessment' => $a, 'teachers' => $teachers];
@@ -164,28 +164,28 @@ final class AssessmentFollowupService
         }
 
         $ids = array_map(static fn($c) => (int)$c['assessment']['id'], $created);
-        self::notifyDetected($conn, $memberId, $created, $from, $to, $actorId);
+        self::notifyDetected($conn, $studentId, $created, $from, $to, $actorId);
         $details = [
-            'member_id' => $memberId, 'period_id' => $inactivePeriodId,
+            'student_id' => $studentId, 'period_id' => $inactivePeriodId,
             'window_from_ec' => self::ecLabel($from), 'window_to_ec' => self::ecLabel($to),
             'assessment_ids' => $ids, 'created' => count($created),
         ];
-        self::audit($conn, $auditActor, 'Assessment Follow-ups Opened', $details, $memberId);
+        self::audit($conn, $auditActor, 'Assessment Follow-ups Opened', $details, $studentId);
         return ['created' => count($created), 'assessments' => $ids];
     }
 
     /**
-     * Assessments of the member's enrolled class(es) whose due date — or,
+     * Assessments of the student's enrolled class(es) whose due date — or,
      * when the assessment has no due date, whose term window — falls inside
-     * [$from, $to] and for which the member has no scored academic_records
-     * row. An assessment that already has a follow-up for this member (from
+     * [$from, $to] and for which the student has no scored academic_records
+     * row. An assessment that already has a follow-up for this student (from
      * an earlier inactive period — e.g. a term-window match) is not opened
      * again. Assessments with neither a due date nor term dates cannot be
      * placed in time and are skipped (documented limitation).
      *
      * @return list<array<string,mixed>>
      */
-    public static function detectMissed(\mysqli $conn, int $memberId, string $from, string $to): array
+    public static function detectMissed(\mysqli $conn, int $studentId, string $from, string $to): array
     {
         $sql = "SELECT a.id, a.class_id, a.subject_id, a.academic_year_id, a.term_id, a.assessment_name,
                        a.assessment_type, a.max_score, a.due_date, t.start_date AS term_start, t.end_date AS term_end
@@ -193,7 +193,7 @@ final class AssessmentFollowupService
                 LEFT JOIN academic_terms t ON t.id = a.term_id
                 WHERE EXISTS (
                         SELECT 1 FROM class_enrollments ce
-                        WHERE ce.member_id = ? AND ce.class_id = a.class_id
+                        WHERE ce.student_id = ? AND ce.class_id = a.class_id
                           AND ce.academic_year_id = a.academic_year_id
                           AND ce.status IN ('active', 'completed'))
                   AND (
@@ -203,16 +203,16 @@ final class AssessmentFollowupService
                   )
                   AND NOT EXISTS (
                         SELECT 1 FROM academic_records ar
-                        WHERE ar.member_id = ? AND ar.assessment_id = a.id AND ar.score IS NOT NULL)
+                        WHERE ar.student_id = ? AND ar.assessment_id = a.id AND ar.score IS NOT NULL)
                   AND NOT EXISTS (
                         SELECT 1 FROM " . self::TABLE . " f
-                        WHERE f.member_id = ? AND f.assessment_id = a.id)
+                        WHERE f.student_id = ? AND f.assessment_id = a.id)
                 ORDER BY a.due_date ASC, a.id ASC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('issssii', $memberId, $from, $to, $to, $from, $memberId, $memberId);
+        $stmt->bind_param('issssii', $studentId, $from, $to, $to, $from, $studentId, $studentId);
         $stmt->execute();
         $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
@@ -271,7 +271,7 @@ final class AssessmentFollowupService
     // ── queue reads ───────────────────────────────────────────────
 
     /**
-     * @param array{teacher_id?:int,decision?:string,class_id?:int,subject_id?:int,member_id?:int,q?:string,limit?:int,offset?:int,open_only?:bool} $f
+     * @param array{teacher_id?:int,decision?:string,class_id?:int,subject_id?:int,student_id?:int,q?:string,limit?:int,offset?:int,open_only?:bool} $f
      * @return array{items:list<array<string,mixed>>,total:int}
      */
     public static function listQueue(\mysqli $conn, array $f = []): array
@@ -446,10 +446,10 @@ final class AssessmentFollowupService
         }
         $stmt->execute();
         $stmt->close();
-        $details = ['followup_id' => $id, 'member_id' => (int)$row['member_id'], 'assessment_id' => (int)$row['assessment_id'],
+        $details = ['followup_id' => $id, 'student_id' => (int)$row['student_id'], 'assessment_id' => (int)$row['assessment_id'],
                     'class_id' => (int)$row['class_id'], 'subject_id' => (int)$row['subject_id'],
                     'from' => $previous, 'to' => $decision, 'note' => $note];
-        self::audit($conn, $auditActor, 'Assessment Follow-up Decided', $details, (int)$row['member_id']);
+        self::audit($conn, $auditActor, 'Assessment Follow-up Decided', $details, (int)$row['student_id']);
         return ['changed' => true, 'item' => self::find($conn, $id)];
     }
 
@@ -494,7 +494,7 @@ final class AssessmentFollowupService
         if (mb_strlen($remarks) > 500) {
             throw new \DomainException('Remarks must be 500 characters or fewer.');
         }
-        $originalId = self::originalRecordId($conn, (int)$row['member_id'], (int)$row['assessment_id']);
+        $originalId = self::originalRecordId($conn, (int)$row['student_id'], (int)$row['assessment_id']);
         $stmt = $conn->prepare(
             'INSERT INTO ' . self::ATTEMPTS . ' (followup_id, original_record_id, score, max_score, recorded_by, recorded_at, remarks)
              VALUES (?, ?, ?, ?, ?, NOW(), ?)'
@@ -504,23 +504,23 @@ final class AssessmentFollowupService
         $stmt->execute();
         $attemptId = (int)$conn->insert_id;
         $stmt->close();
-        $details = ['followup_id' => $id, 'attempt_id' => $attemptId, 'member_id' => (int)$row['member_id'],
+        $details = ['followup_id' => $id, 'attempt_id' => $attemptId, 'student_id' => (int)$row['student_id'],
                     'assessment_id' => (int)$row['assessment_id'], 'original_record_id' => $originalId,
                     'score' => $score, 'max_score' => $max, 'remarks' => $remarks];
-        self::audit($conn, $auditActor, 'Assessment Make-up Recorded', $details, (int)$row['member_id']);
+        self::audit($conn, $auditActor, 'Assessment Make-up Recorded', $details, (int)$row['student_id']);
         return ['attempt_id' => $attemptId, 'item' => self::find($conn, $id)];
     }
 
     // ── report-card / marklist precedence ─────────────────────────
 
     /**
-     * Latest make-up per (member, assessment) for a class, with the
+     * Latest make-up per (student, assessment) for a class, with the
      * assessment columns the report card needs to synthesize a row when the
-     * member had no original record. Display precedence (plan §Phase 5,
+     * student had no original record. Display precedence (plan §Phase 5,
      * flagged for owner confirmation): the make-up SUPERSEDES the original
      * on cards; the original row stays untouched in academic_records.
      *
-     * @return array<int,array<int,array<string,mixed>>> member_id => assessment_id => row
+     * @return array<int,array<int,array<string,mixed>>> student_id => assessment_id => row
      */
     public static function latestMakeupsForClass(\mysqli $conn, int $classId): array
     {
@@ -528,7 +528,7 @@ final class AssessmentFollowupService
             return [];
         }
         $stmt = $conn->prepare(
-            'SELECT f.member_id, f.assessment_id, f.class_id, f.subject_id, m.id AS attempt_id, m.original_record_id,
+            'SELECT f.student_id, f.assessment_id, f.class_id, f.subject_id, m.id AS attempt_id, m.original_record_id,
                     m.score, m.max_score, m.remarks, m.recorded_at,
                     a.assessment_name, a.weight_percentage, a.max_score AS assess_max, a.academic_year_id, a.term_id,
                     s.subject_name, s.subject_name_en
@@ -546,7 +546,7 @@ final class AssessmentFollowupService
         $stmt->execute();
         $out = [];
         foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
-            $out[(int)$r['member_id']][(int)$r['assessment_id']] = $r; // ascending id → last wins = latest
+            $out[(int)$r['student_id']][(int)$r['assessment_id']] = $r; // ascending id → last wins = latest
         }
         $stmt->close();
         return $out;
@@ -564,13 +564,13 @@ final class AssessmentFollowupService
         }
     }
 
-    private static function originalRecordId(\mysqli $conn, int $memberId, int $assessmentId): ?int
+    private static function originalRecordId(\mysqli $conn, int $studentId, int $assessmentId): ?int
     {
-        $stmt = $conn->prepare('SELECT id FROM academic_records WHERE member_id = ? AND assessment_id = ? ORDER BY id DESC LIMIT 1');
+        $stmt = $conn->prepare('SELECT id FROM academic_records WHERE student_id = ? AND assessment_id = ? ORDER BY id DESC LIMIT 1');
         if (!$stmt) {
             return null;
         }
-        $stmt->bind_param('ii', $memberId, $assessmentId);
+        $stmt->bind_param('ii', $studentId, $assessmentId);
         $stmt->execute();
         $r = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -580,7 +580,7 @@ final class AssessmentFollowupService
     /** @return array<string,mixed>|null */
     private static function period(\mysqli $conn, int $periodId): ?array
     {
-        $stmt = $conn->prepare('SELECT id, member_id, department, status, started_at, ended_at FROM member_department_periods WHERE id = ? LIMIT 1');
+        $stmt = $conn->prepare('SELECT id, student_id, department, status, started_at, ended_at FROM student_department_periods WHERE id = ? LIMIT 1');
         if (!$stmt) {
             return null;
         }
@@ -593,19 +593,19 @@ final class AssessmentFollowupService
 
     private static function joins(): string
     {
-        return ' JOIN members mb ON mb.id = f.member_id
+        return ' JOIN students mb ON mb.id = f.student_id
                  JOIN assessments a ON a.id = f.assessment_id
                  LEFT JOIN classes c ON c.id = f.class_id
                  LEFT JOIN subjects s ON s.id = f.subject_id
-                 LEFT JOIN member_department_periods p ON p.id = f.period_id
+                 LEFT JOIN student_department_periods p ON p.id = f.period_id
                  LEFT JOIN users du ON du.id = f.decided_by';
     }
 
     private static function selectCols(): string
     {
-        return 'f.id, f.member_id, f.period_id, f.assessment_id, f.class_id, f.subject_id, f.teacher_id, f.decision,
+        return 'f.id, f.student_id, f.period_id, f.assessment_id, f.class_id, f.subject_id, f.teacher_id, f.decision,
                 f.decided_by, f.decided_at, f.note, f.created_at,
-                mb.student_name, mb.father_name, mb.member_code,
+                mb.student_name, mb.father_name, mb.student_code,
                 a.assessment_name, a.assessment_type, a.max_score AS assessment_max_score, a.due_date, a.academic_year_id, a.term_id,
                 c.class_name, s.subject_name, s.subject_name_en,
                 p.started_at AS period_started_at, p.ended_at AS period_ended_at,
@@ -613,7 +613,7 @@ final class AssessmentFollowupService
                 (SELECT COUNT(*) FROM ' . self::ATTEMPTS . ' m WHERE m.followup_id = f.id) AS attempt_count,
                 (SELECT m.score FROM ' . self::ATTEMPTS . ' m WHERE m.followup_id = f.id ORDER BY m.id DESC LIMIT 1) AS latest_score,
                 (SELECT m.max_score FROM ' . self::ATTEMPTS . ' m WHERE m.followup_id = f.id ORDER BY m.id DESC LIMIT 1) AS latest_max_score,
-                (SELECT ar.score FROM academic_records ar WHERE ar.member_id = f.member_id AND ar.assessment_id = f.assessment_id ORDER BY ar.id DESC LIMIT 1) AS original_score';
+                (SELECT ar.score FROM academic_records ar WHERE ar.student_id = f.student_id AND ar.assessment_id = f.assessment_id ORDER BY ar.id DESC LIMIT 1) AS original_score';
     }
 
     /** @return array{0:string,1:string,2:list<mixed>} */
@@ -635,7 +635,7 @@ final class AssessmentFollowupService
         } elseif (!empty($f['open_only'])) {
             $where[] = "f.decision IN ('pending', 'makeup_required')";
         }
-        foreach (['class_id' => 'f.class_id', 'subject_id' => 'f.subject_id', 'member_id' => 'f.member_id', 'assessment_id' => 'f.assessment_id'] as $k => $col) {
+        foreach (['class_id' => 'f.class_id', 'subject_id' => 'f.subject_id', 'student_id' => 'f.student_id', 'assessment_id' => 'f.assessment_id'] as $k => $col) {
             if (!empty($f[$k])) {
                 $where[] = $col . ' = ?';
                 $types .= 'i';
@@ -645,7 +645,7 @@ final class AssessmentFollowupService
         $q = trim((string)($f['q'] ?? ''));
         if ($q !== '') {
             $like = '%' . $q . '%';
-            $where[] = '(mb.student_name LIKE ? OR mb.father_name LIKE ? OR mb.member_code LIKE ? OR a.assessment_name LIKE ?)';
+            $where[] = '(mb.student_name LIKE ? OR mb.father_name LIKE ? OR mb.student_code LIKE ? OR a.assessment_name LIKE ?)';
             $types .= 'ssss';
             array_push($params, $like, $like, $like, $like);
         }
@@ -660,9 +660,9 @@ final class AssessmentFollowupService
         $latestMax = $r['latest_max_score'] !== null ? (float)$r['latest_max_score'] : null;
         return [
             'id' => (int)$r['id'],
-            'member_id' => (int)$r['member_id'],
-            'member_code' => (string)($r['member_code'] ?? ''),
-            'member_name' => trim((string)($r['student_name'] ?? '') . ' ' . (string)($r['father_name'] ?? '')),
+            'student_id' => (int)$r['student_id'],
+            'student_code' => (string)($r['student_code'] ?? ''),
+            'student_name' => trim((string)($r['student_name'] ?? '') . ' ' . (string)($r['father_name'] ?? '')),
             'period_id' => (int)$r['period_id'],
             'inactive_from_ec' => $r['period_started_at'] ? self::ecLabel(substr((string)$r['period_started_at'], 0, 10)) : null,
             'inactive_to_ec' => $r['period_ended_at'] ? self::ecLabel(substr((string)$r['period_ended_at'], 0, 10)) : null,
@@ -694,19 +694,19 @@ final class AssessmentFollowupService
         ];
     }
 
-    private static function notifyDetected(\mysqli $conn, int $memberId, array $created, string $from, string $to, ?int $actorId): void
+    private static function notifyDetected(\mysqli $conn, int $studentId, array $created, string $from, string $to, ?int $actorId): void
     {
         try {
-            $member = self::memberName($conn, $memberId);
+            $student = self::memberName($conn, $studentId);
             $n = count($created);
             $names = array_slice(array_map(static fn($c) => (string)$c['assessment']['assessment_name'], $created), 0, 4);
             $list = implode(', ', $names) . ($n > 4 ? ', …' : '');
             $title = "Education: {$n} missed assessment(s) need a follow-up decision · የማካካሻ ውሳኔ ያስፈልጋል";
-            $msg = "{$member} was reactivated in Education. {$n} assessment(s) fell inside the inactive period ("
+            $msg = "{$student} was reactivated in Education. {$n} assessment(s) fell inside the inactive period ("
                  . self::ecLabel($from) . ' – ' . self::ecLabel($to) . ") with no score: {$list}. "
                  . "Decide: make-up required, exempt or not applicable. No score is recorded automatically.\n"
-                 . "{$member} በትምህርት ክፍል እንደገና ንቁ ሆኗል። ኢ-ንቁ በነበረበት ወቅት {$n} ፈተና(ዎች) ተሰጥተዋል፤ ውሳኔ ይስጡ።";
-            $data = ['member_id' => $memberId, 'followup_ids' => array_map(static fn($c) => (int)$c['id'], $created),
+                 . "{$student} በትምህርት ክፍል እንደገና ንቁ ሆኗል። ኢ-ንቁ በነበረበት ወቅት {$n} ፈተና(ዎች) ተሰጥተዋል፤ ውሳኔ ይስጡ።";
+            $data = ['student_id' => $studentId, 'followup_ids' => array_map(static fn($c) => (int)$c['id'], $created),
                      'assessment_ids' => array_map(static fn($c) => (int)$c['assessment']['id'], $created),
                      'window_from_ec' => self::ecLabel($from), 'window_to_ec' => self::ecLabel($to), 'event' => 'detected'];
             $json = json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -746,34 +746,34 @@ final class AssessmentFollowupService
         }
     }
 
-    private static function audit(\mysqli $conn, ?SecurityAuditActor $actor, string $action, array $details, int $memberId): void
+    private static function audit(\mysqli $conn, ?SecurityAuditActor $actor, string $action, array $details, int $studentId): void
     {
         try {
             if ($actor !== null) {
-                SecurityAuditService::recordTrusted($conn, $actor, $action, $details, 'member', $memberId);
+                SecurityAuditService::recordTrusted($conn, $actor, $action, $details, 'student', $studentId);
             } else {
-                SecurityAuditService::record($conn, $action, $details, 'member', $memberId);
+                SecurityAuditService::record($conn, $action, $details, 'student', $studentId);
             }
         } catch (\Throwable $e) {
             error_log('Assessment follow-up audit failed: ' . $e->getMessage());
         }
     }
 
-    private static function memberName(\mysqli $conn, int $memberId): string
+    private static function memberName(\mysqli $conn, int $studentId): string
     {
-        $stmt = $conn->prepare('SELECT student_name, father_name, member_code FROM members WHERE id = ? LIMIT 1');
+        $stmt = $conn->prepare('SELECT student_name, father_name, student_code FROM students WHERE id = ? LIMIT 1');
         if (!$stmt) {
-            return '#' . $memberId;
+            return '#' . $studentId;
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (!$row) {
-            return '#' . $memberId;
+            return '#' . $studentId;
         }
         $name = trim((string)$row['student_name'] . ' ' . (string)$row['father_name']);
-        return $name . ($row['member_code'] ? ' (' . $row['member_code'] . ')' : '');
+        return $name . ($row['student_code'] ? ' (' . $row['student_code'] . ')' : '');
     }
 
     public static function ecLabel(string $date): string

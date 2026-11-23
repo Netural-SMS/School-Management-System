@@ -1,6 +1,6 @@
 <?php
 /**
- * Family Link API — guardian entity, member links, picker search and the
+ * Family Link API — guardian entity, student links, picker search and the
  * steward review queue.
  *
  * Roles: write = super_admin, school_admin, hr_dept; read adds info_dept.
@@ -110,20 +110,20 @@ switch ($action) {
     }
 
     case 'attach_member': {
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         $gid = (int)($_POST['guardian_id'] ?? 0); // optional explicit pick
         try {
             if ($mid <= 0) {
-                throw new InvalidArgumentException('Member is required.');
+                throw new InvalidArgumentException('Student is required.');
             }
             $r = GuardianService::attachFromLegacy($conn, $mid, $gid, 'hr');
             if ($r['mode'] === 'none') {
-                throw new InvalidArgumentException('This member has no guardian name saved — add it on the member profile first, or pick a guardian.');
+                throw new InvalidArgumentException('This student has no guardian name saved — add it on the student profile first, or pick a guardian.');
             }
-            echo json_encode(['status' => 'success', 'message' => 'Member linked.'] + $r);
+            echo json_encode(['status' => 'success', 'message' => 'Student linked.'] + $r);
         } catch (Throwable $e) {
             http_response_code(422);
-            echo json_encode(['status' => 'error', 'message' => guardianSafeError($e, 'Member could not be linked.')]);
+            echo json_encode(['status' => 'error', 'message' => guardianSafeError($e, 'Student could not be linked.')]);
         }
         exit;
     }
@@ -136,7 +136,7 @@ switch ($action) {
         @set_time_limit(60);
         $r = GuardianService::attachBatch($conn, $cursor, 40, 15.0);
         if ($r['processed'] > 0) {
-            GuardianService::audit($conn, 'Guardian Backfill', "Link-all step: {$r['processed']} member(s) linked ({$r['created']} new guardians, {$r['matched']} matched, {$r['failed']} failed); " . ($r['done'] ? 'complete' : 'continuing') . '.');
+            GuardianService::audit($conn, 'Guardian Backfill', "Link-all step: {$r['processed']} student(s) linked ({$r['created']} new guardians, {$r['matched']} matched, {$r['failed']} failed); " . ($r['done'] ? 'complete' : 'continuing') . '.');
         }
         echo json_encode(['status' => 'success'] + $r);
         exit;
@@ -144,7 +144,7 @@ switch ($action) {
 
     case 'set_relation': {
         $gid = (int)($_POST['guardian_id'] ?? 0);
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         $rel = (string)($_POST['relation'] ?? '');
         $prim = isset($_POST['is_primary']) ? ((int)$_POST['is_primary'] === 1) : null;
         try {
@@ -172,11 +172,11 @@ switch ($action) {
     }
 
     case 'get_family': {
-        $memberId = (int)($_GET['member_id'] ?? 0);
+        $studentId = (int)($_GET['student_id'] ?? 0);
         echo json_encode([
             'status' => 'success',
-            'guardians' => GuardianService::familyOfMember($conn, $memberId),
-            'siblings' => GuardianService::siblingsOf($conn, $memberId),
+            'guardians' => GuardianService::familyOfMember($conn, $studentId),
+            'siblings' => GuardianService::siblingsOf($conn, $studentId),
         ]);
         exit;
     }
@@ -273,7 +273,7 @@ switch ($action) {
 
     case 'link': {
         $gid = (int)($_POST['guardian_id'] ?? 0);
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         $rel = (string)($_POST['relation'] ?? 'other');
         if (!in_array($rel, ['father', 'mother', 'other'], true)) {
             $rel = 'other';
@@ -282,17 +282,17 @@ switch ($action) {
         $prim = (int)($_POST['is_primary'] ?? 0) === 1;
         try {
             GuardianService::linkMember($conn, $gid, $mid, $rel, $prio, $prim, true, true);
-            echo json_encode(['status' => 'success', 'message' => 'Member linked to guardian.']);
+            echo json_encode(['status' => 'success', 'message' => 'Student linked to guardian.']);
         } catch (Throwable $e) {
             http_response_code(422);
-            echo json_encode(['status' => 'error', 'message' => guardianSafeError($e, 'Member could not be linked.')]);
+            echo json_encode(['status' => 'error', 'message' => guardianSafeError($e, 'Student could not be linked.')]);
         }
         exit;
     }
 
     case 'verify_link': {
         $gid = (int)($_POST['guardian_id'] ?? 0);
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         try {
             GuardianService::verifyLink($conn, $gid, $mid, (int)$_SESSION['admin_id']);
             echo json_encode(['status' => 'success', 'message' => 'Link verified.']);
@@ -305,7 +305,7 @@ switch ($action) {
 
     case 'unverify_link': {
         $gid = (int)($_POST['guardian_id'] ?? 0);
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         try {
             GuardianService::clearVerification($conn, $gid, $mid, (int)$_SESSION['admin_id']);
             echo json_encode(['status' => 'success', 'message' => 'Verification cleared.']);
@@ -318,10 +318,10 @@ switch ($action) {
 
     case 'unlink': {
         $gid = (int)($_POST['guardian_id'] ?? 0);
-        $mid = (int)($_POST['member_id'] ?? 0);
+        $mid = (int)($_POST['student_id'] ?? 0);
         if ($gid <= 0 || $mid <= 0) {
             http_response_code(422);
-            echo json_encode(['status' => 'error', 'message' => 'Guardian and member are required.']);
+            echo json_encode(['status' => 'error', 'message' => 'Guardian and student are required.']);
             exit;
         }
         GuardianService::unlinkMember($conn, $gid, $mid);

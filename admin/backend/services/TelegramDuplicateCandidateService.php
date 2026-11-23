@@ -23,27 +23,27 @@ final class TelegramDuplicateCandidateService
         $gender = (string)($answers['gender'] ?? '');
         $motherNorm = AmharicIdentityNormalizer::normalize($answers['mother_name'] ?? '');
 
-        $sql = "SELECT DISTINCT m.id, m.member_code, m.student_name, m.father_name,
+        $sql = "SELECT DISTINCT m.id, m.student_code, m.student_name, m.father_name,
                        m.mother_name, m.grandfather_name, m.baptismal_name, m.gender,
-                       m.dob_ec_day, m.dob_ec_month, m.dob_ec_year, m.current_section,
+                       m.dob_ec_day, m.dob_ec_month, m.dob_ec_year, ,
                        m.status, m.membership_tier, m.phone_suffix9, m.phone_number,
-                       m.age, m.education_level, m.member_type, m.registration_type,
+                       m.age, m.education_level, m, m.registration_type,
                        m.registered_at
-                FROM members m JOIN (
-                  SELECT id FROM members
+                FROM students m JOIN (
+                  SELECT id FROM students
                    WHERE name_pair_hash=? AND name_pair_hash IS NOT NULL
                   UNION
-                  SELECT id FROM members
+                  SELECT id FROM students
                    WHERE student_name_norm=? AND father_name_norm=?
                   UNION
-                  SELECT id FROM members
+                  SELECT id FROM students
                    WHERE phone_suffix9=? AND ?<>''
                   UNION
-                  SELECT id FROM members
+                  SELECT id FROM students
                    WHERE dob_ec_year=? AND dob_ec_month=? AND dob_ec_day=?
                      AND student_name_norm=? AND ?>0
                   UNION
-                  SELECT id FROM members
+                  SELECT id FROM students
                    WHERE student_name_norm=? AND ?<>''
                   LIMIT {$candidateLimit}
                 ) c ON c.id=m.id
@@ -94,7 +94,7 @@ final class TelegramDuplicateCandidateService
             if ($score < 25) continue;
             // department info
             $eduStatus = (string)($row['education_level'] ?? '');
-            $secStatus = (string)($row['current_section'] ?? '');
+            $secStatus = (string)( ?? '');
             unset($row['phone_suffix9']);
             $dob = '';
             if (!empty($row['dob_ec_year'])) $dob = sprintf('%02d/%02d/%04d',(int)$row['dob_ec_day'],(int)$row['dob_ec_month'],(int)$row['dob_ec_year']);
@@ -104,7 +104,7 @@ final class TelegramDuplicateCandidateService
                 $pn = (string)$row['phone_number'];
                 $phoneDisplay = mb_strlen($pn) >= 7 ? mb_substr($pn,0,4).'***'.mb_substr($pn,-3) : $pn;
             }
-            $memberCode = (string)($row['member_code'] ?? ('M'.str_pad((string)$row['id'],5,'0',STR_PAD_LEFT)));
+            $memberCode = (string)($row['student_code'] ?? ('M'.str_pad((string)$row['id'],5,'0',STR_PAD_LEFT)));
             $statusLabel = match((string)$row['status']) {
                 'active' => 'ንቁ', 'warning' => 'ማስጠንቀቂያ', 'inactive' => 'እንቅስቃሴ-አልባ',
                 'archived' => 'የተዘጋ', 'closed' => 'የተዘጋ', 'upcoming' => 'መጪ', default=>(string)$row['status']
@@ -112,7 +112,7 @@ final class TelegramDuplicateCandidateService
             $matchBand = $score >= 70 ? 'high' : ($score >= 45 ? 'medium' : 'low');
             $rows[] = [
                 'id' => (int)$row['id'],
-                'member_code' => $memberCode,
+                'student_code' => $memberCode,
                 'full_name' => $candidateFull,
                 'baptismal_name' => (string)($row['baptismal_name'] ?? ''),
                 'mother_name' => (string)($row['mother_name'] ?? ''),
@@ -124,8 +124,7 @@ final class TelegramDuplicateCandidateService
                 'phone_masked' => $phoneDisplay,
                 'education_level' => $eduStatus,
                 'mezmur_status' => '',
-                'current_section' => $secStatus,
-                'status' => (string)$row['status'],
+                                'status' => (string)$row['status'],
                 'status_label' => $statusLabel,
                 'match_score' => min(100, $score),
                 'match_band' => $matchBand,

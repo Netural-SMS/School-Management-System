@@ -172,7 +172,7 @@ final class MysqliProfileRepository implements ProfileRepository
             ? 'authorization_version'
             : '1 AS authorization_version';
         $sql = "SELECT id, username, email, full_name, role, password_hash,
-                       is_active, {$authVersion}, member_id, created_at,
+                       is_active, {$authVersion}, student_id, created_at,
                        last_login, {$image}
                   FROM users WHERE id = ? LIMIT 1" . ($forUpdate ? ' FOR UPDATE' : '');
         $statement = $this->database->prepare($sql);
@@ -544,7 +544,7 @@ final class ProfileService
             'full_name' => (string)($row['full_name'] ?? ''),
             'role' => (string)($row['role'] ?? ''),
             'is_active' => (int)($row['is_active'] ?? 0) === 1,
-            'member_id' => isset($row['member_id']) ? (int)$row['member_id'] : null,
+            'student_id' => isset($row['student_id']) ? (int)$row['student_id'] : null,
             'assignments' => $assignments,
             'profile_image' => [
                 'present' => $imagePath !== '',

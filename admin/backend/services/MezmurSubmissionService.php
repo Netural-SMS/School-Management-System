@@ -29,7 +29,7 @@ require_once __DIR__ . '/ReviewTransitionPolicy.php';
 // no trail). The service declares its own dependency — see
 // MezmurHymnService for the same hardening.
 require_once __DIR__ . '/SecurityAuditService.php';
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 require_once __DIR__ . '/AttendanceSubmissionEventService.php';
 
 final class MezmurSubmissionService
@@ -192,15 +192,15 @@ final class MezmurSubmissionService
         if (!self::validDate($date)) {
             return false;
         }
-        $canonical = MemberCategory::canonicalizeSection($section);
-        $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+        $canonical = StudentCategory::canonicalizeSection($section);
+        $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
         try {
             $stmt = $conn->prepare(
                 "SELECT 1
                  FROM mezmur_attendance a
-                 JOIN members m ON m.id = a.member_id
+                 JOIN students m ON m.id = a.student_id
                  WHERE a.attendance_date = ?
-                   AND ($secExpr = ? OR m.current_section = ?)
+                   AND ($secExpr = ? OR  = ?)
                  LIMIT 1"
             );
             if (!$stmt) {
@@ -282,7 +282,7 @@ final class MezmurSubmissionService
     /**
      * Create or update one (date, section) packet.
      *
-     * @param array{taker_id:int,date:string,section:string,status:string,member_count?:int,present?:int,late?:int,absent?:int,excused?:int,client_op_id?:?string} $opts
+     * @param array{taker_id:int,date:string,section:string,status:string,student_count?:int,present?:int,late?:int,absent?:int,excused?:int,client_op_id?:?string} $opts
      * @return array{ok:bool,id:int,status:string,message:string}
      */
     public static function upsert(\mysqli $conn, array $opts): array
@@ -290,12 +290,12 @@ final class MezmurSubmissionService
         $takerId = (int)($opts['taker_id'] ?? 0);
         $date = trim((string)($opts['date'] ?? ''));
         $rawSection = trim((string)($opts['section'] ?? ''));
-        $section = MemberCategory::canonicalizeSection($rawSection);
+        $section = StudentCategory::canonicalizeSection($rawSection);
         $status = self::normalizeStatus($opts['status'] ?? self::STATUS_INCOMPLETE);
         if ($status === self::STATUS_DRAFT) {
             $status = self::STATUS_INCOMPLETE;
         }
-        $count = max(0, min(1000000, (int)($opts['member_count'] ?? 0)));
+        $count = max(0, min(1000000, (int)($opts['student_count'] ?? 0)));
         $present = max(0, min(1000000, (int)($opts['present'] ?? 0)));
         $late = max(0, min(1000000, (int)($opts['late'] ?? 0)));
         $absent = max(0, min(1000000, (int)($opts['absent'] ?? 0)));
@@ -378,7 +378,7 @@ final class MezmurSubmissionService
             try {
                 $up = $conn->prepare(
                     "UPDATE mezmur_submissions
-                     SET status = ?, taker_id = ?, member_count = ?, present_count = ?, late_count = ?,
+                     SET status = ?, taker_id = ?, student_count = ?, present_count = ?, late_count = ?,
                          absent_count = ?, excused_count = ?, client_op_id = COALESCE(?, client_op_id),
                          submitted_at = COALESCE(?, submitted_at)" . $clearReviewSql . "
                      WHERE id = ?$lockGuard"
@@ -438,7 +438,7 @@ final class MezmurSubmissionService
         try {
             $ins = $conn->prepare(
                 "INSERT INTO mezmur_submissions
-                    (attendance_date, section, taker_id, status, member_count,
+                    (attendance_date, section, taker_id, status, student_count,
                      present_count, late_count, absent_count, excused_count,
                      submitted_at, client_op_id)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?)"
@@ -672,9 +672,9 @@ final class MezmurSubmissionService
             $dateEc = ethio_date_format(new \DateTime($date), 'F j, Y');
             // Canonical section names (the stored value is a code such as
             // 'children'); fall back to the raw value for unknown codes.
-            $sectionAm = MemberCategory::normalizeSectionAm($section) ?? $section;
+            $sectionAm = StudentCategory::normalizeSectionAm($section) ?? $section;
             $sectionEn = $section;
-            foreach (MemberCategory::sections() as $meta) {
+            foreach (StudentCategory::sections() as $meta) {
                 if (($meta['am'] ?? '') === $sectionAm) {
                     $sectionEn = (string)$meta['en'];
                     break;
@@ -713,7 +713,7 @@ final class MezmurSubmissionService
     }
 
     /**
-     * Re-evaluate attendance warnings for every member on one (date, section)
+     * Re-evaluate attendance warnings for every student on one (date, section)
      * sheet (Phase 2 evaluator; no-op when the feature is off or tables are
      * missing). Best-effort: errors are logged, never thrown.
      *
@@ -728,7 +728,7 @@ final class MezmurSubmissionService
             if (!class_exists('\App\Services\AttendanceWarningService')) {
                 require_once __DIR__ . '/AttendanceWarningService.php';
             }
-            $ids = AttendanceWarningService::memberIdsFromRecords(self::rows($conn, $date, $section));
+            $ids = AttendanceWarningService::studentIdsFromRecords(self::rows($conn, $date, $section));
             return AttendanceWarningService::safeEvaluateMany($conn, 'mezmur', $ids, $date, $actorId);
         } catch (\Throwable $e) {
             error_log('Mezmur attendance warning recalculation failed: ' . $e->getMessage());
@@ -808,7 +808,7 @@ final class MezmurSubmissionService
         $offset = ($page - 1) * $perPage;
 
         $sql = "SELECT ms.id, ms.attendance_date, ms.section, ms.taker_id, ms.status,
-                       ms.member_count, ms.present_count, ms.late_count, ms.absent_count,
+                       ms.student_count, ms.present_count, ms.late_count, ms.absent_count,
                        ms.excused_count, ms.submitted_at, ms.reviewed_by, ms.reviewed_at,
                        ms.review_notes, ms.created_at, ms.updated_at,
                        u.full_name AS taker_name,
@@ -881,15 +881,15 @@ final class MezmurSubmissionService
         if (!self::validDate($date) || trim($section) === '') {
             return [];
         }
-        $canonical = MemberCategory::canonicalizeSection($section);
-        $secExpr = MemberCategory::sqlSectionExpr('m', 'current_section', 'age_group');
+        $canonical = StudentCategory::canonicalizeSection($section);
+        $secExpr = StudentCategory::sqlSectionExpr('m', 'current_section', 'age_group');
         try {
             $stmt = $conn->prepare(
-                "SELECT a.member_id, a.status, a.notes, m.student_name, m.father_name, m.member_code
+                "SELECT a.student_id, a.status, a.notes, m.student_name, m.father_name, m.student_code
                  FROM mezmur_attendance a
-                 JOIN members m ON m.id = a.member_id
+                 JOIN students m ON m.id = a.student_id
                  WHERE a.attendance_date = ?
-                   AND ($secExpr = ? OR m.current_section = ?)
+                   AND ($secExpr = ? OR  = ?)
                  ORDER BY m.student_name, m.father_name
                  LIMIT 100000"
             );
@@ -902,10 +902,10 @@ final class MezmurSubmissionService
             $r = $stmt->get_result();
             while ($row = $r->fetch_assoc()) {
                 $rows[] = [
-                    'member_id' => (int)$row['member_id'],
+                    'student_id' => (int)$row['student_id'],
                     'student_name' => $row['student_name'] ?? '',
                     'father_name' => $row['father_name'] ?? '',
-                    'member_code' => $row['member_code'] ?? '',
+                    'student_code' => $row['student_code'] ?? '',
                     'status' => $row['status'] ?? '',
                     'notes' => $row['notes'] ?? '',
                 ];
@@ -919,7 +919,7 @@ final class MezmurSubmissionService
 
     public static function countsFromRecords(array $records): array
     {
-        $out = ['present' => 0, 'absent' => 0, 'late' => 0, 'excused' => 0, 'member_count' => 0];
+        $out = ['present' => 0, 'absent' => 0, 'late' => 0, 'excused' => 0, 'student_count' => 0];
         foreach ($records as $rec) {
             if (!is_array($rec)) {
                 continue;
@@ -927,7 +927,7 @@ final class MezmurSubmissionService
             $st = strtolower(trim((string)($rec['status'] ?? '')));
             if (isset($out[$st])) {
                 $out[$st]++;
-                $out['member_count']++;
+                $out['student_count']++;
             }
         }
         return $out;
@@ -991,7 +991,7 @@ final class MezmurSubmissionService
             'taker_id' => isset($row['taker_id']) ? (int)$row['taker_id'] : null,
             'status' => $uiStatus,
             'status_label' => self::statusLabel($uiStatus),
-            'member_count' => (int)($row['member_count'] ?? 0),
+            'student_count' => (int)($row['student_count'] ?? 0),
             'present_count' => (int)($row['present_count'] ?? 0),
             'late_count' => (int)($row['late_count'] ?? 0),
             'absent_count' => (int)($row['absent_count'] ?? 0),

@@ -8,7 +8,7 @@
  * GET  ?action=subjects&class_id=            subjects the signed‑in teacher may take in that class
  * GET  ?action=sheet&class_id=&subject_id=&date=&lesson_no=
  * GET  ?action=day&class_id=&date=           lessons already saved for that class/day
- * GET  ?action=member&member_id=&limit=&offset=   lesson history (Edu, HR, Info, School Admin; teacher = own classes)
+ * GET  ?action=student&student_id=&limit=&offset=   lesson history (Edu, HR, Info, School Admin; teacher = own classes)
  * POST action=save   class_id, subject_id, date, lesson_no, records(JSON), csrf_token   (teacher of that class+subject, or Education)
  * POST action=cancel session_id, reason, csrf_token                                      (Education only)
  *
@@ -62,7 +62,7 @@ if ($method === 'POST' && stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'app
         $action = (string)($json['action'] ?? $action);
     }
 }
-$readActions = ['subjects', 'sheet', 'day', 'member'];
+$readActions = ['subjects', 'sheet', 'day', 'student'];
 $writeActions = ['save', 'cancel'];
 if (!in_array($action, array_merge($readActions, $writeActions), true)) {
     $fail(400, 'Unknown action');
@@ -171,41 +171,41 @@ switch ($action) {
         $ok($meta + ['date_status' => SchoolCalendarService::classDayStatus($conn, $classId, $date),
             'sessions' => LessonAttendanceService::sessionsForDay($conn, $classId, $date, true)]);
 
-    case 'member':
-        $memberId = (int)($_GET['member_id'] ?? 0);
-        if ($memberId <= 0) {
-            $fail(400, 'Member is required.');
+    case 'student':
+        $studentId = (int)($_GET['student_id'] ?? 0);
+        if ($studentId <= 0) {
+            $fail(400, 'Student is required.');
         }
         if (!$available) {
             $ok($meta + ['items' => [], 'total' => 0]);
         }
         $scopeIds = $role === 'teacher' ? $teacherClassIds() : null;
         if ($scopeIds !== null) {
-            // Teachers may only look up members enrolled in one of their classes
-            // (no member-name enumeration by id).
+            // Teachers may only look up students enrolled in one of their classes
+            // (no student-name enumeration by id).
             $ids = array_values(array_filter(array_map('intval', $scopeIds), static fn($i) => $i > 0));
             $inScope = false;
             if ($ids !== []) {
-                $chk = $conn->prepare('SELECT 1 FROM class_enrollments WHERE member_id = ? AND class_id IN (' . implode(',', $ids) . ') LIMIT 1');
-                $chk->bind_param('i', $memberId);
+                $chk = $conn->prepare('SELECT 1 FROM class_enrollments WHERE student_id = ? AND class_id IN (' . implode(',', $ids) . ') LIMIT 1');
+                $chk->bind_param('i', $studentId);
                 $chk->execute();
                 $inScope = $chk->get_result()->num_rows > 0;
                 $chk->close();
             }
             if (!$inScope) {
-                $fail(403, 'This member is not in one of your classes.');
+                $fail(403, 'This student is not in one of your classes.');
             }
         }
-        $ms = $conn->prepare('SELECT id, student_name, father_name, member_code FROM members WHERE id = ? LIMIT 1');
-        $ms->bind_param('i', $memberId);
+        $ms = $conn->prepare('SELECT id, student_name, father_name, student_code FROM students WHERE id = ? LIMIT 1');
+        $ms->bind_param('i', $studentId);
         $ms->execute();
-        $member = $ms->get_result()->fetch_assoc();
+        $student = $ms->get_result()->fetch_assoc();
         $ms->close();
-        if (!$member) {
-            $fail(404, 'Member not found.');
+        if (!$student) {
+            $fail(404, 'Student not found.');
         }
-        $ok($meta + ['member' => ['id' => (int)$member['id'], 'name' => trim((string)$member['student_name'] . ' ' . (string)$member['father_name']), 'member_code' => (string)$member['member_code']]]
-            + LessonAttendanceService::memberHistory($conn, $memberId, (int)($_GET['limit'] ?? 100), (int)($_GET['offset'] ?? 0), $scopeIds));
+        $ok($meta + ['student' => ['id' => (int)$student['id'], 'name' => trim((string)$student['student_name'] . ' ' . (string)$student['father_name']), 'student_code' => (string)$student['student_code']]]
+            + LessonAttendanceService::memberHistory($conn, $studentId, (int)($_GET['limit'] ?? 100), (int)($_GET['offset'] ?? 0), $scopeIds));
 
     case 'save':
         if (!$available) {

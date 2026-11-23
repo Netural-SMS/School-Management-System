@@ -224,25 +224,25 @@ function collectDataSnapshot($conn, $scope = 'overview') {
             SUM(status='warning') as warning,
             SUM(gender='male') as male,
             SUM(gender='female') as female,
-            SUM(member_type='regular') as regular,
-            SUM(member_type='special_regular') as special,
+            SUM() as regular,
+            SUM() as special,
             SUM(registration_type='waiting') as waiting,
             SUM(registration_type='transfer') as transfer,
             SUM(registration_type='direct') as direct,
             SUM(phone_number IS NOT NULL AND phone_number!='') as has_phone,
             SUM(student_photo_path IS NOT NULL AND student_photo_path!='') as has_photo,
-            SUM(age_group='7_13') as age_7_13,
-            SUM(age_group='14_17') as age_14_17,
-            SUM(age_group='18_plus' OR age_group='18+') as age_18plus
-        FROM members WHERE status != 'archived'");
+            as age_7_13,
+            as age_14_17,
+            as age_18plus
+        FROM students WHERE status != 'archived'");
         if ($r) $data['members_overview'] = $r->fetch_assoc();
     } catch (Exception $e) { $data['members_overview'] = ['error' => 'Query failed']; }
     
     // ── Registration trends (last 12 months) ──
-    if (in_array($scope, ['overview', 'members', 'trends'])) {
+    if (in_array($scope, ['overview', 'students', 'trends'])) {
         try {
             $r = $conn->query("SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as count 
-                FROM members WHERE status != 'archived' AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+                FROM students WHERE status != 'archived' AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
                 GROUP BY month ORDER BY month");
             $data['registration_trends'] = [];
             if ($r) while ($row = $r->fetch_assoc()) $data['registration_trends'][] = $row;
@@ -356,11 +356,11 @@ function getSystemPrompt($conn = null) {
     
     // Role-based data access rules
     $roleRules = [
-        'super_admin' => 'You have full access to all school data including members, attendance, finance, education, and system health.',
-        'school_admin' => 'You have access to all school data including members, attendance, finance, and education.',
-        'info_dept' => 'You have access to member data, registrations, and demographics. You do NOT have access to financial data.',
+        'super_admin' => 'You have full access to all school data including students, attendance, finance, education, and system health.',
+        'school_admin' => 'You have access to all school data including students, attendance, finance, and education.',
+        'info_dept' => 'You have access to student data, registrations, and demographics. You do NOT have access to financial data.',
         'edu_dept' => 'You have access to education data: classes, enrollments, teachers, subjects, and grades. You do NOT have access to financial data.',
-        'finance_dept' => 'You have access to financial data: income, expenses, and budgets. You do NOT have access to individual member details.',
+        'finance_dept' => 'You have access to financial data: income, expenses, and budgets. You do NOT have access to individual student details.',
         'material_dept' => 'You have access to material/resource inventory data. You have limited access to other data.',
         'mezmur_dept' => 'You have access to the mezmur (hymn) library data. You have limited access to other data.',
         'teacher' => 'You have access to your class data, student attendance, and grades. You do NOT have access to finance or system settings. Do NOT reveal other teachers\' data or admin information.',
@@ -374,21 +374,21 @@ function getSystemPrompt($conn = null) {
     $systemKnowledge = <<<'SYS'
 ABOUT THIS SYSTEM (use this to explain how it works, what a section/button/status does):
 This is a Sunday School Management System with role-based dashboards. Main areas:
-- Members: register & manage students ("members"). Each has a unique member code, profile, photo, age group, gender, phone, and a status: active, warning (becoming irregular), inactive, or archived.
-- Old Members Archive: members whose status is "archived" — people who left, graduated, or went inactive long-term. Kept for historical records, excluded from active counts and daily lists, and can be restored.
-- Manage Members: add, edit, approve waiting registrations, change status, archive/restore.
-- ID Cards: generate & print member ID cards (with QR codes).
-- Groups: organise members into groups/teams for activities.
-- Attendance & Status: record/review attendance per class/section per day (present, absent, late, excused) and spot members becoming irregular.
+- Students: register & manage students ("students"). Each has a unique student code, profile, photo, age group, gender, phone, and a status: active, warning (becoming irregular), inactive, or archived.
+- Old Students Archive: students whose status is "archived" — people who left, graduated, or went inactive long-term. Kept for historical records, excluded from active counts and daily lists, and can be restored.
+- Manage Students: add, edit, approve waiting registrations, change status, archive/restore.
+- ID Cards: generate & print student ID cards (with QR codes).
+- Groups: organise students into groups/teams for activities.
+- Attendance & Status: record/review attendance per class/section per day (present, absent, late, excused) and spot students becoming irregular.
 - Attendance Takers: staff assigned only to record attendance.
 - Classes & Education: classes/sections, enrolments, teacher assignments, subjects, and grades (academic records).
 - Finance: income, expenses and budgets in Ethiopian Birr (ETB). Only Finance, School Admin and Super Admin see money.
 - Materials: inventory of physical resources/equipment.
-- Exports & Reports: export members and reports to PDF / Excel / Word.
+- Exports & Reports: export students and reports to PDF / Excel / Word.
 - Academic Year: the school runs on academic years with a lifecycle — Upcoming, Active (the single live year) and Closed (past years). Exactly one year is Active. "Year Rollover" starts the next year and carries students forward. Anyone can open a past year READ-ONLY ("time-travel") to view old data without changing anything.
 - Settings, Staff & Users, System Health, Backups: administration (School Admin / Super Admin).
 - Calendar: dates display in the Ethiopian calendar (ዓ.ም.) but are stored in Gregorian internally. The current Ethiopian date and academic year show in the sidebar.
-- Roles: Super Admin (full technical control), School Admin (runs the school), Information Dept (members/registration), Education Dept (classes/grades), Finance Dept (money), Material Dept (inventory), Teacher (own classes), Attendance Taker (attendance only), Content Editor (public website).
+- Roles: Super Admin (full technical control), School Admin (runs the school), Information Dept (students/registration), Education Dept (classes/grades), Finance Dept (money), Material Dept (inventory), Teacher (own classes), Attendance Taker (attendance only), Content Editor (public website).
 Only describe features the current user's role can access.
 SYS;
 
@@ -410,13 +410,13 @@ CRITICAL RULES:
 
 YOUR CAPABILITIES:
 - Explain what any part of the system does and how to use it (from ABOUT THIS SYSTEM above)
-- Analyze member demographics, attendance patterns, registration trends
+- Analyze student demographics, attendance patterns, registration trends
 - Generate insights about engagement and retention; identify data-quality issues
 - Provide actionable advice for school improvement
 
 CONTEXT:
 - {$schoolContext}
-- Members are students of various age groups (under 6, 7-13, 14-17, 18+)
+- Students are students of various age groups (under 6, 7-13, 14-17, 18+)
 - The school uses the Ethiopian Calendar alongside Gregorian; currency is Ethiopian Birr (ETB)
 
 RESPONSE RULES:
@@ -620,7 +620,7 @@ switch ($action) {
         elseif (preg_match('/financ|money|birr|ገንዘብ|income|expense|budget/', $msgLower)) $scope = 'finance';
         elseif (preg_match('/class|grade|enroll|teacher|subject|ትምህርት/', $msgLower)) $scope = 'education';
         elseif (preg_match('/group|department|ክፍል/', $msgLower)) $scope = 'groups';
-        elseif (preg_match('/member|student|ተማሪ|registr|demograph|phone|photo/', $msgLower)) $scope = 'members';
+        elseif (preg_match('/student|student|ተማሪ|registr|demograph|phone|photo/', $msgLower)) $scope = 'students';
         elseif (preg_match('/trend|growth|month|year|compare|ለውጥ/', $msgLower)) $scope = 'trends';
         
         // Collect data from database
@@ -699,7 +699,7 @@ switch ($action) {
         $prompts = [
             'overview' => "Analyze this school's overall health. Give me: 1) Key statistics summary 2) Top 3 strengths 3) Top 3 concerns 4) Immediate action items. Be specific with numbers.",
             'attendance' => "Analyze attendance patterns. Show: 1) Overall attendance rate 2) Best/worst days 3) Trends over time 4) Students at risk of dropping out. Include percentages.",
-            'members' => "Analyze member demographics and data quality. Show: 1) Gender/age distribution 2) Registration trends 3) Data completeness issues 4) Growth rate and projections.",
+            'students' => "Analyze student demographics and data quality. Show: 1) Gender/age distribution 2) Registration trends 3) Data completeness issues 4) Growth rate and projections.",
             'finance' => "Analyze the financial situation. Show: 1) Income vs expenses overview 2) Balance health 3) Pending amounts concern level 4) Budget recommendations in ETB.",
             'education' => "Analyze the education system. Show: 1) Class enrollment distribution 2) Teacher-to-student ratios 3) Under/over-enrolled classes 4) Improvement suggestions.",
         ];
@@ -740,10 +740,10 @@ switch ($action) {
         $today = function_exists('ethio_export_date') ? ethio_export_date('now', 'F j, Y') . ' (Ethiopian calendar)' : date('F j, Y');
         
         $reportPrompts = [
-            'monthly' => "Generate a Monthly Status Report for ' . SCHOOL_NAME_SHORT . ' ' . SCHOOL_TYPE . ', dated {$today}. Include: Executive Summary, Member Statistics (with gender/age breakdown), Attendance Analysis, Financial Summary, Class Enrollment Status, Data Quality Assessment, and Recommendations. Format as a professional report with clear headings.",
+            'monthly' => "Generate a Monthly Status Report for ' . SCHOOL_NAME_SHORT . ' ' . SCHOOL_TYPE . ', dated {$today}. Include: Executive Summary, Student Statistics (with gender/age breakdown), Attendance Analysis, Financial Summary, Class Enrollment Status, Data Quality Assessment, and Recommendations. Format as a professional report with clear headings.",
             'attendance' => "Generate a detailed Attendance Analysis Report dated {$today}. Include: Overall rates, patterns by day of week, trends over recent months, at-risk analysis, comparison across classes, and specific recommendations to improve attendance.",
             'financial' => "Generate a Financial Status Report dated {$today}. Include: Income/Expense summary, balance status, pending transactions, month-over-month trends, budget concerns, and financial recommendations. All amounts in ETB.",
-            'demographic' => "Generate a Member Demographics Report dated {$today}. Include: Total population, gender distribution, age group breakdown, registration types, geographic distribution if available, growth trends, and membership health indicators.",
+            'demographic' => "Generate a Student Demographics Report dated {$today}. Include: Total population, gender distribution, age group breakdown, registration types, geographic distribution if available, growth trends, and membership health indicators.",
             'custom' => $customPrompt ?: "Generate a comprehensive school overview report.",
         ];
         

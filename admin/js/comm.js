@@ -63,7 +63,7 @@
         return ((name[0] || ' ')[0] + (name.length > 1 ? name[name.length - 1][0] : '')).toUpperCase();
     }
     var ICONS = [
-        [/member/, 'fa-user'], [/class|enroll/, 'fa-school'], [/attendance/, 'fa-clipboard-check'],
+        [/student/, 'fa-user'], [/class|enroll/, 'fa-school'], [/attendance/, 'fa-clipboard-check'],
         [/grade|marks/, 'fa-graduation-cap'], [/task/, 'fa-list-check'], [/role/, 'fa-id-badge'],
         [/document|share/, 'fa-file-lines'], [/sync|change/, 'fa-rotate']
     ];

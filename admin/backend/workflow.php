@@ -6,9 +6,9 @@
  * 
  * This library handles:
  * 1. Sending notifications to departments/users
- * 2. Logging member changes for department sync
+ * 2. Logging student changes for department sync
  * 3. Creating cross-department tasks
- * 4. Auto-updating related member data
+ * 4. Auto-updating related student data
  * 
  * Include this file in any page that needs these features:
  * require_once __DIR__ . '/backend/workflow.php';
@@ -36,12 +36,12 @@ $DEPT_ROLES = \App\Services\NotificationCenterService::ROLE_LABELS;
  */
 $NOTIFICATION_MATRIX = [
     'failure_alert' => ['super_admin'],
-    'member_registered' => ['super_admin', 'school_admin', 'edu_dept'],
-    'member_eligible_permanent' => ['hr_dept', 'super_admin', 'school_admin'],
-    'member_promoted' => ['hr_dept', 'super_admin', 'school_admin'],
-    'member_updated' => ['super_admin', 'school_admin'],
-    'member_archived' => ['super_admin', 'school_admin', 'edu_dept', 'finance_dept'],
-    'member_restored' => ['super_admin', 'school_admin', 'edu_dept'],
+    'student_registered' => ['super_admin', 'school_admin', 'edu_dept'],
+    'student_eligible_permanent' => ['hr_dept', 'super_admin', 'school_admin'],
+    'student_promoted' => ['hr_dept', 'super_admin', 'school_admin'],
+    'student_updated' => ['super_admin', 'school_admin'],
+    'student_archived' => ['super_admin', 'school_admin', 'edu_dept', 'finance_dept'],
+    'student_restored' => ['super_admin', 'school_admin', 'edu_dept'],
     'role_changed' => ['super_admin', 'school_admin', 'info_dept', 'edu_dept'],
     'teacher_assigned' => ['super_admin', 'school_admin', 'info_dept'],
     'class_enrolled' => ['super_admin', 'school_admin', 'info_dept'],
@@ -63,7 +63,7 @@ $NOTIFICATION_MATRIX = [
  * Send a notification to specific roles or user
  * 
  * @param mysqli $conn Database connection
- * @param string $type Notification type (e.g., 'member_registered')
+ * @param string $type Notification type (e.g., 'student_registered')
  * @param string $title Notification title
  * @param string $message Notification message
  * @param array $options Optional settings:
@@ -166,14 +166,14 @@ function markAllNotificationsRead($conn) {
 }
 
 // ============================================================
-// MEMBER CHANGE LOGGING
+// STUDENT CHANGE LOGGING
 // ============================================================
 
 /**
- * Log a member change for department sync
+ * Log a student change for department sync
  * 
  * @param mysqli $conn Database connection
- * @param int $memberId Member ID
+ * @param int $studentId Student ID
  * @param string $changeType Type of change
  * @param array $options Optional settings:
  *   - 'field_changed' => specific field name
@@ -183,7 +183,7 @@ function markAllNotificationsRead($conn) {
  *   - 'requires_sync' => whether other depts need to know
  * @return int|false Change log ID or false on failure
  */
-function logMemberChange($conn, $memberId, $changeType, $options = []) {
+function logMemberChange($conn, $studentId, $changeType, $options = []) {
     try {
         $fieldChanged = $options['field_changed'] ?? null;
         $oldValue = $options['old_value'] ?? null;
@@ -194,8 +194,8 @@ function logMemberChange($conn, $memberId, $changeType, $options = []) {
         $changedByUser = $_SESSION['admin_id'] ?? null;
         
         $stmt = $conn->prepare("
-            INSERT INTO member_changes 
-            (member_id, change_type, field_changed, old_value, new_value, change_summary, 
+            INSERT INTO student_changes 
+            (student_id, change_type, field_changed, old_value, new_value, change_summary, 
              changed_by_dept, changed_by_user, requires_sync)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
@@ -204,7 +204,7 @@ function logMemberChange($conn, $memberId, $changeType, $options = []) {
         
         $stmt->bind_param(
             "issssssis",
-            $memberId, $changeType, $fieldChanged, $oldValue, $newValue, 
+            $studentId, $changeType, $fieldChanged, $oldValue, $newValue, 
             $summary, $changedByDept, $changedByUser, $requiresSync
         );
         
@@ -219,16 +219,16 @@ function logMemberChange($conn, $memberId, $changeType, $options = []) {
 }
 
 /**
- * Get recent member changes that require sync
+ * Get recent student changes that require sync
  */
 function getUnsyncedChanges($conn, $forDept = null, $limit = 50) {
     try {
         $forDept = $forDept ?? ($_SESSION['admin_role'] ?? '');
         
         $stmt = $conn->prepare("
-            SELECT mc.*, m.student_name, m.father_name, m.member_code
-            FROM member_changes mc
-            LEFT JOIN members m ON mc.member_id = m.id
+            SELECT mc.*, m.student_name, m.father_name, m.student_code
+            FROM student_changes mc
+            LEFT JOIN students m ON mc.student_id = m.id
             WHERE mc.requires_sync = 1
             AND (mc.synced_to IS NULL OR FIND_IN_SET(?, mc.synced_to) = 0)
             AND mc.changed_by_dept != ?
@@ -258,7 +258,7 @@ function markChangeSynced($conn, $changeId) {
     try {
         $dept = $_SESSION['admin_role'] ?? '';
         
-        $stmt = $conn->prepare("SELECT synced_to FROM member_changes WHERE id = ?");
+        $stmt = $conn->prepare("SELECT synced_to FROM student_changes WHERE id = ?");
         if (!$stmt) return false;
         $stmt->bind_param("i", $changeId);
         $stmt->execute();
@@ -271,7 +271,7 @@ function markChangeSynced($conn, $changeId) {
         }
         $newSyncedTo = implode(',', $depts);
         
-        $stmt = $conn->prepare("UPDATE member_changes SET synced_to = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE student_changes SET synced_to = ? WHERE id = ?");
         if (!$stmt) return false;
         $stmt->bind_param("si", $newSyncedTo, $changeId);
         return $stmt->execute();
@@ -293,7 +293,7 @@ function markChangeSynced($conn, $changeId) {
  *   - 'priority' => 'low', 'normal', 'high', 'urgent'
  *   - 'to_dept' => target department
  *   - 'to_user_id' => specific user
- *   - 'related_member_id' => member this is about
+ *   - 'related_student_id' => student this is about
  *   - 'due_date' => YYYY-MM-DD
  *   - 'related_data' => additional data array
  * @return int|false Task ID or false on failure
@@ -307,14 +307,14 @@ function createDepartmentTask($conn, $title, $options = []) {
         $fromUserId = $_SESSION['admin_id'] ?? null;
         $toDept = $options['to_dept'] ?? null;
         $toUserId = $options['to_user_id'] ?? null;
-        $relatedMemberId = $options['related_member_id'] ?? null;
+        $relatedMemberId = $options['related_student_id'] ?? null;
         $relatedData = isset($options['related_data']) ? json_encode($options['related_data']) : null;
         $dueDate = $options['due_date'] ?? null;
         
         $stmt = $conn->prepare("
             INSERT INTO department_tasks 
             (title, description, task_type, priority, from_dept, from_user_id, 
-             to_dept, to_user_id, related_member_id, related_data, due_date)
+             to_dept, to_user_id, related_student_id, related_data, due_date)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
@@ -333,7 +333,7 @@ function createDepartmentTask($conn, $title, $options = []) {
                 'priority' => $priority,
                 'target_roles' => $toDept ? [$toDept] : [],
                 'target_user_id' => $toUserId,
-                'data' => ['task_id' => $taskId, 'related_member_id' => $relatedMemberId]
+                'data' => ['task_id' => $taskId, 'related_student_id' => $relatedMemberId]
             ]);
             
             return $taskId;
@@ -354,10 +354,10 @@ function getPendingTasks($conn, $limit = 20) {
         $userId = $_SESSION['admin_id'] ?? 0;
         
         $stmt = $conn->prepare("
-            SELECT dt.*, m.student_name, m.father_name, m.member_code,
+            SELECT dt.*, m.student_name, m.father_name, m.student_code,
                    u.full_name as from_user_name
             FROM department_tasks dt
-            LEFT JOIN members m ON dt.related_member_id = m.id
+            LEFT JOIN students m ON dt.related_student_id = m.id
             LEFT JOIN users u ON dt.from_user_id = u.id
             WHERE dt.status IN ('pending', 'in_progress')
             AND (dt.to_dept = ? OR dt.to_user_id = ?)
@@ -420,22 +420,22 @@ function updateTaskStatus($conn, $taskId, $status, $notes = null) {
 // ============================================================
 
 /**
- * When Education Dept assigns a teaching role, auto-update member flags
+ * When Education Dept assigns a teaching role, auto-update student flags
  */
-function autoUpdateTeacherStatus($conn, $memberId, $isTeacher = true) {
+function autoUpdateTeacherStatus($conn, $studentId, $isTeacher = true) {
     try {
         $flag = $isTeacher ? 1 : 0;
     
     // Get current status
-    $stmt = $conn->prepare("SELECT is_teacher FROM members WHERE id = ?");
-    $stmt->bind_param("i", $memberId);
+    $stmt = $conn->prepare("SELECT is_teacher FROM students WHERE id = ?");
+    $stmt->bind_param("i", $studentId);
     $stmt->execute();
     $current = $stmt->get_result()->fetch_assoc();
     
     if ($current && (int)$current['is_teacher'] !== $flag) {
         // Update the flag
-        $stmt = $conn->prepare("UPDATE members SET is_teacher = ? WHERE id = ?");
-        $stmt->bind_param("ii", $flag, $memberId);
+        $stmt = $conn->prepare("UPDATE students SET is_teacher = ? WHERE id = ?");
+        $stmt->bind_param("ii", $flag, $studentId);
         $stmt->execute();
 
         // Identity v2 convergence: mirror the flag onto the mapped
@@ -443,14 +443,14 @@ function autoUpdateTeacherStatus($conn, $memberId, $isTeacher = true) {
         // education workflow).
         try {
             require_once __DIR__ . '/services/PositionSyncService.php';
-            \App\Services\PositionSyncService::syncPositionFromFlag($conn, $memberId, 'is_teacher', (bool)$flag);
+            \App\Services\PositionSyncService::syncPositionFromFlag($conn, $studentId, 'is_teacher', (bool)$flag);
         } catch (\Throwable $e) {
             error_log('teacher position convergence skipped: ' . $e->getMessage());
         }
 
         // Log the change
-        $summary = $isTeacher ? 'Member assigned as teacher' : 'Teacher role removed';
-        logMemberChange($conn, $memberId, 'role_changed', [
+        $summary = $isTeacher ? 'Student assigned as teacher' : 'Teacher role removed';
+        logMemberChange($conn, $studentId, 'role_changed', [
             'field_changed' => 'is_teacher',
             'old_value' => $current['is_teacher'],
             'new_value' => $flag,
@@ -458,17 +458,17 @@ function autoUpdateTeacherStatus($conn, $memberId, $isTeacher = true) {
         ]);
         
         // Notify Info Dept
-        $stmt = $conn->prepare("SELECT student_name, father_name FROM members WHERE id = ?");
-        $stmt->bind_param("i", $memberId);
+        $stmt = $conn->prepare("SELECT student_name, father_name FROM students WHERE id = ?");
+        $stmt->bind_param("i", $studentId);
         $stmt->execute();
-        $member = $stmt->get_result()->fetch_assoc();
-        $memberName = $member['student_name'] . ' ' . $member['father_name'];
+        $student = $stmt->get_result()->fetch_assoc();
+        $memberName = $student['student_name'] . ' ' . $student['father_name'];
         
         sendNotification($conn, 'role_changed', 
             ($isTeacher ? "New Teacher Assigned" : "Teacher Role Removed"),
             "$memberName has been " . ($isTeacher ? "assigned as a teacher" : "removed from teaching role"),
             [
-                'data' => ['member_id' => $memberId],
+                'data' => ['student_id' => $studentId],
                 'target_roles' => ['info_dept', 'school_admin']
             ]
         );
@@ -481,9 +481,9 @@ function autoUpdateTeacherStatus($conn, $memberId, $isTeacher = true) {
 }
 
 /**
- * When a member is enrolled in a class, update their class info
+ * When a student is enrolled in a class, update their class info
  */
-function autoUpdateMemberClass($conn, $memberId, $classId, $academicYearId) {
+function autoUpdateMemberClass($conn, $studentId, $classId, $academicYearId) {
     try {
     // Get class info
     $stmt = $conn->prepare("SELECT class_code, class_name FROM classes WHERE id = ?");
@@ -493,17 +493,17 @@ function autoUpdateMemberClass($conn, $memberId, $classId, $academicYearId) {
     
     if (!$class) return false;
     
-    // Update member
+    // Update student
     $stmt = $conn->prepare("
-        UPDATE members 
+        UPDATE students 
         SET current_class_id = ?, spiritual_education = ?, academic_status = 'active'
         WHERE id = ?
     ");
-    $stmt->bind_param("isi", $classId, $class['class_code'], $memberId);
+    $stmt->bind_param("isi", $classId, $class['class_code'], $studentId);
     $stmt->execute();
     
     // Log the change
-    logMemberChange($conn, $memberId, 'class_enrolled', [
+    logMemberChange($conn, $studentId, 'class_enrolled', [
         'field_changed' => 'current_class_id',
         'new_value' => $classId,
         'summary' => "Enrolled in {$class['class_name']}"
@@ -527,7 +527,7 @@ function autoUpdateMemberClass($conn, $memberId, $classId, $academicYearId) {
  * the caller knows the record's date; it falls back to today for legacy
  * call sites.
  */
-function updateAttendanceSummary($conn, $memberId, $academicYearId = null, $attendanceDate = null) {
+function updateAttendanceSummary($conn, $studentId, $academicYearId = null, $attendanceDate = null) {
     try {
         require_once __DIR__ . '/services/AttendanceSummaryService.php';
 
@@ -537,7 +537,7 @@ function updateAttendanceSummary($conn, $memberId, $academicYearId = null, $atte
 
         \App\Services\AttendanceSummaryService::recordSaved(
             $conn,
-            (int)$memberId,
+            (int)$studentId,
             $date,
             $academicYearId !== null ? (int)$academicYearId : null
         );
@@ -546,33 +546,33 @@ function updateAttendanceSummary($conn, $memberId, $academicYearId = null, $atte
 }
 
 /**
- * Handle new member registration - notify all relevant departments
+ * Handle new student registration - notify all relevant departments
  */
-function onMemberRegistered($conn, $memberId) {
+function onMemberRegistered($conn, $studentId) {
     try {
-    $stmt = $conn->prepare("SELECT student_name, father_name, member_code, registration_type FROM members WHERE id = ?");
-    $stmt->bind_param("i", $memberId);
+    $stmt = $conn->prepare("SELECT student_name, father_name, student_code, registration_type FROM students WHERE id = ?");
+    $stmt->bind_param("i", $studentId);
     $stmt->execute();
-    $member = $stmt->get_result()->fetch_assoc();
+    $student = $stmt->get_result()->fetch_assoc();
     
-    if (!$member) return false;
+    if (!$student) return false;
     
-    $memberName = $member['student_name'] . ' ' . $member['father_name'];
-    $regType = $member['registration_type'];
+    $memberName = $student['student_name'] . ' ' . $student['father_name'];
+    $regType = $student['registration_type'];
     
     // Log the change
-    logMemberChange($conn, $memberId, 'registered', [
-        'summary' => "New member registered: $memberName"
+    logMemberChange($conn, $studentId, 'registered', [
+        'summary' => "New student registered: $memberName"
     ]);
     
     // Send notification
-    sendNotification($conn, 'member_registered',
-        "New Member Registered",
+    sendNotification($conn, 'student_registered',
+        "New Student Registered",
         "$memberName has been registered (Type: $regType)",
         [
             'data' => [
-                'member_id' => $memberId,
-                'member_code' => $member['member_code'],
+                'student_id' => $studentId,
+                'student_code' => $student['student_code'],
                 'registration_type' => $regType
             ]
         ]
@@ -580,12 +580,12 @@ function onMemberRegistered($conn, $memberId) {
     
     // If direct or transfer registration, create task for Education Dept to assign class
     if ($regType === 'direct' || $regType === 'transfer') {
-        createDepartmentTask($conn, "Assign class for new member: $memberName", [
-            'description' => "New member $memberName needs to be assigned to a class based on their age and spiritual education level.",
+        createDepartmentTask($conn, "Assign class for new student: $memberName", [
+            'description' => "New student $memberName needs to be assigned to a class based on their age and spiritual education level.",
             'task_type' => 'action',
             'priority' => 'normal',
             'to_dept' => 'edu_dept',
-            'related_member_id' => $memberId
+            'related_student_id' => $studentId
         ]);
     }
     
@@ -594,34 +594,34 @@ function onMemberRegistered($conn, $memberId) {
 }
 
 /**
- * Handle promotion of a temporary member to permanent.
- * Called from hr_register_member.php when upgrade_member_id > 0.
+ * Handle promotion of a temporary student to permanent.
+ * Called from hr_register_student.php when upgrade_student_id > 0.
  */
-function onMemberPromoted($conn, $memberId, $overrideReason = null) {
+function onMemberPromoted($conn, $studentId, $overrideReason = null) {
     try {
-    $stmt = $conn->prepare("SELECT student_name, father_name, member_code, membership_tier FROM members WHERE id = ?");
-    $stmt->bind_param("i", $memberId);
+    $stmt = $conn->prepare("SELECT student_name, father_name, student_code, membership_tier FROM students WHERE id = ?");
+    $stmt->bind_param("i", $studentId);
     $stmt->execute();
-    $member = $stmt->get_result()->fetch_assoc();
+    $student = $stmt->get_result()->fetch_assoc();
 
-    if (!$member) return false;
+    if (!$student) return false;
 
-    $memberName = trim($member['student_name'] . ' ' . $member['father_name']);
+    $memberName = trim($student['student_name'] . ' ' . $student['father_name']);
 
-    $details = ['summary' => "Member promoted to permanent: $memberName"];
+    $details = ['summary' => "Student promoted to permanent: $memberName"];
     if (is_string($overrideReason) && trim($overrideReason) !== '') {
         $details['override_reason'] = trim($overrideReason);
     }
 
-    logMemberChange($conn, $memberId, 'promoted', $details);
+    logMemberChange($conn, $studentId, 'promoted', $details);
 
-    sendNotification($conn, 'member_promoted',
-        "Member Promoted to Permanent",
-        "$memberName has been promoted to permanent member",
+    sendNotification($conn, 'student_promoted',
+        "Student Promoted to Permanent",
+        "$memberName has been promoted to permanent student",
         [
             'data' => [
-                'member_id' => $memberId,
-                'member_code' => $member['member_code'],
+                'student_id' => $studentId,
+                'student_code' => $student['student_code'],
                 'override_reason' => is_string($overrideReason) ? trim($overrideReason) : null,
             ]
         ]
@@ -632,29 +632,29 @@ function onMemberPromoted($conn, $memberId, $overrideReason = null) {
 }
 
 /**
- * Handle member archival
+ * Handle student archival
  */
-function onMemberArchived($conn, $memberId, $reason = null) {
+function onMemberArchived($conn, $studentId, $reason = null) {
     try {
-    $stmt = $conn->prepare("SELECT student_name, father_name, member_code FROM members WHERE id = ?");
-    $stmt->bind_param("i", $memberId);
+    $stmt = $conn->prepare("SELECT student_name, father_name, student_code FROM students WHERE id = ?");
+    $stmt->bind_param("i", $studentId);
     $stmt->execute();
-    $member = $stmt->get_result()->fetch_assoc();
+    $student = $stmt->get_result()->fetch_assoc();
     
-    if (!$member) return false;
+    if (!$student) return false;
     
-    $memberName = $member['student_name'] . ' ' . $member['father_name'];
+    $memberName = $student['student_name'] . ' ' . $student['father_name'];
     
-    logMemberChange($conn, $memberId, 'archived', [
-        'summary' => "Member archived: $memberName" . ($reason ? " (Reason: $reason)" : "")
+    logMemberChange($conn, $studentId, 'archived', [
+        'summary' => "Student archived: $memberName" . ($reason ? " (Reason: $reason)" : "")
     ]);
     
-    sendNotification($conn, 'member_archived',
-        "Member Archived",
+    sendNotification($conn, 'student_archived',
+        "Student Archived",
         "$memberName has been moved to archive" . ($reason ? " (Reason: $reason)" : ""),
         [
             'priority' => 'normal',
-            'data' => ['member_id' => $memberId, 'reason' => $reason]
+            'data' => ['student_id' => $studentId, 'reason' => $reason]
         ]
     );
     

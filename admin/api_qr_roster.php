@@ -3,15 +3,15 @@
  * ════════════════════════════════════════════════════════════
  * QR Roster Printing (Phase 8 — QR-scan attendance)  [phase8-qr28]
  * ════════════════════════════════════════════════════════════
- * Streams a printable PDF grid of member QR tiles so every
- * department can hand members a scannable code (HR members already
+ * Streams a printable PDF grid of student QR tiles so every
+ * department can hand students a scannable code (HR students already
  * carry one on their ID card; Education and Mezmur get rosters).
  *
  *   GET ?dept=edu&class_id=N[&page=P]
  *   GET ?dept=mezmur|hr&section=S[&page=P]
  *
  * The QR payload is IDENTICAL to the ID-card payload
- *   {SITE_URL}/member.php?code={member_code}
+ *   {SITE_URL}/student.php?code={student_code}
  * i.e. the code is an identifier, never a credential: every scan is
  * re-validated against class/section membership and duplicate rules
  * on the device AND again server-side at sync (defence in depth).
@@ -21,7 +21,7 @@
  *    department ownership enforced (edu_dept prints edu rosters only…),
  *  - per-user rate limit, audit log,
  *  - bounded pages (≤200 tiles) over indexed columns
- *    (class_enrollments idx_ce_member_year_status_id, members
+ *    (class_enrollments idx_ce_student_year_status_id, students
  *    current_section / idx_members_code) — no full-table scans.
  * GET-only: renders nothing mutable, therefore CSRF-free.
  */
@@ -122,12 +122,12 @@ if ($dept === 'edu') {
     $total = (int)$countStmt->get_result()->fetch_assoc()['c'];
 
     $stmt = $conn->prepare(
-        "SELECT m.id, m.student_name, m.member_code
+        "SELECT m.id, m.student_name, m.student_code
          FROM class_enrollments ce
          JOIN academic_years y ON y.id = ce.academic_year_id AND y.is_current = 1
-         JOIN members m ON m.id = ce.member_id
+         JOIN students m ON m.id = ce.student_id
          WHERE ce.class_id = ? AND ce.status = 'active'
-         ORDER BY m.member_code, m.id
+         ORDER BY m.student_code, m.id
          LIMIT ? OFFSET ?"
     );
     $limit = QR_ROSTER_PAGE_SIZE;
@@ -141,7 +141,7 @@ if ($dept === 'edu') {
     $groupLabel = (string)($labelStmt->get_result()->fetch_assoc()['class_name'] ?? ('Class #' . $classId));
 } else {
     $countStmt = $conn->prepare(
-        "SELECT COUNT(*) AS c FROM members
+        "SELECT COUNT(*) AS c FROM students
          WHERE current_section = ? AND status = 'active'"
     );
     $countStmt->bind_param('s', $section);
@@ -149,10 +149,10 @@ if ($dept === 'edu') {
     $total = (int)$countStmt->get_result()->fetch_assoc()['c'];
 
     $stmt = $conn->prepare(
-        "SELECT id, student_name, member_code
-         FROM members
+        "SELECT id, student_name, student_code
+         FROM students
          WHERE current_section = ? AND status = 'active'
-         ORDER BY member_code, id
+         ORDER BY student_code, id
          LIMIT ? OFFSET ?"
     );
     $limit = QR_ROSTER_PAGE_SIZE;
@@ -163,7 +163,7 @@ if ($dept === 'edu') {
 }
 
 if ($total === 0) {
-    qr_roster_fail('No active members in this ' . ($dept === 'edu' ? 'class' : 'section') . '.');
+    qr_roster_fail('No active students in this ' . ($dept === 'edu' ? 'class' : 'section') . '.');
 }
 
 // ── 5. Render the tile grid ──────────────────────────────────
@@ -187,8 +187,8 @@ $pages = (int)ceil($total / QR_ROSTER_PAGE_SIZE);
 $pdf->SetFont('notosansethiopicb', '', 13);
 $pdf->Cell(0, 8, $deptTitle . ' ' . $groupLabel . ' — QR Roster', 0, 1);
 $pdf->SetFont('notosansethiopic', '', 9);
-$pdf->Cell(0, 5, 'Cut the tiles and hand one to each member. Scanned by attendance takers in the mobile app.', 0, 1);
-$pdf->Cell(0, 5, 'Page ' . $page . ' of ' . $pages . ' • ' . $total . ' members • Generated ' . (function_exists('ethio_export_datetime') ? ethio_export_datetime('now') : date('Y-m-d H:i')), 0, 1);
+$pdf->Cell(0, 5, 'Cut the tiles and hand one to each student. Scanned by attendance takers in the mobile app.', 0, 1);
+$pdf->Cell(0, 5, 'Page ' . $page . ' of ' . $pages . ' • ' . $total . ' students • Generated ' . (function_exists('ethio_export_datetime') ? ethio_export_datetime('now') : date('Y-m-d H:i')), 0, 1);
 $pdf->Ln(3);
 
 $tileW = 92; $tileH = 40; $gap = 4;
@@ -196,9 +196,9 @@ $x0 = 10; $y0 = $pdf->GetY();
 $col = 0; $row = 0;
 
 foreach ($rows as $r) {
-    $code = (string)($r['member_code'] ?? '');
+    $code = (string)($r['student_code'] ?? '');
     if ($code === '') {
-        continue; // members without a code cannot carry a QR
+        continue; // students without a code cannot carry a QR
     }
     $x = $x0 + $col * ($tileW + $gap);
     $y = $y0 + $row * ($tileH + $gap);
@@ -211,7 +211,7 @@ foreach ($rows as $r) {
     $pdf->Rect($x, $y, $tileW, $tileH);
 
     // QR (same payload as the ID card): identifier, not a credential.
-    $payload = $baseUrl . '/member.php?code=' . rawurlencode($code);
+    $payload = $baseUrl . '/student.php?code=' . rawurlencode($code);
     $pdf->write2DBarcode($payload, 'QRCODE,M', $x + 2, $y + 3, 26, 26, [], 'N');
 
     $pdf->SetFont('notosansethiopicb', '', 9.5);

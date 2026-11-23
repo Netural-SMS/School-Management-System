@@ -39,13 +39,13 @@ $cfg = [
     'role' => $userRole,
     'departments' => $departments,
     'canClose' => $canClose,
-    'memberUrl' => '/admin/info_manage_member.php?id=',
+    'studentUrl' => '/admin/info_manage_student.php?id=',
     'csrf' => generateCsrfToken(),
     'initial' => [
         'department' => in_array((string)($_GET['department'] ?? ''), $departments, true) ? (string)$_GET['department'] : 'all',
         'status' => in_array((string)($_GET['status'] ?? ''), ['open', 'closed', 'all'], true) ? (string)$_GET['status'] : 'open',
         'id' => (int)($_GET['id'] ?? 0),
-        'member_id' => (int)($_GET['member_id'] ?? 0),
+        'student_id' => (int)($_GET['student_id'] ?? 0),
     ],
 ];
 $assetVer = '20261022p';

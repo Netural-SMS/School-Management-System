@@ -28,7 +28,7 @@ final class GradesPreparationService
             throw new GradesPreparationDenied('PREPARATION_BOUND_AUTH_REQUIRED');
         }
         $tables = ['users','academic_years','api_refresh_sessions','classes','teacher_assignments',
-            'class_enrollments','members','subjects','assessments','academic_terms'];
+            'class_enrollments','students','subjects','assessments','academic_terms'];
         $issuedAt = time();
         $today = SchoolCalendarService::today();
         $knownDenial = null;
@@ -76,7 +76,7 @@ final class GradesPreparationService
                     foreach ($terms as &$t) { $t['id']=(int)$t['id']; $t['term_number']=(int)$t['term_number']; $t['is_current']=(bool)$t['is_current']; $t['is_reopened']=(bool)$t['is_reopened']; }
                     unset($t);
                 } catch (\Throwable $_) { $terms = []; }
-                $members = []; $preparedClasses = [];
+                $students = []; $preparedClasses = [];
                 foreach ($classes as $i => $class) {
                     $classId = $classIds[$i];
                     $rosterYear = EnrollmentService::resolvePreparationRosterYear($db,$classId,$yearId);
@@ -86,8 +86,8 @@ final class GradesPreparationService
                     for ($d = new \DateTimeImmutable($from); $d->format('Y-m-d') <= $to; $d = $d->modify('+1 day')) { $dates[] = $d->format('Y-m-d'); }
                     $roster = EnrollmentService::fetchPreparationRosterDates($db,$classId,$rosterYear['year_id'],$dates);
                     $uniqueMemberIds = [];
-                    foreach ($roster['dates'] as $day) { foreach ($day['member_ids'] as $mid) $uniqueMemberIds[$mid]=true; }
-                    foreach ($roster['members'] as $member) { $members[$member['member_id']] = $member; }
+                    foreach ($roster['dates'] as $day) { foreach ($day['student_ids'] as $mid) $uniqueMemberIds[$mid]=true; }
+                    foreach ($roster['students'] as $student) { $students[$student['student_id']] = $student; }
                     $subjects = [];
                     if ($classRestricted) {
                         $subjects = self::rows($db,
@@ -114,20 +114,20 @@ final class GradesPreparationService
                             $a['id']=(int)$a['id']; $a['subject_id']=(int)$a['subject_id']; $a['max_score']=(float)$a['max_score']; $a['weight_percentage']=(float)$a['weight_percentage']; $a['assessment_order']=(int)$a['assessment_order']; $a['is_published']=(bool)$a['is_published'];
                         } unset($a);
                     }
-                    // Parity+compat: classes.section/ class_name_en may be NULL/'' (DEFAULT NULL) — sanitize like member fields; '—' keeps old APKs (strict) from aborting whole payload.
+                    // Parity+compat: classes.section/ class_name_en may be NULL/'' (DEFAULT NULL) — sanitize like student fields; '—' keeps old APKs (strict) from aborting whole payload.
                     $preparedClasses[] = ['class_id'=>$classId,'class_name'=>self::sanitizePrepString((string)$class['class_name'],150) ?: '—',
                         'class_name_en'=>self::sanitizePrepString((string)$class['class_name_en'],150) ?: '—','section'=>self::sanitizePrepString((string)$class['section'],50) ?: '—',
                         'write_year_id'=>$yearId,'roster_year_id'=>$rosterYear['year_id'],
-                        'roster_fallback'=>$rosterYear['fallback'],'member_ids'=>array_keys($uniqueMemberIds),
+                        'roster_fallback'=>$rosterYear['fallback'],'student_ids'=>array_keys($uniqueMemberIds),
                         'subjects'=>$subjects,'assessments'=>$assessments];
                 }
                 if (SchoolCalendarService::today() !== $today) throw new \RuntimeException('Preparation calendar clock changed; retry.');
-                ksort($members,SORT_NUMERIC);
+                ksort($students,SORT_NUMERIC);
                 $yearEnd = (new \DateTimeImmutable($yearTo.' 23:59:59',new \DateTimeZone('Africa/Addis_Ababa')))->getTimestamp();
                 return ['preparation_version'=>1,'complete'=>true,'owner_user_id'=>$uid,'authorization_version'=>$av,
                     'role'=>$role,'family_id'=>$fid,'issued_at'=>$issuedAt,'deadline'=>min($issuedAt+30*86400,$yearEnd),
                     'server_today'=>$today,'write_year'=>['id'=>$yearId,'from'=>$yearFrom,'to'=>$yearTo,'status'=>'active'],
-                    'terms'=>$terms,'members'=>array_values($members),'classes'=>$preparedClasses];
+                    'terms'=>$terms,'students'=>array_values($students),'classes'=>$preparedClasses];
             });
         } catch (\Throwable $error) {
             if ($knownDenial !== null) throw $knownDenial;

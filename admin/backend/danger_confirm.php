@@ -30,7 +30,7 @@ if (!function_exists('dc_phrases')) {
             'test_seed.clear'           => 'REMOVE PRACTICE MEMBERS',
             'app_release.delete_apk'    => 'DELETE APK',
             'app_release.force_update'  => 'FORCE UPDATE',
-            'members.import'            => 'IMPORT MEMBERS',
+            'students.import'            => 'IMPORT MEMBERS',
             'guardians.link_all'        => 'LINK ALL',
             'finance.delete_transaction'=> 'DELETE TRANSACTION',
             'groups.delete_group'       => 'DELETE GROUP',

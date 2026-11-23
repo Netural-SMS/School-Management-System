@@ -8,12 +8,12 @@ final class BrowserPageRoutes
     // resolve exactly as they do when the legacy script is requested directly.
     private const PAGES = [
         '/' => '/index.php',
-        '/verify-member' => '/member.php',
+        '/verify-student' => '/student.php',
         '/admin/login' => '/admin/index.php',
         '/admin/dashboard' => '/admin/dashboard.php',
         '/admin/account' => '/admin/account.php',
-        '/admin/member' => '/admin/info_manage_member.php',
-        '/admin/member-print' => '/admin/print_member.php',
+        '/admin/student' => '/admin/info_manage_student.php',
+        '/admin/student-print' => '/admin/print_student.php',
         '/admin/messages' => '/admin/messages.php',
         '/admin/notifications' => '/admin/notifications.php',
         '/admin/groups' => '/admin/groups.php',

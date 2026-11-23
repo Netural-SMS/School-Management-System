@@ -14,7 +14,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/backend/member_sync.php';
+require_once __DIR__ . '/backend/student_sync.php';
 require_once __DIR__ . '/backend/services/AssignmentService.php';
 require_once __DIR__ . '/backend/services/ProfileService.php';
 require_once __DIR__ . '/backend/services/AccountCredentialService.php';
@@ -56,7 +56,7 @@ requirePostActions($action, ['create_teacher', 'update_teacher', 'toggle_status'
 
 // Migration-backed compatibility helper; avoids per-request schema inspection.
 function _teacherSafeColExists($conn, $table, $col) {
-    return $table === 'users' && in_array($col, ['member_id', 'last_login'], true);
+    return $table === 'users' && in_array($col, ['student_id', 'last_login'], true);
 }
 
 /** Consume reset buckets before any existing-account profile fields change. */
@@ -162,15 +162,15 @@ switch ($action) {
         // Migration 006 guarantees assignment storage.
         $hasTaTable = true;
         
-        // Check if member_id and last_login columns exist
-        $hasMemberId = _teacherSafeColExists($conn, 'users', 'member_id');
+        // Check if student_id and last_login columns exist
+        $hasMemberId = _teacherSafeColExists($conn, 'users', 'student_id');
         $hasLastLogin = _teacherSafeColExists($conn, 'users', 'last_login');
         
-        $memberIdCol = $hasMemberId ? "u.member_id," : "";
+        $studentIdCol = $hasMemberId ? "u.student_id," : "";
         $lastLoginCol = $hasLastLogin ? "u.last_login," : "";
-        $memberJoin = $hasMemberId ? "LEFT JOIN members m ON u.member_id = m.id" : "";
-        $memberCols = $hasMemberId ? "m.student_name as member_name, m.father_name as member_father,
-                    m.phone_number as member_phone, m.member_code," : "";
+        $memberJoin = $hasMemberId ? "LEFT JOIN students m ON u.student_id = m.id" : "";
+        $memberCols = $hasMemberId ? "m.student_name as student_name, m.father_name as student_father,
+                    m.phone_number as student_phone, m.student_code," : "";
         
         if ($hasTaTable) {
             $assignedClasses = "(SELECT COUNT(DISTINCT ta.class_id) FROM teacher_assignments ta 
@@ -184,7 +184,7 @@ switch ($action) {
         
         $select = "SELECT 
                     u.id, u.username, u.email, u.full_name, u.is_active, 
-                    $memberIdCol u.created_at, $lastLoginCol
+                    $studentIdCol u.created_at, $lastLoginCol
                     $memberCols
                     $assignedClasses
                     $assignedSubjects ";
@@ -206,7 +206,7 @@ switch ($action) {
             $bind = [$st, $st, $st];
             $types = 'sss';
             if ($hasMemberId) {
-                $sql .= " OR m.member_code LIKE ? OR m.student_name LIKE ?";
+                $sql .= " OR m.student_code LIKE ? OR m.student_name LIKE ?";
                 $bind[] = $st;
                 $bind[] = $st;
                 $types .= 'ss';
@@ -278,15 +278,15 @@ switch ($action) {
         }
         
         // Get teacher info (use safe column references)
-        $hasMemberId = _teacherSafeColExists($conn, 'users', 'member_id');
-        $memberIdRef = $hasMemberId ? "u.member_id," : "";
-        $memberJoinRef = $hasMemberId ? "LEFT JOIN members m ON u.member_id = m.id" : "";
-        $memberColsRef = $hasMemberId ? "m.student_name as member_name, m.father_name as member_father,
-                   m.phone_number, m.member_code" : "NULL as member_name, NULL as member_father,
-                   NULL as phone_number, NULL as member_code";
+        $hasMemberId = _teacherSafeColExists($conn, 'users', 'student_id');
+        $studentIdRef = $hasMemberId ? "u.student_id," : "";
+        $memberJoinRef = $hasMemberId ? "LEFT JOIN students m ON u.student_id = m.id" : "";
+        $memberColsRef = $hasMemberId ? "m.student_name as student_name, m.father_name as student_father,
+                   m.phone_number, m.student_code" : "NULL as student_name, NULL as student_father,
+                   NULL as phone_number, NULL as student_code";
         
         $stmt = $conn->prepare("
-            SELECT u.id, u.username, u.email, u.full_name, u.is_active, $memberIdRef u.created_at,
+            SELECT u.id, u.username, u.email, u.full_name, u.is_active, $studentIdRef u.created_at,
                    $memberColsRef
             FROM users u
             $memberJoinRef
@@ -347,7 +347,7 @@ switch ($action) {
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $phone = trim($_POST['phone'] ?? '');
-        $memberId = !empty($_POST['member_id']) ? (int)$_POST['member_id'] : null;
+        $studentId = !empty($_POST['student_id']) ? (int)$_POST['student_id'] : null;
         
         // Validation
         if (empty($fullName) || empty($username) || empty($password)) {
@@ -386,18 +386,18 @@ switch ($action) {
         
         // Insert teacher
         $stmt = $conn->prepare("
-            INSERT INTO users (username, email, full_name, role, password_hash, is_active, member_id)
+            INSERT INTO users (username, email, full_name, role, password_hash, is_active, student_id)
             VALUES (?, ?, ?, 'teacher', ?, 1, ?)
         ");
         $emailDb = !empty($email) ? $email : null;
-        $stmt->bind_param("ssssi", $username, $emailDb, $fullName, $passwordHash, $memberId);
+        $stmt->bind_param("ssssi", $username, $emailDb, $fullName, $passwordHash, $studentId);
         
         if ($stmt->execute()) {
             $newTeacherId = $conn->insert_id;
             
-            // If linked to a member, sync teacher flag/position, not manual member type.
-            if ($memberId) {
-                syncMemberTeacherFlag($conn, $memberId, true);
+            // If linked to a student, sync teacher flag/position, not manual student type.
+            if ($studentId) {
+                syncMemberTeacherFlag($conn, $studentId, true);
             }
             
             echo json_encode([
@@ -424,7 +424,7 @@ switch ($action) {
         $fullName = trim($_POST['full_name'] ?? '');
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $memberId = !empty($_POST['member_id']) ? (int)$_POST['member_id'] : null;
+        $studentId = !empty($_POST['student_id']) ? (int)$_POST['student_id'] : null;
         $newPassword = $_POST['new_password'] ?? '';
         
         if (!$teacherId || empty($fullName) || empty($username)) {
@@ -433,7 +433,7 @@ switch ($action) {
         }
         
         // Get current teacher data
-        $stmt = $conn->prepare("SELECT member_id, username FROM users WHERE id = ? AND role = 'teacher'");
+        $stmt = $conn->prepare("SELECT student_id, username FROM users WHERE id = ? AND role = 'teacher'");
         $stmt->bind_param("i", $teacherId);
         $stmt->execute();
         $currentTeacher = $stmt->get_result()->fetch_assoc();
@@ -482,13 +482,13 @@ switch ($action) {
             $fullName,
             $username,
             $emailDb,
-            $memberId,
+            $studentId,
             $teacherId,
             $currentTeacher
         ): void {
             $statement = $conn->prepare(
                 'UPDATE users
-                    SET full_name = ?, username = ?, email = ?, member_id = ?
+                    SET full_name = ?, username = ?, email = ?, student_id = ?
                   WHERE id = ?'
             );
             if (!$statement) {
@@ -501,7 +501,7 @@ switch ($action) {
                 $fullName,
                 $username,
                 $emailDb,
-                $memberId,
+                $studentId,
                 $teacherId
             );
             $updated = $statement->execute();
@@ -537,14 +537,14 @@ switch ($action) {
             exit;
         }
 
-        // Preserve established member/position convergence after the atomic
+        // Preserve established student/position convergence after the atomic
         // account+credential commit; that subsystem owns its own transaction.
-        $oldMemberId = (int)($currentTeacher['member_id'] ?? 0);
-        if ($oldMemberId > 0 && $oldMemberId !== (int)$memberId) {
+        $oldMemberId = (int)($currentTeacher['student_id'] ?? 0);
+        if ($oldMemberId > 0 && $oldMemberId !== (int)$studentId) {
             syncMemberTeacherFlag($conn, $oldMemberId, false);
         }
-        if ($memberId) {
-            syncMemberTeacherFlag($conn, (int)$memberId, true);
+        if ($studentId) {
+            syncMemberTeacherFlag($conn, (int)$studentId, true);
         }
 
         echo json_encode(['status' => 'success', 'message' => 'Teacher updated successfully!']);
@@ -566,7 +566,7 @@ switch ($action) {
             exit;
         }
         
-        $stmt = $conn->prepare("SELECT is_active, member_id FROM users WHERE id = ? AND role = 'teacher'");
+        $stmt = $conn->prepare("SELECT is_active, student_id FROM users WHERE id = ? AND role = 'teacher'");
         $stmt->bind_param("i", $teacherId);
         $stmt->execute();
         $teacher = $stmt->get_result()->fetch_assoc();
@@ -603,8 +603,8 @@ switch ($action) {
                     'user',
                     $teacherId
                 );
-                if (!empty($teacher['member_id'])) {
-                    syncMemberTeacherFlag($conn, (int)$teacher['member_id'], false);
+                if (!empty($teacher['student_id'])) {
+                    syncMemberTeacherFlag($conn, (int)$teacher['student_id'], false);
                 }
                 $message = 'Teacher deactivated — ' . count($ids) . ' assignment(s) paused. Reactivating will restore them.';
             } else {
@@ -617,8 +617,8 @@ switch ($action) {
                     'user',
                     $teacherId
                 );
-                if (!empty($teacher['member_id'])) {
-                    syncMemberTeacherFlag($conn, (int)$teacher['member_id'], true);
+                if (!empty($teacher['student_id'])) {
+                    syncMemberTeacherFlag($conn, (int)$teacher['student_id'], true);
                 }
                 $message = $restored > 0
                     ? "Teacher activated — {$restored} assignment(s) restored."
@@ -657,8 +657,8 @@ switch ($action) {
             respondApiError('You cannot remove your own account here. Ask another administrator.', 422, 'self_delete');
         }
         
-        // Get member_id before removal
-        $stmt = $conn->prepare("SELECT member_id FROM users WHERE id = ? AND role = 'teacher'");
+        // Get student_id before removal
+        $stmt = $conn->prepare("SELECT student_id FROM users WHERE id = ? AND role = 'teacher'");
         $stmt->bind_param("i", $teacherId);
         $stmt->execute();
         $teacher = $stmt->get_result()->fetch_assoc();
@@ -700,9 +700,9 @@ switch ($action) {
             $teacherId
         );
 
-        // Sync the teacher flag/position; preserve the manually selected member type.
-        if ($teacher['member_id']) {
-            syncMemberTeacherFlag($conn, (int)$teacher['member_id'], false);
+        // Sync the teacher flag/position; preserve the manually selected student type.
+        if ($teacher['student_id']) {
+            syncMemberTeacherFlag($conn, (int)$teacher['student_id'], false);
         }
         
         $hadHistory = false;
@@ -912,7 +912,7 @@ switch ($action) {
         break;
 
     // ============================================================
-    // GET MEMBERS FOR LINKING (Teachers who are also members)
+    // GET MEMBERS FOR LINKING (Teachers who are also students)
     // ============================================================
     case 'get_members_for_linking':
         if ($isTeacher) {
@@ -920,22 +920,22 @@ switch ($action) {
             exit;
         }
         
-        // Get adult members who could be teachers
+        // Get adult students who could be teachers
         $result = $conn->query("
-            SELECT id, member_code, student_name, father_name, grandfather_name, phone_number
-            FROM members 
+            SELECT id, student_code, student_name, father_name, grandfather_name, phone_number
+            FROM students 
             WHERE status = 'active' 
-            AND (age_group = '18+' OR age_group IS NULL OR TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) >= 18)
+            AND (OR age_group IS NULL OR TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) >= 18)
             ORDER BY student_name
             LIMIT 500
         ");
         
-        $members = [];
+        $students = [];
         while ($row = $result->fetch_assoc()) {
-            $members[] = $row;
+            $students[] = $row;
         }
         
-        echo json_encode(['status' => 'success', 'members' => $members]);
+        echo json_encode(['status' => 'success', 'students' => $students]);
         break;
 
     // ============================================================
@@ -948,37 +948,37 @@ switch ($action) {
         }
         $q = trim((string)($_GET['q'] ?? ''));
         if (strlen($q) < 1) {
-            echo json_encode(['status' => 'success', 'members' => []]);
+            echo json_encode(['status' => 'success', 'students' => []]);
             break;
         }
         $st = '%' . $q . '%';
         $limit = 15;
         $stmt = $conn->prepare(
-            "SELECT id, member_code, student_name, father_name
-             FROM members
+            "SELECT id, student_code, student_name, father_name
+             FROM students
              WHERE status = 'active'
-               AND (student_name LIKE ? OR father_name LIKE ? OR member_code LIKE ? OR baptismal_name LIKE ?)
+               AND (student_name LIKE ? OR father_name LIKE ? OR student_code LIKE ? OR baptismal_name LIKE ?)
              ORDER BY student_name
              LIMIT ?"
         );
         if (!$stmt) {
-            echo json_encode(['status' => 'success', 'members' => []]);
+            echo json_encode(['status' => 'success', 'students' => []]);
             break;
         }
         $stmt->bind_param('ssssi', $st, $st, $st, $st, $limit);
         $stmt->execute();
-        $members = [];
+        $students = [];
         $r = $stmt->get_result();
         while ($row = $r->fetch_assoc()) {
-            $members[] = [
+            $students[] = [
                 'id' => (int)$row['id'],
-                'member_code' => $row['member_code'] ?? '',
+                'student_code' => $row['student_code'] ?? '',
                 'student_name' => $row['student_name'] ?? '',
                 'father_name' => $row['father_name'] ?? '',
             ];
         }
         $stmt->close();
-        echo json_encode(['status' => 'success', 'members' => $members], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['status' => 'success', 'students' => $students], JSON_UNESCAPED_UNICODE);
         break;
 
     // ============================================================
@@ -995,7 +995,7 @@ switch ($action) {
         $username = trim((string)($_POST['username'] ?? ''));
         $email = trim((string)($_POST['email'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
-        $memberId = !empty($_POST['member_id']) ? (int)$_POST['member_id'] : null;
+        $studentId = !empty($_POST['student_id']) ? (int)$_POST['student_id'] : null;
         $dutiesRaw = $_POST['duties'] ?? '[]';
         $duties = is_array($dutiesRaw) ? $dutiesRaw : (json_decode((string)$dutiesRaw, true) ?: []);
         // One-form payload: assignments[{class_id,subject_id}] + homeroom_class_ids[]
@@ -1040,15 +1040,15 @@ switch ($action) {
             _teacherEnforcePasswordResetRateLimit();
         }
 
-        if ($memberId) {
-            $mchk = $conn->prepare("SELECT id, student_name, status FROM members WHERE id = ? LIMIT 1");
+        if ($studentId) {
+            $mchk = $conn->prepare("SELECT id, student_name, status FROM students WHERE id = ? LIMIT 1");
             if ($mchk) {
-                $mchk->bind_param('i', $memberId);
+                $mchk->bind_param('i', $studentId);
                 $mchk->execute();
                 $mrow = $mchk->get_result()->fetch_assoc();
                 $mchk->close();
                 if (!$mrow || ($mrow['status'] ?? '') === 'archived') {
-                    echo json_encode(['status' => 'error', 'message' => 'That member was not found.']);
+                    echo json_encode(['status' => 'error', 'message' => 'That student was not found.']);
                     exit;
                 }
                 if ($fullName === '') {
@@ -1082,7 +1082,7 @@ switch ($action) {
         $created = false;
 
         if ($teacherId > 0) {
-            $cur = $conn->prepare("SELECT id, member_id FROM users WHERE id = ? AND role = 'teacher' LIMIT 1");
+            $cur = $conn->prepare("SELECT id, student_id FROM users WHERE id = ? AND role = 'teacher' LIMIT 1");
             $cur->bind_param('i', $teacherId);
             $cur->execute();
             $current = $cur->get_result()->fetch_assoc();
@@ -1097,13 +1097,13 @@ switch ($action) {
                 $fullName,
                 $username,
                 $emailDb,
-                $memberId,
+                $studentId,
                 $teacherId,
                 $current
             ): void {
                 $statement = $conn->prepare(
                     'UPDATE users
-                        SET full_name = ?, username = ?, email = ?, member_id = ?
+                        SET full_name = ?, username = ?, email = ?, student_id = ?
                       WHERE id = ?'
                 );
                 if (!$statement) {
@@ -1116,7 +1116,7 @@ switch ($action) {
                     $fullName,
                     $username,
                     $emailDb,
-                    $memberId,
+                    $studentId,
                     $teacherId
                 );
                 $updated = $statement->execute();
@@ -1157,10 +1157,10 @@ switch ($action) {
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $conn->prepare(
-                "INSERT INTO users (username, email, full_name, role, password_hash, is_active, member_id)
+                "INSERT INTO users (username, email, full_name, role, password_hash, is_active, student_id)
                  VALUES (?, ?, ?, 'teacher', ?, 1, ?)"
             );
-            $stmt->bind_param('ssssi', $username, $emailDb, $fullName, $hash, $memberId);
+            $stmt->bind_param('ssssi', $username, $emailDb, $fullName, $hash, $studentId);
             if (!$stmt->execute()) {
                 echo json_encode(['status' => 'error', 'message' => 'Could not create teacher login.']);
                 exit;
@@ -1170,17 +1170,17 @@ switch ($action) {
             $created = true;
         }
 
-        // Preserve established member/position convergence after the atomic
+        // Preserve established student/position convergence after the atomic
         // existing-account update. Position synchronization may start its own
         // transaction and therefore cannot run inside the credential boundary.
         if (!$created) {
-            $oldMid = (int)($current['member_id'] ?? 0);
-            if ($oldMid > 0 && $oldMid !== (int)$memberId) {
+            $oldMid = (int)($current['student_id'] ?? 0);
+            if ($oldMid > 0 && $oldMid !== (int)$studentId) {
                 syncMemberTeacherFlag($conn, $oldMid, false);
             }
         }
-        if ($memberId) {
-            syncMemberTeacherFlag($conn, (int)$memberId, true);
+        if ($studentId) {
+            syncMemberTeacherFlag($conn, (int)$studentId, true);
         }
 
         $assigned = 0;

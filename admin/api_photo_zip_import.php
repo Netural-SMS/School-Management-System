@@ -9,7 +9,7 @@
  * PhotoUploadService::ingestFromFile() so they land through the same
  * receipt+candidate pipeline as online syncs.
  *
- * After commit, the ZIP is moved into admin/uploads/members/photo_imports/
+ * After commit, the ZIP is moved into admin/uploads/students/photo_imports/
  * for audit; on failure the temp dir is cleaned up.
  *
  * Access: super_admin, school_admin, info_dept, hr_dept, photo_importer.
@@ -204,8 +204,8 @@ function handleUpload(int $operatorId): void {
         foreach ($photos as $p) {
             $seq++;
             $arcPath = (string)($p['arc_path'] ?? '');
-            $memberCode = (string)($p['member_code'] ?? '');
-            $memberId = (int)($p['member_id'] ?? 0);
+            $memberCode = (string)($p['student_code'] ?? '');
+            $studentId = (int)($p['student_id'] ?? 0);
             $field = (string)($p['field'] ?? 'student_photo');
             if (!in_array($field, ['student_photo','guardian_photo'], true)) $field = 'student_photo';
             $sha = strtolower((string)($p['sha256'] ?? ''));
@@ -215,8 +215,8 @@ function handleUpload(int $operatorId): void {
 
             // Create the import item row first so ingestFromFile can back-link.
             $conn->query('INSERT INTO photo_import_items
-                (batch_id, seq, member_id, field, sha256, decision, created_at)
-                VALUES ('.$batchId.', '.$seq.', '.($memberId>0?$memberId:'NULL').',
+                (batch_id, seq, student_id, field, sha256, decision, created_at)
+                VALUES ('.$batchId.', '.$seq.', '.($studentId>0?$studentId:'NULL').',
                 "'.$conn->real_escape_string($field).'", "'.$conn->real_escape_string($sha).'",
                 "pending", NOW())');
             $itemId = (int)$conn->insert_id;
@@ -241,23 +241,23 @@ function handleUpload(int $operatorId): void {
                     if ($height <= 0) $height = (int)$dims[1];
                 }
             }
-            // Resolve member_id by code if not trusted (defense: trust client member_id
-            // but cross-check; resolve via member_code when possible).
+            // Resolve student_id by code if not trusted (defense: trust client student_id
+            // but cross-check; resolve via student_code when possible).
             if ($memberCode !== '') {
                 $resolved = resolveMemberIdByCode($conn, $memberCode);
-                if ($resolved !== null) $memberId = $resolved;
+                if ($resolved !== null) $studentId = $resolved;
             }
 
-            if ($memberId <= 0 || !is_file($srcPath)) {
+            if ($studentId <= 0 || !is_file($srcPath)) {
                 $results[] = ['seq'=>$seq,'code'=>$memberCode,'status'=>'skipped',
-                    'reason'=>$memberId<=0?'member_not_found':'file_missing'];
-                $errors[] = "Seq $seq ($memberCode): ".($memberId<=0?'member not found':'file missing in ZIP');
+                    'reason'=>$studentId<=0?'student_not_found':'file_missing'];
+                $errors[] = "Seq $seq ($memberCode): ".($studentId<=0?'student not found':'file missing in ZIP');
                 $conn->query("UPDATE photo_import_items SET decision='failed' WHERE id=$itemId");
                 continue;
             }
 
             $res = PhotoUploadService::ingestFromFile($conn, [
-                'member_id' => $memberId,
+                'student_id' => $studentId,
                 'operator_admin_id' => $operatorId,
                 'device_id' => $deviceId,
                 'client_op_id' => $clientOpId,
@@ -275,7 +275,7 @@ function handleUpload(int $operatorId): void {
                 $decision = !empty($res['conflict']) ? 'conflict' : 'accepted';
                 $receiptId = (int)($res['receipt_id'] ?? 0);
                 $conn->query("UPDATE photo_import_items SET decision='$decision',
-                    resolved_member_id=$memberId, receipt_id=$receiptId WHERE id=$itemId");
+                    resolved_student_id=$studentId, receipt_id=$receiptId WHERE id=$itemId");
                 $results[] = ['seq'=>$seq,'code'=>$memberCode,'status'=>$decision,
                     'receipt_id'=>$receiptId, 'replayed'=>!empty($res['replayed'])];
             } else {
@@ -292,7 +292,7 @@ function handleUpload(int $operatorId): void {
             WHERE id=$batchId");
 
         // Archive the ZIP.
-        $archiveDir = __DIR__ . '/uploads/members/photo_imports';
+        $archiveDir = __DIR__ . '/uploads/students/photo_imports';
         if (!is_dir($archiveDir)) @mkdir($archiveDir, 0755, true);
         $archivePath = $archiveDir . '/' . $batchUuid . '.zip';
         @move_uploaded_file($tmp, $archivePath); // source may already be gone; fall back to copy
@@ -340,7 +340,7 @@ function handleRecent(int $operatorId): void {
 }
 
 function resolveMemberIdByCode(mysqli $conn, string $code): ?int {
-    $stmt = $conn->prepare('SELECT id FROM members WHERE member_code = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id FROM students WHERE student_code = ? LIMIT 1');
     $stmt->bind_param('s', $code);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();

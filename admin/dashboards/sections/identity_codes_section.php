@@ -14,17 +14,17 @@
  *   * destructive/execute flows use an inline modal, never blocking dialogs;
  *   * forms reset and lists refresh on success.
  */
-use App\Services\MemberCategory;
+use App\Services\StudentCategory;
 
-require_once __DIR__ . '/../../backend/services/MemberCategory.php';
+require_once __DIR__ . '/../../backend/services/StudentCategory.php';
 
 $idcCategories = [];
-foreach (MemberCategory::letters() as $idcLetter) {
+foreach (StudentCategory::letters() as $idcLetter) {
     $idcCategories[] = [
         'letter' => $idcLetter,
-        'group' => MemberCategory::groupFor($idcLetter),
-        'label_am' => MemberCategory::labelAm($idcLetter),
-        'label_en' => MemberCategory::labelEn($idcLetter),
+        'group' => StudentCategory::groupFor($idcLetter),
+        'label_am' => StudentCategory::labelAm($idcLetter),
+        'label_en' => StudentCategory::labelEn($idcLetter),
     ];
 }
 ?>
@@ -84,7 +84,7 @@ foreach (MemberCategory::letters() as $idcLetter) {
     <div class="idc-pane active" id="idc-pane-departments">
         <div class="card">
             <h3 class="card-title"><i class="fa-solid fa-plus"></i> Add / Edit Department</h3>
-            <p class="idc-muted">Department codes become the middle of staff codes (EDH = Education head, ED<span class="mc-min">N</span> = ordinary member). 1–4 letters A–Z.</p>
+            <p class="idc-muted">Department codes become the middle of staff codes (EDH = Education head, ED<span class="mc-min">N</span> = ordinary student). 1–4 letters A–Z.</p>
             <form id="idcDeptForm" class="idc-rowform" autocomplete="off">
                 <input type="hidden" name="id" value="0">
                 <div><label class="form-label">Code *</label><input class="form-input" name="code" maxlength="4" pattern="[A-Za-z]{1,4}" required placeholder="ED" style="text-transform:uppercase"></div>
@@ -144,9 +144,9 @@ foreach (MemberCategory::letters() as $idcLetter) {
         <div class="card">
             <h3 class="card-title"><i class="fa-solid fa-arrows-rotate"></i> Format v2 renumbering</h3>
             <p style="font-size:.8rem;color:#cbd5e1;margin:.4rem 0 .8rem">
-                Issues the new code shape to every member: students <span class="idc-codechip">A-76392</span>,
+                Issues the new code shape to every student: students <span class="idc-codechip">A-76392</span>,
                 staff <span class="idc-codechip">DEDHT-98798</span> with a fresh random 5-digit tail.
-                Old codes are preserved in <span class="idc-codechip" style="font-size:.68rem">legacy_member_code</span>,
+                Old codes are preserved in <span class="idc-codechip" style="font-size:.68rem">legacy_student_code</span>,
                 QR images regenerated. Already-correct codes are skipped (safe to re-run).
             </p>
             <div class="idc-actions" style="margin-bottom:.75rem">
@@ -323,7 +323,7 @@ async function renderDepartments(){
             const ok = (window.DangerConfirm && window.DangerConfirm.ask) ? await window.DangerConfirm.ask({tier:'medium', title:'Deactivate department ' + nm + '?', object: nm,
                 summary:'The department is hidden from new codes and position lists.', intent:'I want to deactivate this department',
                 consequences:['New identity codes and positions can no longer use this department.','It disappears from the department and position pickers.'],
-                keeps:['Existing member codes that contain it keep working.','You can activate it again by editing it.'],
+                keeps:['Existing student codes that contain it keep working.','You can activate it again by editing it.'],
                 phrase:'DEACTIVATE DEPARTMENT', confirmLabel:'Deactivate department'}) : (toast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.', false), false);
             if (!ok) return;
             const r2 = await apiPost('delete_department', {id: d.id});
@@ -411,10 +411,10 @@ $('idcPosForm').addEventListener('submit', (ev) => {
 /* ── membership types ─────────────────────────────────────────────── */
 async function renderTypes(){
     loaded.types = true;
-    const r = await apiGet('list_member_types');
+    const r = await apiGet('list_student_types');
     if (r.status !== 'success'){ msg($('idcTypeMsg'), r.message, false); tableError('idcTypeRows', 4, r.message); loaded.types = false; return; }
     const tbody = $('idcTypeRows'); tbody.innerHTML = '';
-    (r.member_types || []).forEach(t => {
+    (r.student_types || []).forEach(t => {
         const tr = document.createElement('tr');
         tr.innerHTML =
             '<td><span class="idc-codechip">' + esc(t.type_key) + '</span></td>' +
@@ -422,7 +422,7 @@ async function renderTypes(){
             '<td><input class="form-input" style="max-width:260px" data-k="en" maxlength="150" value="' + esc(t.label_en) + '"></td>' +
             '<td style="text-align:right"><button class="btn btn-primary btn-sm" type="button">Save</button></td>';
         tr.querySelector('button').addEventListener('click', (e) => busy(e.currentTarget, async () => {
-            const r2 = await apiPost('save_member_type', {
+            const r2 = await apiPost('save_student_type', {
                 type_key: t.type_key,
                 label_am: tr.querySelector('[data-k=am]').value,
                 label_en: tr.querySelector('[data-k=en]').value
@@ -439,10 +439,10 @@ async function runMigration(mode, btn){
     await busy(btn, async () => {
         if (mode === 'execute'){
             if (!(window.DangerConfirm && window.DangerConfirm.ask)) { toast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.', false); return; }
-            const dc = await window.DangerConfirm.ask({tier:'high', title:'Renumber every member identity code?', object:'All members',
-                summary:'Every member gets a NEW identity code. Run "Preview" first to see how many change.', intent:'I want to renumber all codes',
-                consequences:['Every member\'s identity code is re-issued with the current numbering rules.','All QR codes are regenerated: printed ID cards show the OLD code and should be re-printed.','People and lists that use the old codes must switch to the new ones.'],
-                keeps:['Old codes are kept as legacy codes, so scanning an old card still finds the member.','Member records themselves are not changed.'],
+            const dc = await window.DangerConfirm.ask({tier:'high', title:'Renumber every student identity code?', object:'All students',
+                summary:'Every student gets a NEW identity code. Run "Preview" first to see how many change.', intent:'I want to renumber all codes',
+                consequences:['Every student\'s identity code is re-issued with the current numbering rules.','All QR codes are regenerated: printed ID cards show the OLD code and should be re-printed.','People and lists that use the old codes must switch to the new ones.'],
+                keeps:['Old codes are kept as legacy codes, so scanning an old card still finds the student.','Student records themselves are not changed.'],
                 irreversible:true, phrase:'RENUMBER CODES', confirmLabel:'Renumber all codes'});
             if (!dc) { msg($('idcMigMsg'), 'Cancelled — nothing was changed.', false); return; }
             window.__idcPhrase = dc.phrase;

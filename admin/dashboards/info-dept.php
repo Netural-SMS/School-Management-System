@@ -58,7 +58,7 @@ function db_fetch_all_assoc(mysqli $conn, string $sql, array $params = []): arra
 }
 
 // ------------------------------------------------------------
-// Live data: members, stats, recent
+// Live data: students, stats, recent
 // ------------------------------------------------------------
 $membersList = [];
 $recentMembers = [];
@@ -77,14 +77,14 @@ $statusCounts = [
 
 $totalMembers = 0;
 $memberTypeRegular = 0;
-$memberTypeSpecial = 0; // member_type = special_regular (student + role)
+$memberTypeSpecial = 0; // student_type = special_regular (student + role)
 $memberTypeWaiting = 0; // registration waiting (no ID yet)
 $memberTypeHonor   = 0;
 
 $atRiskStudents = 0; // placeholder: define logic later
 
 if (isset($conn)) {
-    // The full directory is fetched on demand by MemberDirectoryService. Do not
+    // The full directory is fetched on demand by StudentDirectoryService. Do not
     // embed a second sensitive roster in the dashboard response.
 
     // Recent 10
@@ -93,12 +93,10 @@ if (isset($conn)) {
         "SELECT 
             student_name,
             father_name,
-            grandfather_name,
-            member_type,
+            grandfather_name, 
             status,
-            current_section,
             created_at
-         FROM members
+         FROM students
          WHERE status != 'archived'
          ORDER BY id DESC
          LIMIT 10"
@@ -109,9 +107,9 @@ if (isset($conn)) {
         $conn,
         "SELECT 
             SUM(status != 'archived')           AS total_members,
-            SUM(member_type='regular' AND status != 'archived')      AS regular_cnt,
-            SUM(member_type='special_regular' AND status != 'archived') AS special_cnt,
-            SUM(member_type='honorary' AND status != 'archived')     AS honor_cnt,
+            SUM(AND status != 'archived')      AS regular_cnt,
+            SUM(AND status != 'archived') AS special_cnt,
+            SUM(AND status != 'archived')     AS honor_cnt,
             SUM(registration_type='waiting' AND status != 'archived') AS waiting_cnt,
             SUM(gender='male' AND status != 'archived')              AS male_cnt,
             SUM(gender='female' AND status != 'archived')            AS female_cnt,
@@ -119,10 +117,10 @@ if (isset($conn)) {
             SUM(status='warning')           AS warning_cnt,
             SUM(status='inactive')          AS inactive_cnt,
             SUM(status='archived')          AS archived_cnt,
-            SUM(age_group='7_13' AND status != 'archived')           AS ag_7_13_cnt,
-            SUM(age_group='14_17' AND status != 'archived')          AS ag_14_17_cnt,
-            SUM(age_group='18_plus' AND status != 'archived')        AS ag_18_plus_cnt
-         FROM members"
+            AS ag_7_13_cnt,
+            AS ag_14_17_cnt,
+            AS ag_18_plus_cnt
+         FROM students"
     );
 
     if (!empty($aggCounts)) {
@@ -152,7 +150,7 @@ if (isset($conn)) {
 
 // For display labels mapping — delegates to the ministry category model
 // so the A/B/C letters and Amharic labels have one source of truth.
-require_once __DIR__ . '/../backend/services/MemberCategory.php';
+require_once __DIR__ . '/../backend/services/StudentCategory.php';
 
 // Attendance alerting Phase 2: open warnings per department (server-side, cheap GROUP BY).
 require_once __DIR__ . '/../backend/services/AttendanceWarningService.php';
@@ -171,39 +169,39 @@ try {
 }
 function sectionLabelFromGroup(?string $ageGroup): string
 {
-    $letter = \App\Services\MemberCategory::letterFor($ageGroup);
-    return $letter === null ? '' : \App\Services\MemberCategory::labelAm($letter)
+    $letter = \App\Services\StudentCategory::letterFor($ageGroup);
+    return $letter === null ? '' : \App\Services\StudentCategory::labelAm($letter)
         . ' (' . $letter . ')';
 }
 
 // ------------------------------------------------------------
-// Recent members normalized for UI
+// Recent students normalized for UI
 // ------------------------------------------------------------
 $recentMembers = array_map(function ($row) {
     $name = trim(($row['student_name'] ?? '') . ' ' . ($row['father_name'] ?? '') . ' ' . ($row['grandfather_name'] ?? ''));
     return [
         'name'   => $name ?: '—',
-        'type'   => $row['member_type'] ?? 'መደበኛ',
+        'type'   =>  ?? 'መደበኛ',
         'status' => ucfirst($row['status'] ?? 'Active'),
-        'section'=> $row['current_section'] ?? '',
+        'section'=>  ?? '',
         'date'   => !empty($row['created_at']) ? ethio_date_format(new DateTime($row['created_at'], new DateTimeZone('Africa/Addis_Ababa')), 'M j, Y') : '',
     ];
 }, $recentMembers);
 
 // ------------------------------------------------------------
-// Helpers: next member code (simple illustrative logic)
+// Helpers: next student code (simple illustrative logic)
 // ------------------------------------------------------------
-function generate_next_member_code(mysqli $conn): string
+function generate_next_student_code(mysqli $conn): string
 {
-    $res = db_fetch_all_assoc($conn, "SELECT member_code FROM members WHERE member_code IS NOT NULL AND member_code <> '' ORDER BY id DESC LIMIT 1");
-    $last = $res[0]['member_code'] ?? null;
+    $res = db_fetch_all_assoc($conn, "SELECT student_code FROM students WHERE student_code IS NOT NULL AND student_code <> '' ORDER BY id DESC LIMIT 1");
+    $last = $res[0]['student_code'] ?? null;
     if (!$last) return '0001';
     $num = preg_replace('/\D/', '', $last);
     $next = str_pad((int)$num + 1, 4, '0', STR_PAD_LEFT);
     return $next;
 }
 
-$nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
+$nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
 
 ?>
 <!DOCTYPE html>
@@ -512,7 +510,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
                     <i class="fa-solid fa-pen-to-square text-sm"></i>
                 </span>
-                <span class="font-semibold">Manage Members</span>
+                <span class="font-semibold">Manage Students</span>
             </button>
 
             <button data-section="archive"
@@ -520,7 +518,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
                     <i class="fa-regular fa-folder-open text-sm"></i>
                 </span>
-                <span class="font-semibold">Old Members Archive</span>
+                <span class="font-semibold">Old Students Archive</span>
             </button>
 
                 
@@ -692,7 +690,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
                     <div class="stat-card p-3 sm:p-4 flex flex-col justify-between" style="background:linear-gradient(135deg, <?= THEME_PRIMARY_DARK ?>, <?= THEME_PRIMARY ?>, <?= THEME_PRIMARY_LIGHT ?>)">
                         <div class="flex items-center justify-between">
-                            <div class="text-xs uppercase tracking-wide">Total Members</div>
+                            <div class="text-xs uppercase tracking-wide">Total Students</div>
                             <div class="w-8 h-8 rounded-2xl bg-white/15 flex items-center justify-center">
                                 <i class="fa-solid fa-users text-sm"></i>
                             </div>
@@ -701,13 +699,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <?= $totalMembers ?>
                         </div>
                         <div class="mt-1 text-[11px] sm:text-xs opacity-80">
-                            Active (non-archived) members
+                            Active (non-archived) students
                         </div>
                     </div>
 
                     <div class="stat-card p-3 sm:p-4 flex flex-col justify-between" style="background:linear-gradient(135deg, <?= THEME_ACCENT ?>, <?= THEME_ACCENT_2 ?>)">
                         <div class="flex items-center justify-between">
-                            <div class="text-xs uppercase tracking-wide">By Member Type</div>
+                            <div class="text-xs uppercase tracking-wide">By Student Type</div>
                             <div class="w-8 h-8 rounded-2xl bg-white/15 flex items-center justify-center">
                                 <i class="fa-solid fa-tags text-sm"></i>
                             </div>
@@ -756,7 +754,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     </div>
 
                     <!-- Attendance alerting Phase 2: "Open Attendance Warnings" replaces the
-                         members.status-based "At-risk" heuristic (requirements §4–§6, §9). -->
+                         students.status-based "At-risk" heuristic (requirements §4–§6, §9). -->
                     <a href="/admin/attendance_warnings.php" class="stat-card bg-gradient-to-tr from-red-500 via-rose-500 to-orange-400 p-3 sm:p-4 flex flex-col justify-between" id="aw-dashboard-card" title="Open the attendance warnings list" style="text-decoration:none;color:inherit">
                         <div class="flex items-center justify-between">
                             <div class="text-xs uppercase tracking-wide">Open Attendance Warnings</div>
@@ -811,7 +809,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span>Section Distribution (by current section)</span>
                                 </h3>
                                 <p class="text-[11px] text-slate-500">
-                                    Live numbers from members table
+                                    Live numbers from students table
                                 </p>
                             </div>
                         </div>
@@ -849,7 +847,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span>Gender Distribution</span>
                                 </h3>
                                 <p class="text-[11px] text-slate-500">
-                                    Visual balance of male vs female members
+                                    Visual balance of male vs female students
                                 </p>
                             </div>
                         </div>
@@ -880,7 +878,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <span class="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                     <i class="fa-solid fa-clock-rotate-left"></i>
                                 </span>
-                                <span>Recent Members</span>
+                                <span>Recent Students</span>
                             </h3>
                             <p class="text-[11px] text-slate-500">
                                 Latest registrations handled by the Information Department
@@ -932,17 +930,17 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             </section>
 
             <!-- ALL MEMBERS -->
-            <section id="section-members" class="content-section">
+            <section id="section-students" class="content-section">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2">
                             <span class="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                 <i class="fa-solid fa-users"></i>
                             </span>
-                            <span>All Members</span>
+                            <span>All Students</span>
                         </h3>
                         <p class="text-[11px] text-slate-500">
-                            Full registration and management for Information Department members.
+                            Full registration and management for Information Department students.
                         </p>
                     </div>
                     <div class="flex gap-2">
@@ -954,16 +952,16 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div>
                             <h2 class="text-base md:text-lg font-semibold text-slate-900 amharic-text">
- ሁሉም አባላት (All Members)
+ ሁሉም አባላት (All Students)
                             </h2>
                             <p class="text-xs text-slate-500">
-                                Showing latest <?php echo count($membersList); ?> members. Use search and filters to narrow down.
+                                Showing latest <?php echo count($membersList); ?> students. Use search and filters to narrow down.
                             </p>
                         </div>
 
                         <div class="flex flex-wrap gap-2 md:justify-end w-full md:w-auto">
                             <div class="relative flex-1 min-w-[240px]">
-                                <input autocomplete="off" id="memberSearchInput"
+                                <input autocomplete="off" id="studentSearchInput"
                                        type="text"
                                        class="pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-full"
                                        placeholder="Search any field (name, code, phone, profession, education, city...)">
@@ -979,9 +977,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <option value="direct">Direct</option>
                                 </select>
 
-                                <select id="filterMemberType"
+                                <select id=""
                                         class="text-xs border border-slate-200 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                    <option value="">Member Type (All)</option>
+                                    <option value="">Student Type (All)</option>
                                     <option value="regular">Regular</option>
                                     <option value="special_regular">Special Regular</option>
                                     <option value="honorary">Honorary</option>
@@ -1006,7 +1004,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <select id="filterAgeGroup"
                                         class="text-xs border border-slate-200 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                     <option value="">Section (All)</option>
-                                    <?php foreach (\App\Services\MemberCategory::sections() as $infoCode => $infoSec): ?><option value="<?= $infoCode ?>"><?= e($infoSec['am']) ?> (<?= e($infoSec['letter']) ?>)</option><?php endforeach; ?>
+                                    <?php foreach (\App\Services\StudentCategory::sections() as $infoCode => $infoSec): ?><option value="<?= $infoCode ?>"><?= e($infoSec['am']) ?> (<?= e($infoSec['letter']) ?>)</option><?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
@@ -1018,10 +1016,10 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <thead class="bg-slate-50 border-b border-slate-100">
                                 <tr class="text-[11px] text-slate-500">
                                     <th class="px-3 py-2 text-left">#</th>
-                                    <th class="px-3 py-2 text-left">Member</th>
+                                    <th class="px-3 py-2 text-left">Student</th>
                                     <th class="px-3 py-2 text-left">Code</th>
                                     <th class="px-3 py-2 text-left">Reg. Type</th>
-                                    <th class="px-3 py-2 text-left">Member Type</th>
+                                    <th class="px-3 py-2 text-left">Student Type</th>
                                     <th class="px-3 py-2 text-left">Gender</th>
                                     <th class="px-3 py-2 text-left">Section</th>
                                     <th class="px-3 py-2 text-left">Status</th>
@@ -1044,7 +1042,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <div id="memberRegistrationWrapper" class="panel p-4 sm:p-5 mobile-card hidden">
                     <form id="memberRegistrationForm"
                           method="post"
-                          action="info_register_member.php"
+                          action="info_register_student.php"
                           enctype="multipart/form-data"
                           onsubmit="handleMemberFormSubmitWithCheck(event)">
 
@@ -1054,7 +1052,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span class="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                         <i class="fa-solid fa-user-pen text-xs"></i>
                                     </span>
-                                    <span>Register New Member</span>
+                                    <span>Register New Student</span>
                                 </h3>
                                 <p class="text-[11px] text-slate-500">
                                     Live logic: Waiting has pending ID; Direct/Transfer auto-assign ID + card-ready.
@@ -1074,15 +1072,15 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span class="w-6 h-6 rounded-lg bg-slate-200 flex items-center justify-center">
                                         <i class="fa-solid fa-barcode text-[10px]"></i>
                                     </span>
-                                    <span>Auto Member ID</span>
+                                    <span>Auto Student ID</span>
                                 </h4>
 
                                 <p class="text-[11px] text-slate-500 mb-1">
-                                    Next Member ID:
+                                    Next Student ID:
                                     <span id="nextMemberIdDisplay" class="font-semibold text-slate-800"><?= e($nextMemberCode) ?></span>
                                 </p>
                                 <p class="text-[10px] text-slate-400">
-                                    Waiting-list members will not get an ID until they complete 3 months.
+                                    Waiting-list students will not get an ID until they complete 3 months.
                                 </p>
 
                                 <input type="hidden" name="student_id" id="studentIdField" value="">
@@ -1132,156 +1130,14 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     <span class="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center">
                                         <i class="fa-solid fa-user-tag text-[10px]"></i>
                                     </span>
-                                    <span>Member Type *</span>
+                                    <span>Student Type *</span>
                                 </h4>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     <button type="button"
-                                            class="member-type-btn w-full text-left px-3 py-2 rounded-xl border border-emerald-300 bg-white text-[11px] sm:text-xs"
-                                            data-member-type="regular"
-                                            onclick="selectMemberTypeFull('regular', this)">
-                                        <div class="amharic-text text-[13px]">መደበኛ</div>
-                                        <div class="text-[10px] text-slate-500">Regular</div>
-                                    </button>
-
-                                    <button type="button"
-                                            class="member-type-btn w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] sm:text-xs"
-                                            data-member-type="special_regular"
-                                            onclick="selectMemberTypeFull('special_regular', this)">
-                                        <div class="amharic-text text-[13px]">ልዩ መደበኛ</div>
-                                        <div class="text-[10px] text-slate-500">Student + role</div>
-                                    </button>
-
-                                    <button type="button"
-                                            class="member-type-btn w-full text-left px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] sm:text-xs"
-                                            data-member-type="honorary"
-                                            onclick="selectMemberTypeFull('honorary', this)">
-                                        <div class="amharic-text text-[13px]">የክብር አባላት</div>
-                                        <div class="text-[10px] text-slate-500">Honorary</div>
-                                    </button>
-                                </div>
-
-                                <input type="hidden" name="member_type" id="memberTypeFieldFull" value="regular">
-                            </div>
-
-                            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4">
-                                <h4 class="text-xs font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                                    <span class="w-6 h-6 rounded-lg bg-slate-200 flex items-center justify-center">
-                                        <i class="fa-solid fa-circle-info text-[10px]"></i>
-                                    </span>
-                                    <span>Status</span>
-                                </h4>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-[11px] font-medium text-slate-700 mb-1">
-                                            Member Status
-                                        </label>
-                                        <select name="status"
-                                                class="mobile-touch-target w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-emerald-200 focus:border-emerald-400">
-                                            <option value="active">Active</option>
-                                            <option value="warning">Warning</option>
-                                            <option value="inactive">Inactive</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="text-[10px] text-slate-500 flex items-center">
-                                        <span>Section equals age group (auto from DOB).</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Registration Date for Existing Members -->
-                        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4 mb-4">
-                            <h4 class="text-xs font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                                <span class="w-6 h-6 rounded-lg bg-blue-200 flex items-center justify-center">
-                                    <i class="fa-solid fa-calendar-plus text-[10px]"></i>
-                                </span>
-                                <span>Original Registration Date (For Existing Members)</span>
-                            </h4>
-                            <p class="text-[10px] text-blue-700 mb-3">
-                                <i class="fa-solid fa-info-circle mr-1"></i>
-                                If this member was registered before the system was created, enter their original registration date. Leave empty for new members (today's date will be used).
-                            </p>
-
-                            <div class="flex items-center gap-3 mb-3">
-                                <label class="inline-flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="useCustomRegDate" onchange="toggleCustomRegDate()" 
-                                           class="rounded border-blue-300 text-blue-600 focus:ring-blue-200">
-                                    <span class="text-xs font-medium text-blue-800">Set custom registration date</span>
-                                </label>
-                            </div>
-
-                            <div id="customRegDateFields" class="hidden">
-                                <label class="block text-[11px] font-medium text-slate-700 mb-1">
-                                    Registration Date (Ethiopian Calendar - E.C.)
-                                </label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" name="reg_date_day" id="regDateDay"
-                                           min="1" max="30"
-                                           class="mobile-touch-target w-full px-3 py-2 rounded-xl border border-blue-200 text-xs focus:ring-blue-200 focus:border-blue-400 bg-white"
-                                           placeholder="Day">
-
-                                    <select name="reg_date_month" id="regDateMonth"
-                                            class="mobile-touch-target w-full px-3 py-2 rounded-xl border border-blue-200 text-xs focus:ring-blue-200 focus:border-blue-400 bg-white">
-                                        <option value="">Month</option>
-                                        <option value="1">መስከረም (1)</option>
-                                        <option value="2">ጥቅምት (2)</option>
-                                        <option value="3">ኅዳር (3)</option>
-                                        <option value="4">ታኅሣሥ (4)</option>
-                                        <option value="5">ጥር (5)</option>
-                                        <option value="6">የካቲት (6)</option>
-                                        <option value="7">መጋቢት (7)</option>
-                                        <option value="8">ሚያዝያ (8)</option>
-                                        <option value="9">ግንቦት (9)</option>
-                                        <option value="10">ሰኔ (10)</option>
-                                        <option value="11">ሐምሌ (11)</option>
-                                        <option value="12">ነሐሴ (12)</option>
-                                        <option value="13">ጳጉሜ (13)</option>
-                                    </select>
-
-                                    <input type="number" name="reg_date_year" id="regDateYear"
-                                           min="1990" max="2020"
-                                           class="mobile-touch-target w-full px-3 py-2 rounded-xl border border-blue-200 text-xs focus:ring-blue-200 focus:border-blue-400 bg-white"
-                                           placeholder="Year (E.C.)">
-                                </div>
-                                <p class="mt-2 text-[10px] text-blue-600">
-                                    <i class="fa-solid fa-calculator mr-1"></i>
-                                    <span id="regDateDuration">Enter date to see membership duration</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div id="roleFlagsSection"
-                             class="bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4 mb-4 hidden">
-                            <h4 class="text-xs font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                                <span class="w-6 h-6 rounded-lg bg-amber-200 flex items-center justify-center">
-                                    <i class="fa-solid fa-user-gear text-[10px]"></i>
-                                </span>
-                                <span>Role Flags (for ልዩ መደበኛ)</span>
-                            </h4>
-
-                            <p class="text-[11px] text-amber-800 mb-2">
-                                Mark responsibilities. These are simple flags we’ll use for filters/reports later.
-                            </p>
-
-                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 text-[11px]">
-                                <?php
-                                $flags = [
-                                    'is_teacher' => 'መምህር (Teacher)',
-                                    'is_staff' => 'ሰራተኛ (Staff)',
-                                    'is_committee' => 'ኮሚቴ (Committee)',
-                                    'is_volunteer' => 'በፈቃደኝነት (Volunteer)',
-                                    'is_dept_head_1' => 'Dept Head 1',
-                                    'is_dept_head_2' => 'Dept Head 2',
-                                    'is_dept_head_3' => 'Dept Head 3',
-                                    'is_dept_head_4' => 'Dept Head 4',
-                                    'is_dept_head_5' => 'Dept Head 5',
-                                    'is_dept_head_6' => 'Dept Head 6',
-                                    'is_dept_head_7' => 'Dept Head 7',
-                                    'is_dept_head_8' => 'Dept Head 8',
-                                ];
+                                            class="student-type-btn w-full text-left px-3 py-2 rounded-xl border border-emerald-300 bg-white text-[11px] sm:text-xs"
+                                            data-student-type="regular"
+                                            onclick="
                                 foreach ($flags as $name => $label): ?>
                                     <label class="inline-flex items-center gap-2">
                                         <input type="checkbox" name="<?= $name ?>" class="rounded border-amber-300 text-amber-600">
@@ -1311,7 +1167,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                     </div>
                                     <label class="text-[11px] text-emerald-700 cursor-pointer">
                                         <span class="px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100">
-                                            Upload Member Photo
+                                            Upload Student Photo
                                         </span>
                                         <input type="file" name="student_photo" accept="image/*" class="hidden"
                                                onchange="previewImage(this, 'studentPhotoPreview', 'studentPhotoPlaceholder')">
@@ -1381,8 +1237,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                         </label>
                                         <input type="text" id="sectionDisplay" readonly
                                                class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50 text-slate-700">
-                                        <input type="hidden" name="current_section" id="currentSectionField">
-                                        <input type="hidden" name="age_group" id="ageGroupField">
+                                        
+                                        
                                     </div>
 
                                     <div>
@@ -1452,7 +1308,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <span class="w-6 h-6 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600">
                                     <i class="fa-solid fa-location-dot"></i>
                                 </span>
-                                <span>Member Address</span>
+                                <span>Student Address</span>
                             </h4>
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -1625,12 +1481,12 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
 
                                     <div class="md:col-span-2 flex items-center justify-between gap-2">
                                         <span class="text-[11px] text-slate-500">
-                                            Guardian Address (same structure as member).
+                                            Guardian Address (same structure as student).
                                         </span>
                                         <button type="button"
                                                 onclick="copyMemberAddressToGuardian()"
                                                 class="px-3 py-1.5 rounded-full border border-emerald-200 text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
-                                            Same as member
+                                            Same as student
                                         </button>
                                     </div>
 
@@ -1751,7 +1607,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 </button>
                                 <button type="submit"
                                         class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow hover:bg-emerald-700 active:scale-95">
-                                    Save Member
+                                    Save Student
                                 </button>
                             </div>
                         </div>
@@ -1768,15 +1624,15 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <span class="w-7 h-7 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600">
                                     <i class="fa-solid fa-pen-to-square"></i>
                                 </span>
-                                <span>Manage Members</span>
+                                <span>Manage Students</span>
                             </h3>
                             <p class="text-xs text-slate-500">
-                                Search, Edit, and Manage all active members.
+                                Search, Edit, and Manage all active students.
                             </p>
                         </div>
                     </div>
 
-                    <!-- Search & Filter Bar (Duplicated from All Members for convenience) -->
+                    <!-- Search & Filter Bar (Duplicated from All Students for convenience) -->
                     <div class="bg-white border border-slate-200 rounded-xl p-3 mb-4 shadow-sm">
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                             <div class="relative">
@@ -1797,8 +1653,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <option value="inactive">Inactive</option>
                                 <option value="archived">Archived</option>
                             </select>
-                            <select id="manageFilterMemberType" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
-                                <option value="">All Member Types</option>
+                            <select id="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
+                                <option value="">All Student Types</option>
                                 <option value="regular">Regular</option>
                                 <option value="honorary">Honorary</option>
                                 <option value="special_regular">Special Regular</option>
@@ -1817,7 +1673,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             </select>
                             <select id="manageFilterAgeGroup" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
                                 <option value="">All Age Groups</option>
-                                <?php foreach (\App\Services\MemberCategory::sections() as $infoCode => $infoSec): ?><option value="<?= $infoCode ?>"><?= e($infoSec['am']) ?> (<?= e($infoSec['letter']) ?>)</option><?php endforeach; ?>
+                                <?php foreach (\App\Services\StudentCategory::sections() as $infoCode => $infoSec): ?><option value="<?= $infoCode ?>"><?= e($infoSec['am']) ?> (<?= e($infoSec['letter']) ?>)</option><?php endforeach; ?>
                             </select>
                             <select id="manageFilterEducation" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs">
                                 <option value="">All Education Levels</option>
@@ -1837,12 +1693,12 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         </div>
                     </div>
 
-                    <!-- Members List Table -->
+                    <!-- Students List Table -->
                     <div class="overflow-x-auto border rounded-xl bg-white shadow-sm">
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
                                 <tr>
-                                    <th class="px-4 py-3 font-semibold">Member</th>
+                                    <th class="px-4 py-3 font-semibold">Student</th>
                                     <th class="px-4 py-3 font-semibold">Type</th>
                                     <th class="px-4 py-3 font-semibold">Status</th>
                                     <th class="px-4 py-3 font-semibold text-right">Actions</th>
@@ -1850,7 +1706,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             </thead>
                             <tbody id="manageMembersTableBody" class="divide-y divide-slate-100 text-xs text-slate-700">
                                 <!-- Populated by JS -->
-                                <tr><td colspan="4" class="p-4 text-center text-slate-400">Loading members...</td></tr>
+                                <tr><td colspan="4" class="p-4 text-center text-slate-400">Loading students...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1859,11 +1715,11 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             </section>
 
 <script src="/admin/js/paginated-list.js?v=20261022p"></script>
-<script>window.WBWS_SECTIONS=<?= json_encode(array_map(static function($sec){return $sec['am'].' ('.$sec['letter'].')';}, \App\Services\MemberCategory::sections()), JSON_UNESCAPED_UNICODE) ?>;</script>
-        <script src="/admin/js/all-members.js?v=20261022p" defer></script>
-<script src="/admin/js/manage-members.js" defer></script>
-<script src="/frontend/js/member-picker.js?v=20261022p" defer></script>
-<script src="/admin/js/archive-members.js" defer></script>
+<script>window.WBWS_SECTIONS=<?= json_encode(array_map(static function($sec){return $sec['am'].' ('.$sec['letter'].')';}, \App\Services\StudentCategory::sections()), JSON_UNESCAPED_UNICODE) ?>;</script>
+        <script src="/admin/js/all-students.js?v=20261022p" defer></script>
+<script src="/admin/js/manage-students.js" defer></script>
+<script src="/frontend/js/student-picker.js?v=20261022p" defer></script>
+<script src="/admin/js/archive-students.js" defer></script>
 
             <!-- ARCHIVE -->
             <section id="section-archive" class="content-section">
@@ -1872,10 +1728,10 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div>
                             <h3 class="text-sm font-semibold text-slate-800 mb-1">
-                                <i class="fa-solid fa-box-archive text-amber-500 mr-2"></i>Old Members Archive
+                                <i class="fa-solid fa-box-archive text-amber-500 mr-2"></i>Old Students Archive
                             </h3>
                             <p class="text-xs text-slate-500">
-                                Archived / left members. You can restore them back to active if they return.
+                                Archived / left students. You can restore them back to active if they return.
                             </p>
                         </div>
                         <div class="flex items-center gap-2">
@@ -1892,17 +1748,17 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <div class="mb-4">
                         <div class="relative">
                             <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                            <input autocomplete="off" type="text" id="archiveSearch" placeholder="Search archived members..." 
+                            <input autocomplete="off" type="text" id="archiveSearch" placeholder="Search archived students..." 
                                    oninput="filterArchivedMembers()"
                                    class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition">
                         </div>
                     </div>
                     
-                    <!-- Archived Members List -->
+                    <!-- Archived Students List -->
                     <div id="archivedMembersList" class="space-y-3">
                         <div class="text-center py-8 text-slate-400">
                             <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
-                            <p class="text-sm">Loading archived members...</p>
+                            <p class="text-sm">Loading archived students...</p>
                         </div>
                     </div>
                     <div id="archivedMembersPagination" class="mt-3 flex items-center justify-between gap-3" aria-live="polite"></div>
@@ -1957,7 +1813,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <div class="flex gap-2 mb-5 overflow-x-auto hide-scrollbar pb-1">
                     <button onclick="showAttTab(this,'attOverview')" class="atab atab-on"><i class="fa-solid fa-chart-pie mr-1"></i>Overview</button>
                     <button onclick="showAttTab(this,'attDaily')" class="atab"><i class="fa-solid fa-calendar-day mr-1"></i>Daily Report</button>
-                    <button onclick="showAttTab(this,'attMember')" class="atab"><i class="fa-solid fa-user-clock mr-1"></i>Member Lookup</button>
+                    <button onclick="showAttTab(this,'attMember')" class="atab"><i class="fa-solid fa-user-clock mr-1"></i>Student Lookup</button>
                     <button onclick="showAttTab(this,'attRisk')" class="atab"><i class="fa-solid fa-triangle-exclamation mr-1"></i>At-Risk</button>
                     <button onclick="showAttTab(this,'attStatus')" class="atab"><i class="fa-solid fa-user-pen mr-1"></i>Status Mgmt</button>
                 </div>
@@ -1999,10 +1855,10 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     </div>
                 </div>
 
-                <!-- ===== MEMBER LOOKUP ===== -->
+                <!-- ===== STUDENT LOOKUP ===== -->
                 <div id="attMember" class="att-pane" style="display:none">
                     <div class="panel p-4 mb-4">
-                        <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Search Member</label>
+                        <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Search Student</label>
                         <div class="flex gap-2">
                             <input autocomplete="off" type="text" id="attMemSearch" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm" placeholder="Name, code, or phone..." onkeyup="if(event.key==='Enter')searchMemberAtt()">
                             <button onclick="searchMemberAtt()" class="px-4 py-2 bg-orange-500 text-white rounded-xl text-xs font-semibold hover:bg-orange-600"><i class="fa-solid fa-search"></i></button>
@@ -2040,10 +1896,10 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <!-- ===== STATUS MANAGEMENT ===== -->
                 <div id="attStatus" class="att-pane" style="display:none">
                     <div class="panel p-4 mb-4">
-                        <h4 class="text-sm font-semibold text-slate-700 mb-1"><i class="fa-solid fa-user-pen mr-1 text-violet-500"></i>Update Member Status</h4>
-                        <p class="text-[10px] text-slate-400 mb-3">Search for a member and update their status based on attendance patterns</p>
+                        <h4 class="text-sm font-semibold text-slate-700 mb-1"><i class="fa-solid fa-user-pen mr-1 text-violet-500"></i>Update Student Status</h4>
+                        <p class="text-[10px] text-slate-400 mb-3">Search for a student and update their status based on attendance patterns</p>
                         <div class="flex gap-2 mb-4">
-                            <input autocomplete="off" type="text" id="attStatusSearch" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm" placeholder="Search member name, code, or phone..." onkeyup="if(event.key==='Enter')searchForStatus()">
+                            <input autocomplete="off" type="text" id="attStatusSearch" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm" placeholder="Search student name, code, or phone..." onkeyup="if(event.key==='Enter')searchForStatus()">
                             <button onclick="searchForStatus()" class="px-4 py-2 bg-violet-500 text-white rounded-xl text-xs font-semibold hover:bg-violet-600"><i class="fa-solid fa-search"></i></button>
                         </div>
                         <div id="attStatusResults"></div>
@@ -2117,7 +1973,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                 <option value="general">General (all departments)</option>
                                 <option value="sections">Section-based (Mezmur)</option>
                                 <option value="classes">Class-based (Education)</option>
-                                <option value="member">Member-based (one member)</option>
+                                <option value="student">Student-based (one student)</option>
                                 <option value="full">Full analysis (combined)</option>
                             </select>
                         </div>
@@ -2129,13 +1985,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             </select>
                         </div>
                         <div id="pdfMemberWrap" style="display:none">
-                            <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Member</label>
+                            <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Student</label>
                             <input autocomplete="off" type="search" inputmode="search" id="pdfMemberSearch"
-                                   data-member-picker-target="pdfMemberId" data-member-picker-status="active"
+                                   data-student-picker-target="pdfMemberId" data-student-picker-status="active"
                                    class="w-full px-3 py-2 mb-1 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                                   placeholder="Search member…">
+                                   placeholder="Search student…">
                             <select id="pdfMemberId" data-optional="true" class="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
-                                <option value="">— pick member —</option>
+                                <option value="">— pick student —</option>
                             </select>
                         </div>
                         <div>
@@ -2163,8 +2019,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-users text-emerald-600 text-lg"></i></div>
                             <div>
-                                <div class="font-semibold text-slate-800 text-sm">All Members</div>
-                                <div class="text-[10px] text-slate-500">Export full member list as CSV</div>
+                                <div class="font-semibold text-slate-800 text-sm">All Students</div>
+                                <div class="text-[10px] text-slate-500">Export full student list as CSV</div>
                             </div>
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-emerald-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
@@ -2173,8 +2029,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-user-check text-blue-600 text-lg"></i></div>
                             <div>
-                                <div class="font-semibold text-slate-800 text-sm">Active Members Only</div>
-                                <div class="text-[10px] text-slate-500">Active status members</div>
+                                <div class="font-semibold text-slate-800 text-sm">Active Students Only</div>
+                                <div class="text-[10px] text-slate-500">Active status students</div>
                             </div>
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-blue-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
@@ -2184,7 +2040,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-file-pdf text-red-500 text-lg"></i></div>
                             <div>
                                 <div class="font-semibold text-slate-800 text-sm">PDF Report</div>
-                                <div class="text-[10px] text-slate-500">Print-ready member list</div>
+                                <div class="text-[10px] text-slate-500">Print-ready student list</div>
                             </div>
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-red-500 font-medium"><i class="fa-solid fa-print mr-1"></i>Open & Print</span></div>
@@ -2193,7 +2049,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-hourglass-half text-amber-600 text-lg"></i></div>
                             <div>
-                                <div class="font-semibold text-slate-800 text-sm">Waiting Members</div>
+                                <div class="font-semibold text-slate-800 text-sm">Waiting Students</div>
                                 <div class="text-[10px] text-slate-500">Registration type = waiting</div>
                             </div>
                         </div>
@@ -2203,7 +2059,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-id-card text-red-500 text-lg"></i></div>
                             <div>
-                                <div class="font-semibold text-slate-800 text-sm">Members Without ID Card</div>
+                                <div class="font-semibold text-slate-800 text-sm">Students Without ID Card</div>
                                 <div class="text-[10px] text-slate-500">ID card not generated yet</div>
                             </div>
                         </div>
@@ -2214,7 +2070,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-file-word text-indigo-600 text-lg"></i></div>
                             <div>
                                 <div class="font-semibold text-slate-800 text-sm">Word Document</div>
-                                <div class="text-[10px] text-slate-500">All members as Word doc</div>
+                                <div class="text-[10px] text-slate-500">All students as Word doc</div>
                             </div>
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-indigo-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download DOC</span></div>
@@ -2311,9 +2167,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <!-- ===== SYSTEM PREFERENCES ===== -->
                 <div id="stPrefs" class="settings-pane" style="display:none">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <!-- Member Code Settings -->
+                        <!-- Student Code Settings -->
                         <div class="panel p-5">
-                            <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-barcode text-violet-500"></i> Member Code Format</h4>
+                            <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-barcode text-violet-500"></i> Student Code Format</h4>
                             <div class="space-y-3">
                                 <div>
                                     <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Code Prefix</label>
@@ -2334,7 +2190,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                                         <input type="checkbox" id="autoGenCode" class="sr-only peer" checked>
                                         <div class="w-9 h-5 bg-slate-200 peer-focus:ring-2 peer-focus:ring-violet-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500"></div>
                                     </label>
-                                    <span class="text-xs text-slate-600">Auto-generate member codes on registration</span>
+                                    <span class="text-xs text-slate-600">Auto-generate student codes on registration</span>
                                 </div>
                             </div>
                         </div>
@@ -2345,65 +2201,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <div class="space-y-3">
                                 <div>
                                     <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Default Age Group</label>
-                                    <select id="defAgeGroup" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400">
-                                        <option value="">None (manual selection)</option>
-                                        <?php foreach (\App\Services\MemberCategory::sections() as $infoCode => $infoSec): ?><option value="<?= $infoCode ?>"><?= e($infoSec['am']) ?> (<?= e($infoSec['ages']) ?>)</option><?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Default Member Type</label>
-                                    <select id="defMemType" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400">
-                                        <option value="regular">Regular</option>
-                                        <option value="honorary">Honorary</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Default Registration Type</label>
-                                    <select id="defRegType" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-teal-200 focus:border-teal-400">
-                                        <option value="direct">Direct</option>
-                                        <option value="transfer">Transfer</option>
-                                        <option value="waiting">Waiting</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Validation Rules -->
-                        <div class="panel p-5">
-                            <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-shield-check text-rose-500"></i> Validation Rules</h4>
-                            <div class="space-y-3">
-                                <div class="flex items-center gap-3">
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="phoneRequired" class="sr-only peer">
-                                        <div class="w-9 h-5 bg-slate-200 peer-focus:ring-2 peer-focus:ring-rose-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
-                                    </label>
-                                    <span class="text-xs text-slate-600">Require phone number on registration</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="idAutoGen" class="sr-only peer">
-                                        <div class="w-9 h-5 bg-slate-200 peer-focus:ring-2 peer-focus:ring-rose-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
-                                    </label>
-                                    <span class="text-xs text-slate-600">Auto-generate ID cards on registration</span>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Guardian Required Under Age</label>
-                                    <select id="guardianAge" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-rose-200 focus:border-rose-400">
-                                        <option value="0">Not required</option>
-                                        <option value="10">Under 10</option>
-                                        <option value="14">Under 14</option>
-                                        <option value="16">Under 16</option>
-                                        <option value="18">Under 18 (all minors)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Save Prefs Button -->
-                        <div class="panel p-5 flex items-center justify-between">
-                            <div>
-                                <h4 class="font-semibold text-slate-700 flex items-center gap-2"><i class="fa-solid fa-floppy-disk text-emerald-500"></i> Save All Preferences</h4>
-                                <p class="text-[10px] text-slate-400 mt-1">Click to save member code format, defaults, and validation rules</p>
+                                    <select id="defaults, and validation rules</p>
                             </div>
                             <button onclick="savePreferences()" class="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 transition flex items-center gap-2">
                                 <i class="fa-solid fa-save"></i> Save Preferences
@@ -2429,11 +2227,11 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                             <div class="space-y-3">
                                 <a href="/admin/export_pdf.php?format=csv&filter=all" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-emerald-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-file-csv text-emerald-600"></i></div>
-                                    <div><div class="text-sm font-medium text-slate-700">Export All Members (CSV)</div><div class="text-[10px] text-slate-400">Download complete member database</div></div>
+                                    <div><div class="text-sm font-medium text-slate-700">Export All Students (CSV)</div><div class="text-[10px] text-slate-400">Download complete student database</div></div>
                                 </a>
                                 <a href="/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-red-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-file-pdf text-red-500"></i></div>
-                                    <div><div class="text-sm font-medium text-slate-700">Full PDF Report</div><div class="text-[10px] text-slate-400">Print-ready member list</div></div>
+                                    <div><div class="text-sm font-medium text-slate-700">Full PDF Report</div><div class="text-[10px] text-slate-400">Print-ready student list</div></div>
                                 </a>
                                 <div onclick="clearCache()" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-amber-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-broom text-amber-600"></i></div>
@@ -2536,7 +2334,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
     <div class="bg-white rounded-2xl shadow-lg px-6 py-4 flex items-center gap-3">
         <div class="animate-spin rounded-full h-6 w-6 border-2 border-emerald-500 border-t-transparent"></div>
         <div class="text-sm font-medium text-emerald-700">
-            Saving member, please wait…
+            Saving student, please wait…
         </div>
     </div>
 </div>
@@ -2548,7 +2346,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 text-[15px] font-semibold flex items-center justify-between gap-3">
             <div class="flex items-center gap-2">
                 <span class="text-xl">✅</span>
-                <span id="memberSuccessToastText">Member registered successfully.</span>
+                <span id="memberSuccessToastText">Student registered successfully.</span>
             </div>
             <button type="button"
                     onclick="document.getElementById('memberSuccessToast').classList.add('hidden')"
@@ -2565,8 +2363,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 sticky top-0 z-10">
             <div>
-                <div class="label-soft">Manage Member</div>
-                <div class="text-lg font-bold text-slate-800" id="manageSheetTitle">Member Details</div>
+                <div class="label-soft">Manage Student</div>
+                <div class="text-lg font-bold text-slate-800" id="manageSheetTitle">Student Details</div>
             </div>
             <button class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition" onclick="closeManageSheet()">
                 <i class="fa-solid fa-xmark text-lg"></i>
@@ -2590,7 +2388,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
     // Simple section navigation (sidebar + bottom nav)
     function navigateToSection(name) {
         // Preserve old links while using the single server-paged directory.
-        if (name === 'members') name = 'manage';
+        if (name === 'students') name = 'manage';
         closeManageSheet(); // Close any open modal
         // Retired/unknown sections (old bookmarks) fall back to the dashboard.
         if (!document.getElementById('section-' + name)) name = 'dashboard';
@@ -2655,10 +2453,10 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
     } else {
         navigateToSection('dashboard');
     }
-    const memberParam = parseInt(urlParams.get('member') || '0', 10);
+    const memberParam = parseInt(urlParams.get('student') || '0', 10);
     if (memberParam > 0 && typeof openManageSheet === 'function') {
         openManageSheet(memberParam);
-        const cleanUrl = new URL(window.location); cleanUrl.searchParams.delete('member'); history.replaceState(null, '', cleanUrl);
+        const cleanUrl = new URL(window.location); cleanUrl.searchParams.delete('student'); history.replaceState(null, '', cleanUrl);
     }
 
     // Charts
@@ -2732,7 +2530,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         });
     });
 
-    // --- Member registration UI helpers ---
+    // --- Student registration UI helpers ---
 
     function toggleMemberRegistrationForm(show) {
         const wrapper = document.getElementById('memberRegistrationWrapper');
@@ -2743,7 +2541,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         if (show === true) {
             wrapper.classList.remove('hidden');
             list.classList.add('hidden');
-            navigateToSection('members');
+            navigateToSection('students');
         } else if (show === false) {
             wrapper.classList.add('hidden');
             list.classList.remove('hidden');
@@ -2789,8 +2587,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         }
     }
 
-    function selectMemberTypeFull(type, btn) {
-        const hidden = document.getElementById('memberTypeFieldFull');
+    function 
         if (hidden) hidden.value = type;
 
         const roleSection = document.getElementById('roleFlagsSection');
@@ -2802,7 +2599,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             }
         }
 
-        document.querySelectorAll('.member-type-btn').forEach(b => {
+        document.querySelectorAll('.student-type-btn').forEach(b => {
             b.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50', 'border-emerald-300');
             b.classList.add('border-slate-200', 'bg-white');
         });
@@ -2844,9 +2641,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const defaultRegBtn = document.querySelector('.registration-type-btn[data-registration-type="waiting"]');
         if (defaultRegBtn) selectRegistrationType('waiting', defaultRegBtn);
 
-        // Default member type: regular
-        const defaultTypeBtn = document.querySelector('.member-type-btn[data-member-type="regular"]');
-        if (defaultTypeBtn) selectMemberTypeFull('regular', defaultTypeBtn);
+        // Default student type: regular
+        const defaultTypeBtn = document.querySelector('.student-type-btn[data-student-type="regular"]');
+        if (defaultTypeBtn) 
 
         // Clear previews
         previewImage({files: []}, 'studentPhotoPreview', 'studentPhotoPlaceholder');
@@ -3062,9 +2859,9 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const defaultRegBtn = document.querySelector('.registration-type-btn[data-registration-type="waiting"]');
         if (defaultRegBtn) selectRegistrationType('waiting', defaultRegBtn);
 
-        // Default member type: regular
-        const defaultTypeBtn = document.querySelector('.member-type-btn[data-member-type="regular"]');
-        if (defaultTypeBtn) selectMemberTypeFull('regular', defaultTypeBtn);
+        // Default student type: regular
+        const defaultTypeBtn = document.querySelector('.student-type-btn[data-student-type="regular"]');
+        if (defaultTypeBtn) 
 
         // Ethiopian months
         initEthiopianMonths();
@@ -3093,7 +2890,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const formData = new FormData(form);
         formData.append('csrf_token', CSRF_TOKEN);
 
-        fetch('<?php echo $ajaxPrefix; ?>info_register_member.php', {
+        fetch('<?php echo $ajaxPrefix; ?>info_register_student.php', {
             method: 'POST',
             body: formData,
             headers: { 'Accept': 'application/json' }
@@ -3116,7 +2913,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
 
                 if (data && data.status === 'success') {
                     resetMemberForm();
-                    showMemberSuccessToast(data.message || 'Member registered successfully.');
+                    showMemberSuccessToast(data.message || 'Student registered successfully.');
                     const wrapper = document.getElementById('memberRegistrationWrapper');
                     if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
@@ -3138,13 +2935,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
 
     // Advanced search / filters
     function applyMembersFilters() {
-        const searchInput = document.getElementById('memberSearchInput');
+        const searchInput = document.getElementById('studentSearchInput');
         const regTypeSel  = document.getElementById('filterRegistrationType');
-        const mTypeSel    = document.getElementById('filterMemberType');
+        const mTypeSel    = document.getElementById('');
         const statusSel   = document.getElementById('filterStatus');
         const genderSel   = document.getElementById('filterGender');
         const ageSel      = document.getElementById('filterAgeGroup');
-        const rows        = document.querySelectorAll('#membersTableBody .member-row');
+        const rows        = document.querySelectorAll('#membersTableBody .student-row');
         const visibleCountLabel = document.getElementById('membersVisibleCount');
 
         if (!rows.length) {
@@ -3186,13 +2983,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             }
         });
 
-        if (visibleCountLabel) visibleCountLabel.textContent = visible + ' matching member' + (visible === 1 ? '' : 's');
+        if (visibleCountLabel) visibleCountLabel.textContent = visible + ' matching student' + (visible === 1 ? '' : 's');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const searchInput = document.getElementById('memberSearchInput');
+        const searchInput = document.getElementById('studentSearchInput');
         const regTypeSel  = document.getElementById('filterRegistrationType');
-        const mTypeSel    = document.getElementById('filterMemberType');
+        const mTypeSel    = document.getElementById('');
         const statusSel   = document.getElementById('filterStatus');
         const genderSel   = document.getElementById('filterGender');
         const ageSel      = document.getElementById('filterAgeGroup');
@@ -3218,18 +3015,18 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         content.innerHTML = 'Loading...';
 
         const cacheBust = Date.now();
-        fetch('/admin/info_manage_member.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
+        fetch('/admin/info_manage_student.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
             .then(res => res.text())
             .then(html => {
                 content.innerHTML = html;
                 if (window.MemberNav) MemberNav.afterLoad(id);
                 if (window.DeptStatus) DeptStatus.mount(content);
-                if (title) title.textContent = 'Member #' + id;
+                if (title) title.textContent = 'Student #' + id;
                 // Default to Preview tab
                 switchManageTab('preview');
             })
             .catch(() => {
-                content.innerHTML = '<div class="text-red-600 text-sm">Failed to load member.</div>';
+                content.innerHTML = '<div class="text-red-600 text-sm">Failed to load student.</div>';
             });
     }
 
@@ -3245,7 +3042,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
     
     function archiveMember(id, name) {
         archiveMemberId = id;
-        archiveMemberName = name || 'this member';
+        archiveMemberName = name || 'this student';
         
         // Update modal content
         document.getElementById('archiveMemberName').textContent = archiveMemberName;
@@ -3299,16 +3096,16 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         const rsel = document.getElementById('archiveReason');
         const rtxt = rsel && rsel.selectedIndex >= 0 ? rsel.options[rsel.selectedIndex].text : reason;
         const dc = await dcAsk({tier:'medium', title:'Archive ' + archiveMemberName + '?', object: archiveMemberName,
-            summary:'The member is moved out of the active lists. Reason: ' + rtxt + '.', intent:'I want to archive this member',
-            consequences:['The member disappears from active member lists, class rosters, attendance sheets and new reports.','Teachers and the mobile app no longer show this member.','Family links stay but the member is no longer counted as active.'],
-            keeps:['All history (attendance, marks, documents) is kept.','You can restore the member from the Archive list.'],
-            phrase:'ARCHIVE MEMBER', confirmLabel:'Archive member'});
+            summary:'The student is moved out of the active lists. Reason: ' + rtxt + '.', intent:'I want to archive this student',
+            consequences:['The student disappears from active student lists, class rosters, attendance sheets and new reports.','Teachers and the mobile app no longer show this student.','Family links stay but the student is no longer counted as active.'],
+            keeps:['All history (attendance, marks, documents) is kept.','You can restore the student from the Archive list.'],
+            phrase:'ARCHIVE STUDENT', confirmLabel:'Archive student'});
         if (!dc) return;
         
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Archiving...';
         
-        fetch('/admin/info_archive_member.php', {
+        fetch('/admin/info_archive_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -3325,20 +3122,20 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             } else {
                 showToast(data.message || 'Archive failed.', 'error');
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-box-archive mr-2"></i> Archive Member';
+                btn.innerHTML = '<i class="fa-solid fa-box-archive mr-2"></i> Archive Student';
             }
         }).catch(()=>{
             showToast('Network error. Please try again.', 'error');
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-box-archive mr-2"></i> Archive Member';
+            btn.innerHTML = '<i class="fa-solid fa-box-archive mr-2"></i> Archive Student';
         });
     }
     
-    // Restore member from archive
+    // Restore student from archive
     async function restoreMember(id, name) {
-        if (!(await dcAsk({tier:'low', title:'Restore ' + name + ' to active members?', summary:'The member appears again in active lists, rosters and attendance.', confirmLabel:'Restore member'}))) return;
+        if (!(await dcAsk({tier:'low', title:'Restore ' + name + ' to active students?', summary:'The student appears again in active lists, rosters and attendance.', confirmLabel:'Restore student'}))) return;
         
-        fetch('/admin/info_restore_member.php', {
+        fetch('/admin/info_restore_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({id: id, csrf_token: CSRF_TOKEN})
@@ -3524,7 +3321,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
         }
         if (alertBox){ alertBox.style.display='none'; alertBox.className='mm-alert'; alertBox.innerHTML=''; }
 
-        fetch('/admin/info_manage_member.php', {
+        fetch('/admin/info_manage_student.php', {
             method: 'POST',
             body: formData
         })
@@ -3579,8 +3376,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <i class="fa-solid fa-box-archive text-white text-xl"></i>
                 </div>
                 <div class="text-white">
-                    <h3 class="font-bold text-lg">Archive Member</h3>
-                    <p class="text-white/80 text-sm">Move to old members</p>
+                    <h3 class="font-bold text-lg">Archive Student</h3>
+                    <p class="text-white/80 text-sm">Move to old students</p>
                 </div>
             </div>
         </div>
@@ -3593,7 +3390,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <i class="fa-solid fa-triangle-exclamation text-amber-500 text-lg mt-0.5"></i>
                     <div>
                         <p class="text-amber-800 font-semibold text-sm mb-1">You are about to archive:</p>
-                        <p id="archiveMemberName" class="text-amber-900 font-bold text-base">Member Name</p>
+                        <p id="archiveMemberName" class="text-amber-900 font-bold text-base">Student Name</p>
                     </div>
                 </div>
             </div>
@@ -3643,7 +3440,7 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
             </button>
             <button id="confirmArchiveBtn" onclick="confirmArchive()" disabled
                     class="flex-1 px-4 py-3 bg-slate-300 text-white font-semibold rounded-xl cursor-not-allowed transition">
-                <i class="fa-solid fa-box-archive mr-2"></i> Archive Member
+                <i class="fa-solid fa-box-archive mr-2"></i> Archive Student
             </button>
         </div>
     </div>
@@ -3659,8 +3456,8 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                     <i class="fa-solid fa-user-group text-white text-xl"></i>
                 </div>
                 <div class="text-white">
-                    <h3 class="font-bold text-lg">Duplicate Member Found!</h3>
-                    <p class="text-white/80 text-sm">This member may already exist</p>
+                    <h3 class="font-bold text-lg">Duplicate Student Found!</h3>
+                    <p class="text-white/80 text-sm">This student may already exist</p>
                 </div>
             </div>
         </div>
@@ -3672,13 +3469,13 @@ $nextMemberCode = isset($conn) ? generate_next_member_code($conn) : '0001';
                 <div class="flex gap-3">
                     <i class="fa-solid fa-triangle-exclamation text-red-500 text-lg mt-0.5"></i>
                     <div>
-                        <p class="text-red-800 font-semibold text-sm">A similar member already exists in the system!</p>
-                        <p class="text-red-600 text-xs mt-1">Please review the existing member(s) below before registering.</p>
+                        <p class="text-red-800 font-semibold text-sm">A similar student already exists in the system!</p>
+                        <p class="text-red-600 text-xs mt-1">Please review the existing student(s) below before registering.</p>
                     </div>
                 </div>
             </div>
             
-            <!-- Duplicate Member Cards -->
+            <!-- Duplicate Student Cards -->
             <div id="duplicateMembersList" class="space-y-3">
                 <!-- Dynamically populated -->
             </div>
@@ -3792,8 +3589,8 @@ function showDuplicateWarning(matches) {
                             </span>
                         </div>
                         <div class="space-y-1 text-xs text-slate-600">
-                            <p><i class="fa-solid fa-id-card w-4 text-slate-400"></i> ${m.member_code || 'No ID'}</p>
-                            <p><i class="fa-solid fa-users w-4 text-slate-400"></i> ${m.current_section || m.age_group || '—'}</p>
+                            <p><i class="fa-solid fa-id-card w-4 text-slate-400"></i> ${m.student_code || 'No ID'}</p>
+                            <p><i class="fa-solid fa-users w-4 text-slate-400"></i> ${'—'}</p>
                             <p><i class="fa-solid fa-phone w-4 text-slate-400"></i> ${m.phone_number || '—'}</p>
                             ${m.match_reasons ? `<p class="text-red-500 text-[10px] mt-1"><i class="fa-solid fa-exclamation-circle"></i> ${m.match_reasons.join(', ')}</p>` : ''}
                         </div>
@@ -3801,11 +3598,11 @@ function showDuplicateWarning(matches) {
                             ${isArchived 
                                 ? `<button onclick="restoreAndClose(${m.id}, '${fullName.replace(/'/g, "\\'")}')" 
                                         class="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition">
-                                    <i class="fa-solid fa-rotate-left mr-1"></i> Restore This Member
+                                    <i class="fa-solid fa-rotate-left mr-1"></i> Restore This Student
                                    </button>`
                                 : `<button onclick="viewExistingMember(${m.id})" 
                                         class="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition">
-                                    <i class="fa-solid fa-eye mr-1"></i> View Member
+                                    <i class="fa-solid fa-eye mr-1"></i> View Student
                                    </button>`
                             }
                         </div>
@@ -3849,7 +3646,7 @@ function restoreAndClose(id, name) {
     resetMemberForm();
     toggleMemberRegistrationForm(false);
     
-    // Restore the member
+    // Restore the student
     restoreMember(id, name);
 }
 
@@ -3926,7 +3723,7 @@ function submitRegistrationForm(formData) {
         formData.append('csrf_token', CSRF_TOKEN);
     }
     
-    fetch('/admin/info_register_member.php', {
+    fetch('/admin/info_register_student.php', {
         method: 'POST',
         body: formData,
         headers: { 'Accept': 'application/json' }
@@ -3968,7 +3765,7 @@ function submitRegistrationForm(formData) {
         // ── Handle success ──
         if (data.status === 'success') {
             resetMemberForm();
-            showMemberSuccessToast(data.message || 'Member registered successfully.');
+            showMemberSuccessToast(data.message || 'Student registered successfully.');
             const wrapper = document.getElementById('memberRegistrationWrapper');
             if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
@@ -4061,7 +3858,7 @@ function loadAttOverview() {
         _attOvLoaded = true;
         document.getElementById('attOvLoad').style.display = 'none';
         document.getElementById('attOvContent').style.display = 'block';
-        const data = d.data, t = data.today, ms = data.member_status;
+        const data = d.data, t = data.today, ms = data.student_status;
         const todayRate = data.total_active > 0 ? Math.round((parseInt(t.present_cnt)||0) / data.total_active * 100) : 0;
         document.getElementById('attKpis').innerHTML = [
             {l:"Today's Present",v:t.present_cnt||0,c:'#16a34a',b:'#d1fae5'},
@@ -4098,7 +3895,7 @@ function loadAttOverview() {
         const abs = data.top_absentees;
         document.getElementById('attAbsentees').innerHTML = abs.length === 0 ? '<p class="text-xs text-emerald-500"><i class="fa-solid fa-check-circle mr-1"></i>No frequent absentees found!</p>' :
             '<div style="max-height:250px;overflow:auto"><table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="px-2 py-1.5 text-left font-semibold text-slate-500">Name</th><th class="px-2 py-1.5 text-left font-semibold text-slate-500">Code</th><th class="px-2 py-1.5 text-center font-semibold text-slate-500">Absent</th><th class="px-2 py-1.5 text-center font-semibold text-slate-500">Rate</th><th class="px-2 py-1.5 text-center font-semibold text-slate-500">Status</th></tr></thead><tbody>' +
-            abs.map(a => '<tr class="border-t border-slate-100 hover:bg-orange-50 cursor-pointer" onclick="viewMemberAtt('+a.member_id+')"><td class="px-2 py-1.5 font-medium">'+escapeHtml(a.student_name+' '+a.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(a.member_code||'—')+'</code></td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+a.absent_days+'</td><td class="px-2 py-1.5 text-center"><span style="color:'+(a.rate<50?'#dc2626':a.rate<75?'#d97706':'#16a34a')+'">'+a.rate+'%</span></td><td class="px-2 py-1.5 text-center">'+statusBadge(a.member_status)+'</td></tr>').join('') +
+            abs.map(a => '<tr class="border-t border-slate-100 hover:bg-orange-50 cursor-pointer" onclick="viewMemberAtt('+a.student_id+')"><td class="px-2 py-1.5 font-medium">'+escapeHtml(a.student_name+' '+a.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(a.student_code||'—')+'</code></td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+a.absent_days+'</td><td class="px-2 py-1.5 text-center"><span style="color:'+(a.rate<50?'#dc2626':a.rate<75?'#d97706':'#16a34a')+'">'+a.rate+'%</span></td><td class="px-2 py-1.5 text-center">'+statusBadge(a.student_status)+'</td></tr>').join('') +
             '</tbody></table></div>';
     }).catch(err => { document.getElementById('attOvLoad').innerHTML = '<p class="text-xs text-red-400">Error: '+escapeHtml(err.message)+'</p>'; });
 }
@@ -4124,30 +3921,30 @@ function loadDailyReport() {
         ].map(k => '<div style="background:'+k.b+';padding:10px;border-radius:12px;text-align:center"><div style="font-size:18px;font-weight:700;color:'+k.c+'">'+k.v+'</div><div style="font-size:9px;color:'+k.c+'80">'+k.l+'</div></div>').join('');
         document.getElementById('attDailyTable').style.display = 'block';
         document.getElementById('attDailyBody').innerHTML = recs.map((r,i) =>
-            '<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-3 py-2">'+(i+1)+'</td><td class="px-3 py-2 font-medium">'+escapeHtml((r.student_name||'')+' '+(r.father_name||''))+'</td><td class="px-3 py-2"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(r.member_code||'—')+'</code></td><td class="px-3 py-2">'+(r.gender==='male'?'M':'F')+'</td><td class="px-3 py-2">'+attBadge(r.status)+'</td><td class="px-3 py-2 text-slate-400">'+(r.notes||'—')+'</td></tr>'
+            '<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-3 py-2">'+(i+1)+'</td><td class="px-3 py-2 font-medium">'+escapeHtml((r.student_name||'')+' '+(r.father_name||''))+'</td><td class="px-3 py-2"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(r.student_code||'—')+'</code></td><td class="px-3 py-2">'+(r.gender==='male'?'M':'F')+'</td><td class="px-3 py-2">'+attBadge(r.status)+'</td><td class="px-3 py-2 text-slate-400">'+(r.notes||'—')+'</td></tr>'
         ).join('');
     });
 }
 
-// --- Member Lookup ---
+// --- Student Lookup ---
 function searchMemberAtt() {
     const q = document.getElementById('attMemSearch').value.trim();
     if (!q) return;
     fetch(_aa + 'search_members&q=' + encodeURIComponent(q), {credentials:'same-origin'}).then(r => r.json()).then(d => {
-        if (d.members.length === 0) { document.getElementById('attMemResults').style.display = 'block'; document.getElementById('attMemResults').innerHTML = '<div class="panel p-4 text-center text-slate-400 text-xs">No members found</div>'; return; }
+        if (d.students.length === 0) { document.getElementById('attMemResults').style.display = 'block'; document.getElementById('attMemResults').innerHTML = '<div class="panel p-4 text-center text-slate-400 text-xs">No students found</div>'; return; }
         document.getElementById('attMemResults').style.display = 'block';
         document.getElementById('attMemDetail').style.display = 'none';
         document.getElementById('attMemResults').innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">' +
-            d.members.map(m => '<div class="panel p-3 cursor-pointer hover:shadow-md transition" onclick="viewMemberAtt('+m.id+')"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold '+(m.gender==='male'?'bg-blue-100 text-blue-600':'bg-pink-100 text-pink-600')+'">'+escapeHtml((m.student_name||'?').charAt(0))+'</div><div><div class="text-xs font-semibold text-slate-700">'+escapeHtml(m.student_name+' '+m.father_name)+'</div><div class="text-[10px] text-slate-400">'+(m.member_code||'—')+' · '+statusBadge(m.status)+'</div></div></div></div>').join('') +
+            d.students.map(m => '<div class="panel p-3 cursor-pointer hover:shadow-md transition" onclick="viewMemberAtt('+m.id+')"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold '+(m.gender==='male'?'bg-blue-100 text-blue-600':'bg-pink-100 text-pink-600')+'">'+escapeHtml((m.student_name||'?').charAt(0))+'</div><div><div class="text-xs font-semibold text-slate-700">'+escapeHtml(m.student_name+' '+m.father_name)+'</div><div class="text-[10px] text-slate-400">'+(m.student_code||'—')+' · '+statusBadge(m.status)+'</div></div></div></div>').join('') +
             '</div>';
     });
 }
 
-function viewMemberAtt(memberId) {
-    fetch(_aa + 'member_attendance&member_id=' + memberId, {credentials:'same-origin'}).then(r => r.json()).then(d => {
+function viewMemberAtt(studentId) {
+    fetch(_aa + 'student_attendance&student_id=' + studentId, {credentials:'same-origin'}).then(r => r.json()).then(d => {
         if (d.status !== 'success') { attToast(d.message, false); return; }
-        const m = d.member, st = d.stats, recs = d.records;
-        // Switch to member tab if not there
+        const m = d.student, st = d.stats, recs = d.records;
+        // Switch to student tab if not there
         document.querySelectorAll('.att-pane').forEach(p => p.style.display = 'none');
         document.getElementById('attMember').style.display = 'block';
         document.querySelectorAll('.atab').forEach(b => b.classList.remove('atab-on'));
@@ -4155,7 +3952,7 @@ function viewMemberAtt(memberId) {
         document.getElementById('attMemResults').style.display = 'none';
         document.getElementById('attMemDetail').style.display = 'block';
         document.getElementById('attMemDetail').innerHTML =
-            '<div class="panel p-4 mb-3"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold '+(m.gender==='male'?'bg-blue-100 text-blue-600':'bg-pink-100 text-pink-600')+'">'+escapeHtml((m.student_name||'?').charAt(0))+'</div><div><h4 class="font-bold text-slate-800">'+escapeHtml(m.student_name+' '+m.father_name+(m.grandfather_name?' '+m.grandfather_name:''))+'</h4><div class="text-xs text-slate-400">'+(m.member_code||'—')+' · '+(m.age_group||'')+' · '+(m.phone_number||'No phone')+' · '+statusBadge(m.status)+'</div></div></div>' +
+            '<div class="panel p-4 mb-3"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold '+(m.gender==='male'?'bg-blue-100 text-blue-600':'bg-pink-100 text-pink-600')+'">'+escapeHtml((m.student_name||'?').charAt(0))+'</div><div><h4 class="font-bold text-slate-800">'+escapeHtml(m.student_name+' '+m.father_name+(m.grandfather_name?' '+m.grandfather_name:''))+'</h4><div class="text-xs text-slate-400">'+(m.student_code||'—')+' · '+('')+' · '+(m.phone_number||'No phone')+' · '+statusBadge(m.status)+'</div></div></div>' +
             '<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">' +
             '<div style="background:#f0fdf4;padding:8px;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#16a34a">'+st.present+'</div><div style="font-size:9px;color:#16a34a">Present</div></div>' +
             '<div style="background:#fee2e2;padding:8px;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#dc2626">'+st.absent+'</div><div style="font-size:9px;color:#dc2626">Absent</div></div>' +
@@ -4200,11 +3997,11 @@ function loadAtRisk() {
             listEl.innerHTML = '';
             return;
         }
-        const ms = d.members || [];
-        countEl.innerHTML = '<span class="font-semibold text-red-600">' + ms.length + '</span> ' + escapeHtml(d.department_label) + ' members below ' + d.threshold + '% in ' + escapeHtml(d.month_label_am) + ' (' + escapeHtml(d.month_label) + ') · at least ' + d.min_sessions + ' sessions · rate = (present + excused + 0.5 × late) ÷ sessions';
-        listEl.innerHTML = ms.length === 0 ? '<div class="text-center py-8 text-emerald-500 text-xs"><i class="fa-solid fa-check-circle text-2xl mb-2"></i><p>No member is below the threshold this month.</p></div>' :
+        const ms = d.students || [];
+        countEl.innerHTML = '<span class="font-semibold text-red-600">' + ms.length + '</span> ' + escapeHtml(d.department_label) + ' students below ' + d.threshold + '% in ' + escapeHtml(d.month_label_am) + ' (' + escapeHtml(d.month_label) + ') · at least ' + d.min_sessions + ' sessions · rate = (present + excused + 0.5 × late) ÷ sessions';
+        listEl.innerHTML = ms.length === 0 ? '<div class="text-center py-8 text-emerald-500 text-xs"><i class="fa-solid fa-check-circle text-2xl mb-2"></i><p>No student is below the threshold this month.</p></div>' :
             '<table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="px-2 py-1.5 text-left">Name</th><th class="px-2 py-1.5">Code</th><th class="px-2 py-1.5">' + (dept === 'edu' ? 'Class' : 'Section') + '</th><th class="px-2 py-1.5">Sessions</th><th class="px-2 py-1.5">Present</th><th class="px-2 py-1.5">Absent</th><th class="px-2 py-1.5">Rate</th><th class="px-2 py-1.5">Warnings</th><th class="px-2 py-1.5">Status</th><th class="px-2 py-1.5">Action</th></tr></thead><tbody>' +
-            ms.map(m => '<tr class="border-t border-slate-100 hover:bg-red-50"><td class="px-2 py-1.5 font-medium">'+escapeHtml(m.student_name+' '+m.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(m.member_code||'—')+'</code></td><td class="px-2 py-1.5 text-center">'+escapeHtml(m.group||'—')+'</td><td class="px-2 py-1.5 text-center">'+(m.sessions||0)+'</td><td class="px-2 py-1.5 text-center text-emerald-600">'+(m.present_days||0)+'</td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+(m.absent_days||0)+'</td><td class="px-2 py-1.5 text-center" style="color:'+(m.band==='low'?'#dc2626':'#d97706')+'">'+(m.rate==null?'—':m.rate+'%')+'</td><td class="px-2 py-1.5 text-center">'+(m.open_warnings>0?'<a class="text-orange-600 hover:underline" href="/admin/attendance_warnings.php?department='+dept+'&member_id='+m.id+'">'+m.open_warnings+' open</a>':'—')+'</td><td class="px-2 py-1.5 text-center">'+statusBadge(m.status)+(m.department_status==='inactive'?' <span class="text-[10px] text-slate-400">(inactive in dept.)</span>':'')+'</td><td class="px-2 py-1.5 text-center"><button onclick="quickStatusChange('+parseInt(m.id,10)+','+jsArg(m.student_name)+','+jsArg(m.status)+')" class="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"><i class="fa-solid fa-pen"></i></button></td></tr>').join('') +
+            ms.map(m => '<tr class="border-t border-slate-100 hover:bg-red-50"><td class="px-2 py-1.5 font-medium">'+escapeHtml(m.student_name+' '+m.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(m.student_code||'—')+'</code></td><td class="px-2 py-1.5 text-center">'+escapeHtml(m.group||'—')+'</td><td class="px-2 py-1.5 text-center">'+(m.sessions||0)+'</td><td class="px-2 py-1.5 text-center text-emerald-600">'+(m.present_days||0)+'</td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+(m.absent_days||0)+'</td><td class="px-2 py-1.5 text-center" style="color:'+(m.band==='low'?'#dc2626':'#d97706')+'">'+(m.rate==null?'—':m.rate+'%')+'</td><td class="px-2 py-1.5 text-center">'+(m.open_warnings>0?'<a class="text-orange-600 hover:underline" href="/admin/attendance_warnings.php?department='+dept+'&student_id='+m.id+'">'+m.open_warnings+' open</a>':'—')+'</td><td class="px-2 py-1.5 text-center">'+statusBadge(m.status)+(m.department_status==='inactive'?' <span class="text-[10px] text-slate-400">(inactive in dept.)</span>':'')+'</td><td class="px-2 py-1.5 text-center"><button onclick="quickStatusChange('+parseInt(m.id,10)+','+jsArg(m.student_name)+','+jsArg(m.status)+')" class="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"><i class="fa-solid fa-pen"></i></button></td></tr>').join('') +
             '</tbody></table>';
     });
 }
@@ -4214,41 +4011,41 @@ function searchForStatus() {
     const q = document.getElementById('attStatusSearch').value.trim();
     if (!q) return;
     fetch(_aa + 'search_members&q=' + encodeURIComponent(q), {credentials:'same-origin'}).then(r => r.json()).then(d => {
-        document.getElementById('attStatusResults').innerHTML = d.members.length === 0 ? '<p class="text-xs text-slate-400 text-center py-4">No members found</p>' :
-            '<div class="space-y-2">' + d.members.map(m =>
+        document.getElementById('attStatusResults').innerHTML = d.students.length === 0 ? '<p class="text-xs text-slate-400 text-center py-4">No students found</p>' :
+            '<div class="space-y-2">' + d.students.map(m =>
                 '<div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition">' +
                 '<div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold '+(m.gender==='male'?'bg-blue-100 text-blue-600':'bg-pink-100 text-pink-600')+'">'+escapeHtml((m.student_name||'?').charAt(0))+'</div>' +
-                '<div><div class="text-xs font-semibold text-slate-700">'+escapeHtml(m.student_name+' '+m.father_name)+'</div><div class="text-[10px] text-slate-400">'+(m.member_code||'—')+' · '+(m.age_group||'')+'</div></div></div>' +
+                '<div><div class="text-xs font-semibold text-slate-700">'+escapeHtml(m.student_name+' '+m.father_name)+'</div><div class="text-[10px] text-slate-400">'+(m.student_code||'—')+' · '+('')+'</div></div></div>' +
                 '<div class="flex items-center gap-2">'+statusBadge(m.status)+
                 '<button onclick="quickStatusChange('+parseInt(m.id,10)+','+jsArg(m.student_name+' '+m.father_name)+','+jsArg(m.status)+')" class="px-3 py-1.5 bg-violet-100 text-violet-700 rounded-lg text-[10px] font-semibold hover:bg-violet-200"><i class="fa-solid fa-pen mr-1"></i>Change</button></div></div>'
             ).join('') + '</div>';
     });
 }
 
-async function quickStatusChange(memberId, name, currentStatus) {
+async function quickStatusChange(studentId, name, currentStatus) {
     // Manual status changes: active <-> inactive only (HR / Information). The
     // server enforces the same rule; 'warning' is no longer set by hand.
     const opts = ['active','inactive'].filter(s => s !== currentStatus);
     let newStatus = opts.length === 1 ? opts[0] : null;
     const toInactive = newStatus === 'inactive';
     const dc = await dcAsk(newStatus === 'active'
-        ? {tier:'low', title:'Make ' + name + ' active again?', summary:'Current status: ' + currentStatus + '. The member is counted as active in attendance and reports again.',
+        ? {tier:'low', title:'Make ' + name + ' active again?', summary:'Current status: ' + currentStatus + '. The student is counted as active in attendance and reports again.',
            reason:{label:'Reason for the change', required:false, maxLength:500}, confirmLabel:'Make active'}
         : {tier:'medium', title: toInactive ? 'Deactivate ' + name + '?' : 'Change the status of ' + name + '?', object: name,
-           summary:'Current status: ' + currentStatus + '.', intent: toInactive ? 'I want to deactivate this member' : 'I want to change this status',
-           consequences:['An INACTIVE member is left out of attendance warnings, active counts and class follow-up.','HR and Information see the reason in the member history.'],
-           keeps:['The member record and history are kept.','You can make the member active again later.'],
+           summary:'Current status: ' + currentStatus + '.', intent: toInactive ? 'I want to deactivate this student' : 'I want to change this status',
+           consequences:['An INACTIVE student is left out of attendance warnings, active counts and class follow-up.','HR and Information see the reason in the student history.'],
+           keeps:['The student record and history are kept.','You can make the student active again later.'],
            choice: toInactive ? null : {label:'New status', options:opts.map(o => ({value:o, label:o})), value:opts[0]},
            reason:{label: 'Reason (at least 3 letters)', required:true, minLength:3, maxLength:500},
-           phrase: toInactive ? 'DEACTIVATE MEMBER' : 'CHANGE STATUS', confirmLabel: toInactive ? 'Deactivate member' : 'Change status'});
+           phrase: toInactive ? 'DEACTIVATE STUDENT' : 'CHANGE STATUS', confirmLabel: toInactive ? 'Deactivate student' : 'Change status'});
     if (!dc) return;
     if (!newStatus) newStatus = dc.choice;
     const reason = String(dc.reason || '').trim();
     if (!['active','inactive'].includes(newStatus)) { attToast('Invalid status', false); return; }
-    if (newStatus === 'inactive' && reason.length < 3) { attToast('A reason is required to deactivate a member', false); return; }
+    if (newStatus === 'inactive' && reason.length < 3) { attToast('A reason is required to deactivate a student', false); return; }
     fetch('/admin/api_attendance_info.php?action=update_status', {
         method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({member_id: memberId, new_status: newStatus, reason: reason, csrf_token: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')})
+        body: JSON.stringify({student_id: studentId, new_status: newStatus, reason: reason, csrf_token: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')})
     }).then(r => r.json()).then(d => {
         attToast(d.message, d.status === 'success');
         if (d.status === 'success') { searchForStatus(); _attOvLoaded = false; }
@@ -4320,31 +4117,12 @@ function loadPreferences() {
     sApiGet('dept_get').then(d => {
         if (d.status !== 'success') return;
         const s = d.settings;
-        document.getElementById('codePrefix').value = s.member_code_prefix || '';
-        document.getElementById('codeDigits').value = s.member_code_digits || '4';
+        document.getElementById('codePrefix').value = s.student_code_prefix || '';
+        document.getElementById('codeDigits').value = s.student_code_digits || '4';
         document.getElementById('autoGenCode').checked = s.auto_generate_code === '1';
-        document.getElementById('defAgeGroup').value = s.default_age_group || '';
-        document.getElementById('defMemType').value = s.default_member_type || 'regular';
-        document.getElementById('defRegType').value = s.default_registration_type || 'direct';
-        document.getElementById('phoneRequired').checked = s.phone_required === '1';
-        document.getElementById('idAutoGen').checked = s.id_card_auto_generate === '1';
-        document.getElementById('guardianAge').value = s.guardian_required_under || '14';
-        updateCodePreview();
-    });
-}
-
-function updateCodePreview() {
-    const prefix = document.getElementById('codePrefix') ? document.getElementById('codePrefix').value : '';
-    const digits = parseInt(document.getElementById('codeDigits').value || '4');
-    const preview = document.getElementById('codePreview');
-    if (preview) preview.textContent = prefix + '1'.padStart(digits, '0');
-}
-
-function savePreferences() {
-    sApiPost('dept_save', {
-        member_code_prefix: document.getElementById('codePrefix').value, member_code_digits: document.getElementById('codeDigits').value,
-        auto_generate_code: document.getElementById('autoGenCode').checked ? '1' : '0', default_age_group: document.getElementById('defAgeGroup').value,
-        default_member_type: document.getElementById('defMemType').value, default_registration_type: document.getElementById('defRegType').value,
+        document.getElementById('{
+        student_code_prefix: document.getElementById('codePrefix').value, student_code_digits: document.getElementById('codeDigits').value,
+        auto_generate_code: document.getElementById('autoGenCode').checked ? '1' : '0', default_registration_type: document.getElementById('defRegType').value,
         phone_required: document.getElementById('phoneRequired').checked ? '1' : '0', id_card_auto_generate: document.getElementById('idAutoGen').checked ? '1' : '0',
         guardian_required_under: document.getElementById('guardianAge').value
     }).then(d => settingsToast(d.message, d.status === 'success')).catch(() => settingsToast('Network error', false));
@@ -4354,10 +4132,10 @@ function savePreferences() {
 function loadSystemInfo() {
     sApiGet('system_info').then(d => {
         if (d.status !== 'success') return;
-        const i = d.info, m = i.members, u = i.users, db = i.database, c = i.cache;
+        const i = d.info, m = i.students, u = i.users, db = i.database, c = i.cache;
         document.getElementById('sysStats').innerHTML =
-            '<div class="sys-row"><span class="sys-label">Total Members</span><span class="sys-val">' + (m.total || 0) + '</span></div>' +
-            '<div class="sys-row"><span class="sys-label">Active Members</span><span class="sys-val" style="color:#16a34a">' + (m.active || 0) + '</span></div>' +
+            '<div class="sys-row"><span class="sys-label">Total Students</span><span class="sys-val">' + (m.total || 0) + '</span></div>' +
+            '<div class="sys-row"><span class="sys-label">Active Students</span><span class="sys-val" style="color:#16a34a">' + (m.active || 0) + '</span></div>' +
             '<div class="sys-row"><span class="sys-label">Archived</span><span class="sys-val" style="color:#94a3b8">' + (m.archived || 0) + '</span></div>' +
             '<div class="sys-row"><span class="sys-label">User Accounts</span><span class="sys-val">' + (u.total || 0) + ' (' + (u.active || 0) + ' active)</span></div>' +
             '<div class="sys-row"><span class="sys-label">Database Size</span><span class="sys-val">' + (db.size_mb || '?') + ' MB</span></div>' +
@@ -4397,7 +4175,7 @@ const InfoReports = (function () {
     function toggleFields() {
         const type = document.getElementById('pdfReportType').value;
         document.getElementById('pdfSourceWrap').style.display = (type === 'sections') ? '' : 'none';
-        document.getElementById('pdfMemberWrap').style.display = (type === 'member') ? '' : 'none';
+        document.getElementById('pdfMemberWrap').style.display = (type === 'student') ? '' : 'none';
     }
 
     function download() {
@@ -4407,10 +4185,10 @@ const InfoReports = (function () {
         if (type === 'sections') {
             params.set('source', document.getElementById('pdfReportSource').value);
         }
-        if (type === 'member') {
+        if (type === 'student') {
             const mid = document.getElementById('pdfMemberId').value;
-            if (!mid) { showToast('Pick a member first.', 'error'); return; }
-            params.set('member_id', mid);
+            if (!mid) { showToast('Pick a student first.', 'error'); return; }
+            params.set('student_id', mid);
         }
         const from = document.getElementById('pdfFrom').value;
         const to = document.getElementById('pdfTo').value;
@@ -4485,7 +4263,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 <?php include __DIR__ . '/../components/comm/comm_section.php'; ?>
-<script src="/admin/js/member_nav.js?v=<?= SSMS_ASSET_VER ?>"></script>
+<script src="/admin/js/student_nav.js?v=<?= SSMS_ASSET_VER ?>"></script>
 <script src="/admin/js/department_status.js?v=<?= SSMS_ASSET_VER ?>-20261022r"></script>
 <script>
 // Explain a permission bounce (access_control.php → index.php → dashboard.php?error=access_denied).

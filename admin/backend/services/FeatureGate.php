@@ -114,7 +114,7 @@ final class FeatureGate
             'reports_v2.php' => 'reports',
             'api_report_views.php' => 'reports',
             'reports.php' => 'reports',
-            'api_export_members.php' => 'reports',
+            'api_export_students.php' => 'reports',
             'export_class_report.php' => 'reports',
             'export_pdf.php' => 'reports',
         ];

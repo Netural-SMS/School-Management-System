@@ -20,7 +20,7 @@
  *                keyed by (ec_year, ec_month). Recovery never auto-closes.
  *
  * A warning that no longer meets its threshold (a day corrected to present,
- * the member returned) is NOT deleted or auto-closed: `below_threshold` flips
+ * the student returned) is NOT deleted or auto-closed: `below_threshold` flips
  * to 0 with an `invalidated` event so staff still close it with an outcome.
  *
  * Bell: `notifications.type = attendance_warning`, target roles
@@ -28,7 +28,7 @@
  * Titles/messages are English + Amharic with Ethiopian-calendar dates only.
  * Rollout rows (`source=rollout`) never notify.
  *
- * Never writes `members.status`. Never crosses departments. Every public
+ * Never writes `students.status`. Never crosses departments. Every public
  * entry point used from a write path is wrapped (`safeEvaluate*`) so a
  * failure here can never fail the attendance save.
  */
@@ -119,14 +119,14 @@ final class AttendanceWarningService
     // ── evaluation entry points ───────────────────────────────────
 
     /**
-     * Evaluate one member in one department. Never throws from write paths —
+     * Evaluate one student in one department. Never throws from write paths —
      * use safeEvaluate(). Options: as_of (Y-m-d), month {year,month} (EC),
      * actor (int|null), source ('live'|'rollout'), notify (bool).
      * @return array{available:bool,risk:?array,actions:string[]}
      */
-    public static function evaluate(\mysqli $conn, string $dept, int $memberId, array $opts = []): array
+    public static function evaluate(\mysqli $conn, string $dept, int $studentId, array $opts = []): array
     {
-        if (!self::available($conn) || !in_array($dept, AttendanceRiskService::DEPARTMENTS, true) || $memberId <= 0) {
+        if (!self::available($conn) || !in_array($dept, AttendanceRiskService::DEPARTMENTS, true) || $studentId <= 0) {
             return ['available' => false, 'risk' => null, 'actions' => []];
         }
         $asOf = (string)($opts['as_of'] ?? date('Y-m-d'));
@@ -135,41 +135,41 @@ final class AttendanceWarningService
         $actor = isset($opts['actor']) ? (int)$opts['actor'] : null;
         $month = $opts['month'] ?? null;
         $policy = AttendancePolicyService::for($conn, $dept);
-        $risk = AttendanceRiskService::riskFor($conn, $dept, $memberId, $asOf, $month);
+        $risk = AttendanceRiskService::riskFor($conn, $dept, $studentId, $asOf, $month);
         $actions = [];
 
         if ($risk['status'] === 'active') {
-            $actions = array_merge($actions, self::evaluateConsecutive($conn, $dept, $memberId, $risk, $policy, $source, $notify, $actor));
-            $actions = array_merge($actions, self::evaluateLowMonth($conn, $dept, $memberId, $risk, $policy, $source, $notify, $actor));
+            $actions = array_merge($actions, self::evaluateConsecutive($conn, $dept, $studentId, $risk, $policy, $source, $notify, $actor));
+            $actions = array_merge($actions, self::evaluateLowMonth($conn, $dept, $studentId, $risk, $policy, $source, $notify, $actor));
         }
         $risk = self::decorate($conn, $risk);
         return ['available' => true, 'risk' => $risk, 'actions' => $actions];
     }
 
     /** Write-path wrapper: logs and swallows every failure. */
-    public static function safeEvaluate(\mysqli $conn, string $dept, int $memberId, array $opts = []): array
+    public static function safeEvaluate(\mysqli $conn, string $dept, int $studentId, array $opts = []): array
     {
         try {
-            return self::evaluate($conn, $dept, $memberId, $opts);
+            return self::evaluate($conn, $dept, $studentId, $opts);
         } catch (\Throwable $e) {
-            error_log('Attendance warning evaluation failed (' . $dept . '#' . $memberId . '): ' . $e->getMessage());
+            error_log('Attendance warning evaluation failed (' . $dept . '#' . $studentId . '): ' . $e->getMessage());
             return ['available' => false, 'risk' => null, 'actions' => ['error']];
         }
     }
 
     /**
-     * Evaluate many members after a sheet write. $date = the saved sheet's
+     * Evaluate many students after a sheet write. $date = the saved sheet's
      * date (decides the Ethiopian month that is re-checked).
-     * @param int[] $memberIds
+     * @param int[] $studentIds
      * @return array{evaluated:int,actions:int}
      */
-    public static function safeEvaluateMany(\mysqli $conn, string $dept, array $memberIds, string $date, ?int $actor = null): array
+    public static function safeEvaluateMany(\mysqli $conn, string $dept, array $studentIds, string $date, ?int $actor = null): array
     {
         $out = ['evaluated' => 0, 'actions' => 0];
         if (!self::available($conn)) {
             return $out;
         }
-        $ids = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn($i) => $i > 0)));
+        $ids = array_values(array_unique(array_filter(array_map('intval', $studentIds), static fn($i) => $i > 0)));
         if ($ids === []) {
             return $out;
         }
@@ -191,13 +191,13 @@ final class AttendanceWarningService
         return $out;
     }
 
-    /** Member ids from a records array (web/mobile sheet payloads). @return int[] */
-    public static function memberIdsFromRecords(array $records): array
+    /** Student ids from a records array (web/mobile sheet payloads). @return int[] */
+    public static function studentIdsFromRecords(array $records): array
     {
         $ids = [];
         foreach ($records as $r) {
-            if (is_array($r) && isset($r['member_id'])) {
-                $ids[] = (int)$r['member_id'];
+            if (is_array($r) && isset($r['student_id'])) {
+                $ids[] = (int)$r['student_id'];
             }
         }
         return array_values(array_unique(array_filter($ids, static fn($i) => $i > 0)));
@@ -222,12 +222,12 @@ final class AttendanceWarningService
     }
 
     /** @return string[] actions */
-    private static function evaluateConsecutive(\mysqli $conn, string $dept, int $memberId, array $risk, array $policy, string $source, bool $notify, ?int $actor): array
+    private static function evaluateConsecutive(\mysqli $conn, string $dept, int $studentId, array $risk, array $policy, string $source, bool $notify, ?int $actor): array
     {
         $actions = [];
         $streak = $risk['streak'];
         $len = (int)$streak['length'];
-        $open = self::findOpen($conn, $dept, $memberId, 'consecutive');
+        $open = self::findOpen($conn, $dept, $studentId, 'consecutive');
 
         if ($len < (int)$policy['consecutive_threshold']) {
             if ($open && (int)$open['below_threshold'] === 1) {
@@ -241,7 +241,7 @@ final class AttendanceWarningService
         }
 
         $stage = self::stageFor($len, $policy);
-        $key = self::key('c', $dept, $memberId, (string)$streak['start']);
+        $key = self::key('c', $dept, $studentId, (string)$streak['start']);
         $row = self::findByKey($conn, $key);
         $fields = [
             'stage' => $stage,
@@ -263,14 +263,14 @@ final class AttendanceWarningService
 
         if ($row === null) {
             $id = self::insert($conn, [
-                'department' => $dept, 'member_id' => $memberId, 'kind' => 'consecutive',
+                'department' => $dept, 'student_id' => $studentId, 'kind' => 'consecutive',
                 'dedupe_key' => $key, 'threshold_value' => (int)$policy['consecutive_threshold'],
                 'source' => $source, 'opened_at' => date('Y-m-d H:i:s'),
             ] + $fields);
             self::event($conn, $id, 'opened', $actor, $payload + ['source' => $source]);
             $actions[] = 'consecutive_opened';
             if ($notify) {
-                self::notify($conn, $id, $dept, $memberId, 'consecutive', $stage, 'opened', $risk, $actor);
+                self::notify($conn, $id, $dept, $studentId, 'consecutive', $stage, 'opened', $risk, $actor);
             }
             $row = self::find($conn, $id);
         } elseif ($row['status'] === 'closed') {
@@ -280,7 +280,7 @@ final class AttendanceWarningService
                 self::event($conn, (int)$row['id'], 'reopened', $actor, $payload + ['previous_stage' => $row['stage']]);
                 $actions[] = 'consecutive_reopened';
                 if ($notify) {
-                    self::notify($conn, (int)$row['id'], $dept, $memberId, 'consecutive', $stage, 'reopened', $risk, $actor);
+                    self::notify($conn, (int)$row['id'], $dept, $studentId, 'consecutive', $stage, 'reopened', $risk, $actor);
                 }
                 $row = self::find($conn, (int)$row['id']);
             } else {
@@ -303,7 +303,7 @@ final class AttendanceWarningService
                 self::event($conn, (int)$row['id'], 'escalated', $actor, $payload + ['previous_stage' => $row['stage']]);
                 $actions[] = 'consecutive_escalated_' . $stage;
                 if ($notify) {
-                    self::notify($conn, (int)$row['id'], $dept, $memberId, 'consecutive', $stage, 'escalated', $risk, $actor);
+                    self::notify($conn, (int)$row['id'], $dept, $studentId, 'consecutive', $stage, 'escalated', $risk, $actor);
                 }
             }
             $row = self::find($conn, (int)$row['id']);
@@ -314,13 +314,13 @@ final class AttendanceWarningService
             && (int)$row['auto_deactivated'] === 0 && $risk['status'] === 'active') {
             try {
                 $reason = 'Automatic: ' . $len . ' consecutive absences (critical threshold ' . (int)$policy['critical_threshold'] . ')';
-                $res = DepartmentStatusService::setStatus($conn, $memberId, $dept, 'inactive', 0, $reason, 'auto', (int)$row['id']);
+                $res = DepartmentStatusService::setStatus($conn, $studentId, $dept, 'inactive', 0, $reason, 'auto', (int)$row['id']);
                 if (!empty($res['changed'])) {
                     self::update($conn, (int)$row['id'], ['auto_deactivated' => 1, 'last_event_at' => date('Y-m-d H:i:s')]);
                     self::event($conn, (int)$row['id'], 'auto_deactivated', null, $payload + ['period_id' => $res['period_id'] ?? null]);
                     $actions[] = 'auto_deactivated';
                     if ($notify) {
-                        self::notify($conn, (int)$row['id'], $dept, $memberId, 'consecutive', 'critical', 'auto_deactivated', $risk, $actor);
+                        self::notify($conn, (int)$row['id'], $dept, $studentId, 'consecutive', 'critical', 'auto_deactivated', $risk, $actor);
                     }
                 }
             } catch (\Throwable $e) {
@@ -331,13 +331,13 @@ final class AttendanceWarningService
     }
 
     /** @return string[] actions */
-    private static function evaluateLowMonth(\mysqli $conn, string $dept, int $memberId, array $risk, array $policy, string $source, bool $notify, ?int $actor): array
+    private static function evaluateLowMonth(\mysqli $conn, string $dept, int $studentId, array $risk, array $policy, string $source, bool $notify, ?int $actor): array
     {
         $actions = [];
         $m = $risk['month'];
         $sessions = (int)$m['sessions'];
         $rate = $m['rate'];
-        $key = self::key('m', $dept, $memberId, $m['ec_year'] . '-' . $m['ec_month']);
+        $key = self::key('m', $dept, $studentId, $m['ec_year'] . '-' . $m['ec_month']);
         $row = self::findByKey($conn, $key);
         $below = $rate !== null && $sessions >= (int)$policy['min_sessions'] && (float)$rate < (float)$policy['low_rate_threshold'];
         $now = date('Y-m-d H:i:s');
@@ -345,7 +345,7 @@ final class AttendanceWarningService
         if ($below) {
             if ($row === null) {
                 $id = self::insert($conn, [
-                    'department' => $dept, 'member_id' => $memberId, 'kind' => 'low_month', 'stage' => null,
+                    'department' => $dept, 'student_id' => $studentId, 'kind' => 'low_month', 'stage' => null,
                     'dedupe_key' => $key, 'threshold_value' => (float)$policy['low_rate_threshold'],
                     'ec_year' => (int)$m['ec_year'], 'ec_month' => (int)$m['ec_month'],
                     'sessions' => $sessions, 'rate' => $rate, 'below_threshold' => 1,
@@ -355,7 +355,7 @@ final class AttendanceWarningService
                     'sessions' => $sessions, 'rate' => $rate, 'threshold' => (float)$policy['low_rate_threshold'], 'source' => $source]);
                 $actions[] = 'low_month_opened';
                 if ($notify) {
-                    self::notify($conn, $id, $dept, $memberId, 'low_month', null, 'opened', $risk, $actor);
+                    self::notify($conn, $id, $dept, $studentId, 'low_month', null, 'opened', $risk, $actor);
                 }
             } elseif ($row['status'] === 'open') {
                 if ((float)$row['rate'] !== (float)$rate || (int)$row['sessions'] !== $sessions || (int)$row['below_threshold'] !== 1) {
@@ -386,23 +386,23 @@ final class AttendanceWarningService
         return $streak['start'] <= $open['streak_last'] && $streak['last'] >= $open['streak_start'];
     }
 
-    private static function key(string $prefix, string $dept, int $memberId, string $tail): string
+    private static function key(string $prefix, string $dept, int $studentId, string $tail): string
     {
-        return $prefix . '|' . $dept . '|' . $memberId . '|' . $tail;
+        return $prefix . '|' . $dept . '|' . $studentId . '|' . $tail;
     }
 
     // ── notifications (bell only) ─────────────────────────────────
 
-    private static function notify(\mysqli $conn, int $warningId, string $dept, int $memberId, string $kind, ?string $stage, string $event, array $risk, ?int $actor): void
+    private static function notify(\mysqli $conn, int $warningId, string $dept, int $studentId, string $kind, ?string $stage, string $event, array $risk, ?int $actor): void
     {
         try {
-            $member = self::memberName($conn, $memberId);
+            $student = self::memberName($conn, $studentId);
             $deptEn = AttendanceRiskService::LABELS[$dept];
             $deptAm = self::DEPT_AM[$dept];
             $s = $risk['streak'];
             $m = $risk['month'];
             $data = [
-                'warning_id' => $warningId, 'department' => $dept, 'member_id' => $memberId,
+                'warning_id' => $warningId, 'department' => $dept, 'student_id' => $studentId,
                 'kind' => $kind, 'stage' => $stage, 'event' => $event,
                 'streak_length' => (int)$s['length'], 'streak_start_ec' => $s['start_ec'], 'streak_last_ec' => $s['last_ec'],
                 'absence_dates_ec' => array_map([AttendanceRiskService::class, 'ecLabel'], $s['dates']),
@@ -417,10 +417,10 @@ final class AttendanceWarningService
                 switch ($event) {
                     case 'auto_deactivated':
                         $priority = 'urgent';
-                        $title = "{$deptEn}: member deactivated after {$n} consecutive absences · አባሉ ኢ-ንቁ ተደርጓል";
-                        $msg = "{$member} was automatically set INACTIVE in {$deptEn} after {$n} consecutive absences ({$range}). "
-                             . "HR / Information may reactivate from the member profile.\n"
-                             . "{$member} በ{$deptAm} {$n} ተከታታይ ቀናት በመቅረቱ ({$rangeAm}) በራስ-ሰር ኢ-ንቁ ተደርጓል።";
+                        $title = "{$deptEn}: student deactivated after {$n} consecutive absences · አባሉ ኢ-ንቁ ተደርጓል";
+                        $msg = "{$student} was automatically set INACTIVE in {$deptEn} after {$n} consecutive absences ({$range}). "
+                             . "HR / Information may reactivate from the student profile.\n"
+                             . "{$student} በ{$deptAm} {$n} ተከታታይ ቀናት በመቅረቱ ({$rangeAm}) በራስ-ሰር ኢ-ንቁ ተደርጓል።";
                         break;
                     default:
                         $stageEn = ['standard' => 'Consecutive absence', 'prolonged' => 'Prolonged absence', 'critical' => 'Critical absence'][$stage] ?? 'Consecutive absence';
@@ -429,16 +429,16 @@ final class AttendanceWarningService
                             $priority = 'urgent';
                         }
                         $title = "{$deptEn}: {$stageEn} warning · {$stageAm} ማስጠንቀቂያ";
-                        $msg = "{$member}: {$n} consecutive absences in {$deptEn} ({$range})."
+                        $msg = "{$student}: {$n} consecutive absences in {$deptEn} ({$range})."
                              . ($stage === 'critical' ? ' Review of the department status is recommended.' : '')
-                             . "\n{$member}: በ{$deptAm} {$n} ተከታታይ የመቅረት ቀናት ({$rangeAm})።"
+                             . "\n{$student}: በ{$deptAm} {$n} ተከታታይ የመቅረት ቀናት ({$rangeAm})።"
                              . ($stage === 'critical' ? ' የክፍል ሁኔታ እንዲገመገም ይመከራል።' : '');
                 }
             } else {
                 $rate = $m['rate'] !== null ? number_format((float)$m['rate'], 1) : '—';
                 $title = "{$deptEn}: Low monthly attendance · ዝቅተኛ የወር ተገኝነት";
-                $msg = "{$member}: {$rate}% attendance in {$m['label']} ({$m['sessions']} sessions) in {$deptEn}.\n"
-                     . "{$member}: በ{$deptAm} የ{$m['label_am']} ተገኝነት {$rate}% ({$m['sessions']} ክፍለ ጊዜዎች)።";
+                $msg = "{$student}: {$rate}% attendance in {$m['label']} ({$m['sessions']} sessions) in {$deptEn}.\n"
+                     . "{$student}: በ{$deptAm} የ{$m['label_am']} ተገኝነት {$rate}% ({$m['sessions']} ክፍለ ጊዜዎች)።";
             }
             $stmt = $conn->prepare(
                 'INSERT INTO notifications (type, title, message, data, priority, source_dept, source_user_id, target_roles, target_user_id)
@@ -461,21 +461,21 @@ final class AttendanceWarningService
         }
     }
 
-    private static function memberName(\mysqli $conn, int $memberId): string
+    private static function memberName(\mysqli $conn, int $studentId): string
     {
-        $stmt = $conn->prepare('SELECT student_name, father_name, member_code FROM members WHERE id = ? LIMIT 1');
+        $stmt = $conn->prepare('SELECT student_name, father_name, student_code FROM students WHERE id = ? LIMIT 1');
         if (!$stmt) {
-            return '#' . $memberId;
+            return '#' . $studentId;
         }
-        $stmt->bind_param('i', $memberId);
+        $stmt->bind_param('i', $studentId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (!$row) {
-            return '#' . $memberId;
+            return '#' . $studentId;
         }
         $name = trim((string)$row['student_name'] . ' ' . (string)$row['father_name']);
-        return $name !== '' ? $name : ('#' . $memberId);
+        return $name !== '' ? $name : ('#' . $studentId);
     }
 
     // ── closing ───────────────────────────────────────────────────
@@ -512,13 +512,13 @@ final class AttendanceWarningService
         self::update($conn, $id, ['status' => 'closed', 'closed_at' => $now, 'closed_by' => $actorId,
                                    'outcome' => $outcome, 'closure_note' => $note !== '' ? $note : null, 'last_event_at' => $now]);
         self::event($conn, $id, 'closed', $actorId, ['outcome' => $outcome, 'note' => $note]);
-        $details = ['warning_id' => $id, 'department' => $row['department'], 'member_id' => (int)$row['member_id'],
+        $details = ['warning_id' => $id, 'department' => $row['department'], 'student_id' => (int)$row['student_id'],
                     'kind' => $row['kind'], 'stage' => $row['stage'], 'outcome' => $outcome, 'note' => $note];
         try {
             if ($auditActor !== null) {
-                SecurityAuditService::recordTrusted($conn, $auditActor, 'Attendance Warning Closed', $details, 'member', (int)$row['member_id']);
+                SecurityAuditService::recordTrusted($conn, $auditActor, 'Attendance Warning Closed', $details, 'student', (int)$row['student_id']);
             } else {
-                SecurityAuditService::record($conn, 'Attendance Warning Closed', $details, 'member', (int)$row['member_id']);
+                SecurityAuditService::record($conn, 'Attendance Warning Closed', $details, 'student', (int)$row['student_id']);
             }
         } catch (\Throwable $e) {
             error_log('Attendance warning audit failed: ' . $e->getMessage());
@@ -529,7 +529,7 @@ final class AttendanceWarningService
     // ── reads ─────────────────────────────────────────────────────
 
     /**
-     * @param array<string,mixed> $f department(s), status, kind, stage, member_id, source, q, limit, offset
+     * @param array<string,mixed> $f department(s), status, kind, stage, student_id, source, q, limit, offset
      * @return array{items:array<int,array<string,mixed>>,total:int}
      */
     public static function list(\mysqli $conn, array $f = []): array
@@ -560,10 +560,10 @@ final class AttendanceWarningService
             $types .= 's';
             $params[] = $f['stage'];
         }
-        if (!empty($f['member_id'])) {
-            $where[] = 'w.member_id = ?';
+        if (!empty($f['student_id'])) {
+            $where[] = 'w.student_id = ?';
             $types .= 'i';
-            $params[] = (int)$f['member_id'];
+            $params[] = (int)$f['student_id'];
         }
         if (!empty($f['source']) && in_array($f['source'], ['live', 'rollout'], true)) {
             $where[] = 'w.source = ?';
@@ -572,7 +572,7 @@ final class AttendanceWarningService
         }
         if (!empty($f['q'])) {
             $q = '%' . trim((string)$f['q']) . '%';
-            $where[] = '(m.student_name LIKE ? OR m.father_name LIKE ? OR m.full_name_am LIKE ? OR m.member_code LIKE ?)';
+            $where[] = '(m.student_name LIKE ? OR m.father_name LIKE ? OR m.full_name_am LIKE ? OR m.student_code LIKE ?)';
             $types .= 'ssss';
             array_push($params, $q, $q, $q, $q);
         }
@@ -580,15 +580,15 @@ final class AttendanceWarningService
         $offset = max(0, (int)($f['offset'] ?? 0));
         $sqlWhere = implode(' AND ', $where);
 
-        $cnt = $conn->prepare("SELECT COUNT(*) AS c FROM " . self::TABLE . " w JOIN members m ON m.id = w.member_id WHERE $sqlWhere");
+        $cnt = $conn->prepare("SELECT COUNT(*) AS c FROM " . self::TABLE . " w JOIN students m ON m.id = w.student_id WHERE $sqlWhere");
         $cnt->bind_param($types, ...$params);
         $cnt->execute();
         $total = (int)($cnt->get_result()->fetch_assoc()['c'] ?? 0);
         $cnt->close();
 
         $stmt = $conn->prepare(
-            "SELECT w.*, m.student_name, m.father_name, m.full_name_am, m.member_code, m.current_section, m.status AS member_status
-             FROM " . self::TABLE . " w JOIN members m ON m.id = w.member_id
+            "SELECT w.*, m.student_name, m.father_name, m.full_name_am, m.student_code, , m.status AS student_status
+             FROM " . self::TABLE . " w JOIN students m ON m.id = w.student_id
              WHERE $sqlWhere
              ORDER BY w.status ASC, FIELD(w.stage,'critical','prolonged','standard') ASC, w.opened_at DESC, w.id DESC
              LIMIT $limit OFFSET $offset"
@@ -645,8 +645,8 @@ final class AttendanceWarningService
             return null;
         }
         $stmt = $conn->prepare(
-            "SELECT w.*, m.student_name, m.father_name, m.full_name_am, m.member_code, m.current_section, m.status AS member_status
-             FROM " . self::TABLE . " w JOIN members m ON m.id = w.member_id WHERE w.id = ? LIMIT 1"
+            "SELECT w.*, m.student_name, m.father_name, m.full_name_am, m.student_code, , m.status AS student_status
+             FROM " . self::TABLE . " w JOIN students m ON m.id = w.student_id WHERE w.id = ? LIMIT 1"
         );
         $stmt->bind_param('i', $id);
         $stmt->execute();
@@ -656,7 +656,7 @@ final class AttendanceWarningService
         $out['events'] = self::events($conn, $id);
         $dept = (string)$row['department'];
         try {
-            $risk = AttendanceRiskService::riskFor($conn, $dept, (int)$row['member_id'], null,
+            $risk = AttendanceRiskService::riskFor($conn, $dept, (int)$row['student_id'], null,
                 $row['kind'] === 'low_month' ? ['year' => (int)$row['ec_year'], 'month' => (int)$row['ec_month']] : null);
             $out['risk'] = self::decorate($conn, $risk);
             $out['absence_dates_ec'] = array_map([AttendanceRiskService::class, 'ecLabel'], $risk['streak']['dates']);
@@ -698,36 +698,36 @@ final class AttendanceWarningService
         return $out;
     }
 
-    /** Both departments for one member: risk + open/closed warnings (HR/Info profile tab). */
-    public static function memberSummary(\mysqli $conn, int $memberId, array $departments = AttendanceRiskService::DEPARTMENTS): array
+    /** Both departments for one student: risk + open/closed warnings (HR/Info profile tab). */
+    public static function memberSummary(\mysqli $conn, int $studentId, array $departments = AttendanceRiskService::DEPARTMENTS): array
     {
-        $out = ['member_id' => $memberId, 'available' => self::available($conn), 'departments' => []];
+        $out = ['student_id' => $studentId, 'available' => self::available($conn), 'departments' => []];
         foreach ($departments as $d) {
             $entry = ['department' => $d, 'label' => AttendanceRiskService::LABELS[$d], 'risk' => null, 'warnings' => []];
             try {
-                $entry['risk'] = self::decorate($conn, AttendanceRiskService::riskFor($conn, $d, $memberId));
+                $entry['risk'] = self::decorate($conn, AttendanceRiskService::riskFor($conn, $d, $studentId));
             } catch (\Throwable $e) {
                 $entry['risk'] = null;
             }
             if ($out['available']) {
-                $entry['warnings'] = self::list($conn, ['departments' => [$d], 'member_id' => $memberId, 'status' => 'all', 'limit' => 50])['items'];
+                $entry['warnings'] = self::list($conn, ['departments' => [$d], 'student_id' => $studentId, 'status' => 'all', 'limit' => 50])['items'];
             }
             $out['departments'][$d] = $entry;
         }
         return $out;
     }
 
-    /** Open warning per member for sheet indicators. @return array<int,array{id:int,kind:string,stage:?string}> */
-    public static function openByMembers(\mysqli $conn, string $dept, array $memberIds): array
+    /** Open warning per student for sheet indicators. @return array<int,array{id:int,kind:string,stage:?string}> */
+    public static function openByMembers(\mysqli $conn, string $dept, array $studentIds): array
     {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn($i) => $i > 0)));
+        $ids = array_values(array_unique(array_filter(array_map('intval', $studentIds), static fn($i) => $i > 0)));
         if ($ids === [] || !self::available($conn)) {
             return [];
         }
         $in = implode(',', $ids);
         $stmt = $conn->prepare(
-            "SELECT id, member_id, kind, stage FROM " . self::TABLE .
-            " WHERE department = ? AND status = 'open' AND member_id IN ($in)
+            "SELECT id, student_id, kind, stage FROM " . self::TABLE .
+            " WHERE department = ? AND status = 'open' AND student_id IN ($in)
              ORDER BY FIELD(stage,'critical','prolonged','standard') ASC, id DESC"
         );
         $stmt->bind_param('s', $dept);
@@ -735,7 +735,7 @@ final class AttendanceWarningService
         $res = $stmt->get_result();
         $out = [];
         while ($r = $res->fetch_assoc()) {
-            $mid = (int)$r['member_id'];
+            $mid = (int)$r['student_id'];
             if (!isset($out[$mid])) {
                 $out[$mid] = ['id' => (int)$r['id'], 'kind' => (string)$r['kind'], 'stage' => $r['stage']];
             }
@@ -751,7 +751,7 @@ final class AttendanceWarningService
         if (!self::available($conn)) {
             return $risk;
         }
-        $open = self::findOpen($conn, (string)$risk['department'], (int)$risk['member_id'], null);
+        $open = self::findOpen($conn, (string)$risk['department'], (int)$risk['student_id'], null);
         if ($open) {
             $risk['open_warning'] = ['id' => (int)$open['id'], 'kind' => (string)$open['kind'], 'stage' => $open['stage'],
                                      'below_threshold' => (int)$open['below_threshold'], 'opened_ec' => self::ecDateTime((string)$open['opened_at'])];
@@ -783,10 +783,10 @@ final class AttendanceWarningService
             'id' => (int)$r['id'],
             'department' => $dept,
             'department_label' => AttendanceRiskService::LABELS[$dept] ?? $dept,
-            'member_id' => (int)$r['member_id'],
-            'member_name' => $name,
-            'member_name_am' => (string)($r['full_name_am'] ?? ''),
-            'member_code' => (string)($r['member_code'] ?? ''),
+            'student_id' => (int)$r['student_id'],
+            'student_name' => $name,
+            'student_name_am' => (string)($r['full_name_am'] ?? ''),
+            'student_code' => (string)($r['student_code'] ?? ''),
             'section' => (string)($r['current_section'] ?? ''),
             'kind' => $kind,
             'stage' => $r['stage'],
@@ -849,18 +849,18 @@ final class AttendanceWarningService
         return $row ?: null;
     }
 
-    private static function findOpen(\mysqli $conn, string $dept, int $memberId, ?string $kind): ?array
+    private static function findOpen(\mysqli $conn, string $dept, int $studentId, ?string $kind): ?array
     {
-        $sql = 'SELECT * FROM ' . self::TABLE . " WHERE department = ? AND member_id = ? AND status = 'open'";
+        $sql = 'SELECT * FROM ' . self::TABLE . " WHERE department = ? AND student_id = ? AND status = 'open'";
         if ($kind !== null) {
             $sql .= ' AND kind = ?';
         }
         $sql .= " ORDER BY FIELD(kind,'consecutive','low_month') ASC, id DESC LIMIT 1";
         $stmt = $conn->prepare($sql);
         if ($kind !== null) {
-            $stmt->bind_param('sis', $dept, $memberId, $kind);
+            $stmt->bind_param('sis', $dept, $studentId, $kind);
         } else {
-            $stmt->bind_param('si', $dept, $memberId);
+            $stmt->bind_param('si', $dept, $studentId);
         }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();

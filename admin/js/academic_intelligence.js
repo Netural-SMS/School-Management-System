@@ -183,7 +183,7 @@
       class_id: 0,
       subject_id: 0,
       teacher_id: 0,
-      member_id: 0,
+      student_id: 0,
       gender: '',
       grade_letter: '',
       min_grade: '',
@@ -426,14 +426,14 @@
           self.state.class_id = 0;
           self.state.subject_id = 0;
           self.state.teacher_id = 0;
-          self.state.member_id = 0;
+          self.state.student_id = 0;
           self.loadCatalogue().then(function () { self.load(); });
           return;
         }
         if (key === 'class_id' && self.perspective === 'student') {
           // The roster changed, so the student picker has to be rebuilt
           // and the previous student dropped.
-          self.state.member_id = 0;
+          self.state.student_id = 0;
           self.renderFilters();
           self.load();
           return;
@@ -466,7 +466,7 @@
     var studentSel = document.getElementById('aiStudent');
     if (studentSel) {
       studentSel.addEventListener('change', function () {
-        self.state.member_id = studentSel.value;
+        self.state.student_id = studentSel.value;
         self.load();
       });
       this.populateStudents();
@@ -508,15 +508,15 @@
         // If the previously selected student is not in this roster the
         // selection is dropped rather than silently moved to someone else.
         var stillValid = students.some(function (st) {
-          return String(st.member_id) === String(self.state.member_id);
+          return String(st.student_id) === String(self.state.student_id);
         });
-        if (!stillValid) self.state.member_id = 0;
+        if (!stillValid) self.state.student_id = 0;
         sel.innerHTML = '<option value="0">Select a student\u2026</option>'
           + students.map(function (st) {
             var label = st.student_name + (st.father_name ? ' ' + st.father_name : '')
-              + (st.member_code ? ' \u00b7 ' + st.member_code : '');
-            return '<option value="' + st.member_id + '"'
-              + (String(st.member_id) === String(self.state.member_id) ? ' selected' : '')
+              + (st.student_code ? ' \u00b7 ' + st.student_code : '');
+            return '<option value="' + st.student_id + '"'
+              + (String(st.student_id) === String(self.state.student_id) ? ' selected' : '')
               + '>' + esc(label) + '</option>';
           }).join('');
       })
@@ -534,7 +534,7 @@
       'year_id=' + encodeURIComponent(s.year_id || 0),
       'term_id=' + encodeURIComponent(s.term_id || 0)
     ];
-    if (this.perspective === 'student') parts.push('member_id=' + encodeURIComponent(s.member_id || 0));
+    if (this.perspective === 'student') parts.push('student_id=' + encodeURIComponent(s.student_id || 0));
     if (this.perspective === 'teacher') parts.push('teacher_id=' + encodeURIComponent(s.teacher_id || 0));
     if (this.perspective === 'subject') parts.push('subject_id=' + encodeURIComponent(s.subject_id || 0));
     if (this.perspective === 'class' || this.perspective === 'student') {
@@ -572,7 +572,7 @@
             : { icon: 'fa-school', title: 'No classes configured',
                 message: 'Classes must exist before students can be tracked.' };
         }
-        if (!s.member_id) {
+        if (!s.student_id) {
           return { icon: 'fa-user-graduate', title: 'Choose a student',
                    message: 'Select a student from this class to see their subjects, '
                             + 'results and attendance.' };
@@ -718,7 +718,7 @@
         ev.preventDefault();
         var target = el.getAttribute('data-drill');
         var patch = {};
-        ['class_id', 'subject_id', 'teacher_id', 'member_id'].forEach(function (k) {
+        ['class_id', 'subject_id', 'teacher_id', 'student_id'].forEach(function (k) {
           var v = el.getAttribute('data-' + k.replace('_', '-'));
           if (v !== null) patch[k] = intOr(v, 0);
         });
@@ -816,7 +816,7 @@
       + '<div><div style="font-size:1.1rem;font-weight:800;color:#1e293b">' + esc(fullName) + '</div>'
       + '<div style="font-size:.75rem;color:#64748b;margin-top:.15rem">'
       + (s.christian_name ? 'Christian name: ' + esc(s.christian_name) + ' · ' : '')
-      + (s.member_code ? 'Code: ' + esc(s.member_code) : '') + '</div>'
+      + (s.student_code ? 'Code: ' + esc(s.student_code) : '') + '</div>'
       + '<div style="margin-top:.4rem">'
       + drillBtn('class', { class_id: s.class_id }, s.class_name || 'Class', 'Open the class view')
       + '</div></div>'
@@ -1055,9 +1055,9 @@
     var studentRows = students.map(function (st) {
       return '<tr>'
         + td(st.rank ? ('#' + st.rank + (st.rank_tied ? '*' : '')) : '—', 'text-align:right;color:#64748b')
-        + td(drillBtn('student', { member_id: st.member_id, class_id: s.class_id },
+        + td(drillBtn('student', { student_id: st.student_id, class_id: s.class_id },
           [st.student_name, st.father_name].filter(Boolean).join(' '), 'Open this student')
-          + (st.member_code ? '<div style="font-size:.66rem;color:#94a3b8">' + esc(st.member_code) + '</div>' : ''))
+          + (st.student_code ? '<div style="font-size:.66rem;color:#94a3b8">' + esc(st.student_code) + '</div>' : ''))
         + td(esc(st.gender || '—'))
         + td('<strong>' + num(st.overall_average, '%') + '</strong>', 'text-align:right')
         + td(gradeChip(st.grade_letter))

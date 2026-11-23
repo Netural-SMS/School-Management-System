@@ -1,11 +1,11 @@
 <?php
 /**
  * ============================================================================
- * AttendanceMonthRollupService — per-member, per-Ethiopian-month roll-up
+ * AttendanceMonthRollupService — per-student, per-Ethiopian-month roll-up
  * (Attendance alerting — Phase 4, requirements §6 / §9, owner T-5)
  * ============================================================================
  * ONE derived table (`attendance_month_rollup`, sql/074) that caches the
- * SHARED risk formula of AttendanceRiskService for every member and every
+ * SHARED risk formula of AttendanceRiskService for every student and every
  * Ethiopian month, per department (Education and Mezmur stay separate):
  *
  *   sessions    = eligible rows with status present|absent|late|excused
@@ -22,13 +22,13 @@
  * day of `started_at` up to — not including — the day of `ended_at`).
  *
  * Refresh policy (no cron on shared hosting):
- *   • after every official write / review transition the members on that
+ *   • after every official write / review transition the students on that
  *     sheet are recomputed for the sheet's month (hook in
  *     AttendanceWarningService::safeEvaluateMany);
  *   • opening the Monthly attendance report recomputes a whole
  *     (department, month) when it is missing or stale (10 min for the current
  *     month, 24 h for past months).
- * Rows are never deleted: a member who no longer has eligible sessions in a
+ * Rows are never deleted: a student who no longer has eligible sessions in a
  * month is reset to sessions = 0 / band no_data (history preserved, §13).
  *
  * All user-facing dates produced here are Ethiopian calendar strings; the
@@ -42,7 +42,7 @@ require_once __DIR__ . '/FeatureGate.php';
 require_once __DIR__ . '/DepartmentStatusService.php';
 require_once __DIR__ . '/AttendancePolicyService.php';
 require_once __DIR__ . '/AttendanceRiskService.php';
-require_once __DIR__ . '/MemberCategory.php';
+require_once __DIR__ . '/StudentCategory.php';
 require_once __DIR__ . '/AttendanceWarningService.php';
 
 final class AttendanceMonthRollupService
@@ -95,17 +95,17 @@ final class AttendanceMonthRollupService
     // ── refresh ───────────────────────────────────────────────────
 
     /**
-     * Recompute one (department, EC month) — for every member with rows in
-     * that month, or only for $memberIds when given. Idempotent; wrapped in a
+     * Recompute one (department, EC month) — for every student with rows in
+     * that month, or only for $studentIds when given. Idempotent; wrapped in a
      * transaction so readers never see a half-reset month.
      *
-     * @param int[]|null $memberIds
+     * @param int[]|null $studentIds
      * @return array{ok:bool,rows:int,reset:int}
      */
     /** Message of the last failed refresh in this request (null when the last refresh succeeded). */
     public static ?string $lastError = null;
 
-    public static function refreshMonth(\mysqli $conn, string $dept, int $ecYear, int $ecMonth, ?array $memberIds = null): array
+    public static function refreshMonth(\mysqli $conn, string $dept, int $ecYear, int $ecMonth, ?array $studentIds = null): array
     {
         $out = ['ok' => false, 'rows' => 0, 'reset' => 0];
         if (!self::available($conn) || !in_array($dept, AttendanceRiskService::DEPARTMENTS, true)) {
@@ -113,8 +113,8 @@ final class AttendanceMonthRollupService
         }
         $ecMonth = max(1, min(13, $ecMonth));
         $ids = null;
-        if ($memberIds !== null) {
-            $ids = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn($i) => $i > 0)));
+        if ($studentIds !== null) {
+            $ids = array_values(array_unique(array_filter(array_map('intval', $studentIds), static fn($i) => $i > 0)));
             if ($ids === []) {
                 $out['ok'] = true;
                 return $out;
@@ -128,13 +128,13 @@ final class AttendanceMonthRollupService
         $idSql = $ids === null ? '' : ' AND %s IN (' . implode(',', $ids) . ')';
         $conn->begin_transaction();
         try {
-            // 1. Reset: members whose sheet was reopened/rejected may have no
+            // 1. Reset: students whose sheet was reopened/rejected may have no
             //    eligible rows left — their row must show "no data", not the old rate.
             $reset = $conn->prepare(
                 'UPDATE ' . self::TABLE . "
                  SET sessions = 0, present = 0, absent = 0, late = 0, excused = 0, present_eq = 0, absent_eq = 0,
                      rate = NULL, band = 'no_data', below_threshold = 0, threshold_value = ?, computed_at = NOW()
-                 WHERE department = ? AND ec_year = ? AND ec_month = ?" . ($ids === null ? '' : sprintf($idSql, 'member_id'))
+                 WHERE department = ? AND ec_year = ? AND ec_month = ?" . ($ids === null ? '' : sprintf($idSql, 'student_id'))
             );
             if (!$reset) {
                 throw new \RuntimeException('rollup reset prepare failed');
@@ -146,16 +146,16 @@ final class AttendanceMonthRollupService
 
             // 2. Set-based recompute of the shared formula.
             $src = $dept === 'edu'
-                ? self::eduSourceSql($conn, $ids === null ? '' : sprintf($idSql, 'a.member_id'))
-                : self::mezmurSourceSql($conn, $ids === null ? '' : sprintf($idSql, 'x.member_id'));
+                ? self::eduSourceSql($conn, $ids === null ? '' : sprintf($idSql, 'a.student_id'))
+                : self::mezmurSourceSql($conn, $ids === null ? '' : sprintf($idSql, 'x.student_id'));
             $w = AttendanceRiskService::LATE_WEIGHT;
             $bE = AttendanceRiskService::BAND_EXCELLENT;
             $bG = AttendanceRiskService::BAND_GOOD;
             $bF = AttendanceRiskService::BAND_FAIR;
             $sql = 'INSERT INTO ' . self::TABLE . "
-                    (department, member_id, ec_year, ec_month, sessions, present, absent, late, excused,
+                    (department, student_id, ec_year, ec_month, sessions, present, absent, late, excused,
                      present_eq, absent_eq, rate, band, below_threshold, threshold_value, computed_at)
-                SELECT ?, t.member_id, ?, ?, t.sessions, t.present, t.absent, t.late, t.excused,
+                SELECT ?, t.student_id, ?, ?, t.sessions, t.present, t.absent, t.late, t.excused,
                        t.present + t.excused + {$w} * t.late,
                        t.absent + {$w} * t.late,
                        ROUND((t.present + t.excused + {$w} * t.late) / t.sessions * 100, 2),
@@ -205,22 +205,22 @@ final class AttendanceMonthRollupService
         return $out;
     }
 
-    /** Recompute the month that contains $date for the given members (post-write hook). */
-    public static function refreshForDate(\mysqli $conn, string $dept, array $memberIds, string $date): array
+    /** Recompute the month that contains $date for the given students (post-write hook). */
+    public static function refreshForDate(\mysqli $conn, string $dept, array $studentIds, string $date): array
     {
         try {
             $ec = AttendanceRiskService::ecOf($date);
         } catch (\Throwable $e) {
             return ['ok' => false, 'rows' => 0, 'reset' => 0];
         }
-        return self::refreshMonth($conn, $dept, (int)$ec['year'], (int)$ec['month'], $memberIds);
+        return self::refreshMonth($conn, $dept, (int)$ec['year'], (int)$ec['month'], $studentIds);
     }
 
     /** Never throws. */
-    public static function safeRefreshForDate(\mysqli $conn, string $dept, array $memberIds, string $date): void
+    public static function safeRefreshForDate(\mysqli $conn, string $dept, array $studentIds, string $date): void
     {
         try {
-            self::refreshForDate($conn, $dept, $memberIds, $date);
+            self::refreshForDate($conn, $dept, $studentIds, $date);
         } catch (\Throwable $e) {
             error_log('[AttendanceMonthRollupService::safeRefreshForDate] ' . $e->getMessage());
         }
@@ -262,8 +262,8 @@ final class AttendanceMonthRollupService
         if (!DepartmentStatusService::available($conn)) {
             return '';
         }
-        return " AND NOT EXISTS (SELECT 1 FROM member_department_periods dp
-                     WHERE dp.member_id = {$memberExpr} AND dp.department = '{$dept}' AND dp.status = 'inactive'
+        return " AND NOT EXISTS (SELECT 1 FROM student_department_periods dp
+                     WHERE dp.student_id = {$memberExpr} AND dp.department = '{$dept}' AND dp.status = 'inactive'
                        AND DATE(dp.started_at) <= {$dateExpr}
                        AND (dp.ended_at IS NULL OR DATE(dp.ended_at) > {$dateExpr}))";
     }
@@ -273,12 +273,12 @@ final class AttendanceMonthRollupService
         $packetFilter = AttendanceRiskService::legacyRowsEligible()
             ? "(gs.id IS NULL OR gs.status IN ('submitted','approved'))"
             : "(gs.id IS NOT NULL AND gs.status IN ('submitted','approved'))";
-        return "SELECT a.member_id,
+        return "SELECT a.student_id,
                        COUNT(*) AS sessions,
                        SUM(a.status = 'present') AS present, SUM(a.status = 'absent') AS absent,
                        SUM(a.status = 'late') AS late, SUM(a.status = 'excused') AS excused
                 FROM attendance a
-                JOIN members m ON m.id = a.member_id
+                JOIN students m ON m.id = a.student_id
                 LEFT JOIN grade_submissions gs ON gs.id = (
                     SELECT g2.id FROM grade_submissions g2
                     WHERE g2.class_id = a.class_id AND g2.attendance_date = a.attendance_date
@@ -286,30 +286,30 @@ final class AttendanceMonthRollupService
                     ORDER BY g2.id DESC LIMIT 1)
                 WHERE a.attendance_date BETWEEN ? AND ?
                   AND a.status IN ('present','absent','late','excused')
-                  AND {$packetFilter}" . self::periodExclusionSql($conn, 'edu', 'a.member_id', 'a.attendance_date') . $idFilter . "
-                GROUP BY a.member_id";
+                  AND {$packetFilter}" . self::periodExclusionSql($conn, 'edu', 'a.student_id', 'a.attendance_date') . $idFilter . "
+                GROUP BY a.student_id";
     }
 
     private static function mezmurSourceSql(\mysqli $conn, string $idFilter): string
     {
-        $sectionExpr = MemberCategory::sqlSectionExpr('m');
+        $sectionExpr = StudentCategory::sqlSectionExpr('m');
         $packetFilter = AttendanceRiskService::legacyRowsEligible()
             ? "(ms.id IS NULL OR ms.status IN ('submitted','approved'))"
             : "(ms.id IS NOT NULL AND ms.status IN ('submitted','approved'))";
         $d = 'COALESCE(x.attendance_date, s.session_date)';
-        return "SELECT x.member_id,
+        return "SELECT x.student_id,
                        COUNT(*) AS sessions,
                        SUM(x.status = 'present') AS present, SUM(x.status = 'absent') AS absent,
                        SUM(x.status = 'late') AS late, SUM(x.status = 'excused') AS excused
                 FROM mezmur_attendance x
-                JOIN members m ON m.id = x.member_id
+                JOIN students m ON m.id = x.student_id
                 LEFT JOIN mezmur_sessions s ON s.id = x.session_id
                 LEFT JOIN mezmur_submissions ms
                        ON ms.attendance_date = {$d} AND ms.section = {$sectionExpr}
                 WHERE {$d} BETWEEN ? AND ?
                   AND x.status IN ('present','absent','late','excused')
-                  AND {$packetFilter}" . self::periodExclusionSql($conn, 'mezmur', 'x.member_id', $d) . $idFilter . "
-                GROUP BY x.member_id";
+                  AND {$packetFilter}" . self::periodExclusionSql($conn, 'mezmur', 'x.student_id', $d) . $idFilter . "
+                GROUP BY x.student_id";
     }
 
     // ── reads ─────────────────────────────────────────────────────
@@ -360,8 +360,8 @@ final class AttendanceMonthRollupService
     }
 
     /**
-     * One month of one department — paged, filterable, joined with the member
-     * directory, class/section and the member's open warnings.
+     * One month of one department — paged, filterable, joined with the student
+     * directory, class/section and the student's open warnings.
      * @param array{below?:bool,band?:string,q?:string,group?:string,limit?:int,offset?:int} $f
      * @return array{items:list<array<string,mixed>>,total:int,limit:int,offset:int}
      */
@@ -373,7 +373,7 @@ final class AttendanceMonthRollupService
         if (!self::available($conn) || !in_array($dept, AttendanceRiskService::DEPARTMENTS, true)) {
             return $empty;
         }
-        $sectionExpr = MemberCategory::sqlSectionExpr('m');
+        $sectionExpr = StudentCategory::sqlSectionExpr('m');
         $where = 'r.department = ? AND r.ec_year = ? AND r.ec_month = ?';
         $types = 'sii';
         $params = [$dept, $ecYear, $ecMonth];
@@ -388,7 +388,7 @@ final class AttendanceMonthRollupService
         }
         $q = trim((string)($f['q'] ?? ''));
         if ($q !== '') {
-            $where .= ' AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.member_code LIKE ?)';
+            $where .= ' AND (m.student_name LIKE ? OR m.father_name LIKE ? OR m.student_code LIKE ?)';
             $like = '%' . $q . '%';
             $types .= 'sss';
             array_push($params, $like, $like, $like);
@@ -399,9 +399,9 @@ final class AttendanceMonthRollupService
             $types .= $dept === 'edu' ? 'i' : 's';
             $params[] = $dept === 'edu' ? (int)$group : $group;
         }
-        $joins = "JOIN members m ON m.id = r.member_id
+        $joins = "JOIN students m ON m.id = r.student_id
                   LEFT JOIN class_enrollments ce ON ce.id = (
-                      SELECT MAX(e.id) FROM class_enrollments e WHERE e.member_id = m.id AND e.status = 'active')
+                      SELECT MAX(e.id) FROM class_enrollments e WHERE e.student_id = m.id AND e.status = 'active')
                   LEFT JOIN classes cl ON cl.id = ce.class_id";
 
         $cnt = $conn->prepare("SELECT COUNT(*) AS c FROM " . self::TABLE . " r {$joins} WHERE {$where}");
@@ -415,11 +415,11 @@ final class AttendanceMonthRollupService
 
         $warnTable = AttendanceWarningService::TABLE;
         $openWarnings = AttendanceWarningService::tableExists($conn)
-            ? "(SELECT COUNT(*) FROM {$warnTable} w WHERE w.member_id = r.member_id AND w.department = r.department AND w.status = 'open')"
+            ? "(SELECT COUNT(*) FROM {$warnTable} w WHERE w.student_id = r.student_id AND w.department = r.department AND w.status = 'open')"
             : '0';
-        $sql = "SELECT r.member_id, r.sessions, r.present, r.absent, r.late, r.excused, r.present_eq, r.absent_eq,
+        $sql = "SELECT r.student_id, r.sessions, r.present, r.absent, r.late, r.excused, r.present_eq, r.absent_eq,
                        r.rate, r.band, r.below_threshold, r.threshold_value, r.computed_at,
-                       m.member_code, m.student_name, m.father_name, m.gender, m.status AS member_status,
+                       m.student_code, m.student_name, m.father_name, m.gender, m.status AS student_status,
                        cl.id AS class_id, cl.class_name, {$sectionExpr} AS section,
                        {$openWarnings} AS open_warnings
                 FROM " . self::TABLE . " r {$joins}
@@ -438,14 +438,14 @@ final class AttendanceMonthRollupService
         $items = [];
         $ids = [];
         while ($row = $res->fetch_assoc()) {
-            $ids[] = (int)$row['member_id'];
+            $ids[] = (int)$row['student_id'];
             $items[] = self::present($row, $dept);
         }
         $stmt->close();
-        // Department status (active / inactive) for the page — never members.status.
+        // Department status (active / inactive) for the page — never students.status.
         $statuses = $ids === [] ? [] : DepartmentStatusService::statusesFor($conn, $ids);
         foreach ($items as &$it) {
-            $st = $statuses[$it['member_id']][$dept] ?? null;
+            $st = $statuses[$it['student_id']][$dept] ?? null;
             $it['department_status'] = is_array($st) ? (string)($st['status'] ?? 'active') : (is_string($st) ? $st : 'active');
         }
         unset($it);
@@ -457,13 +457,13 @@ final class AttendanceMonthRollupService
     {
         $rate = $row['rate'] === null ? null : (float)$row['rate'];
         return [
-            'member_id' => (int)$row['member_id'],
-            'member_code' => (string)($row['member_code'] ?? ''),
+            'student_id' => (int)$row['student_id'],
+            'student_code' => (string)($row['student_code'] ?? ''),
             'name' => trim((string)($row['student_name'] ?? '') . ' ' . (string)($row['father_name'] ?? '')),
             'student_name' => (string)($row['student_name'] ?? ''),
             'father_name' => (string)($row['father_name'] ?? ''),
             'gender' => (string)($row['gender'] ?? ''),
-            'member_status' => (string)($row['member_status'] ?? ''),
+            'student_status' => (string)($row['student_status'] ?? ''),
             'group' => $dept === 'edu' ? (string)($row['class_name'] ?? '—') : (string)($row['section'] ?? '—'),
             'group_id' => $dept === 'edu' ? (int)($row['class_id'] ?? 0) : (string)($row['section'] ?? ''),
             'sessions' => (int)$row['sessions'],
@@ -498,7 +498,7 @@ final class AttendanceMonthRollupService
             'month_label_am' => AttendanceRiskService::monthLabelAm($ecYear, $ecMonth),
             'threshold' => (float)($policy['low_rate_threshold'] ?? 75.0),
             'min_sessions' => (int)($policy['min_sessions'] ?? 3),
-            'members' => 0, 'with_data' => 0, 'below' => 0, 'avg_rate' => null,
+            'students' => 0, 'with_data' => 0, 'below' => 0, 'avg_rate' => null,
             'bands' => ['excellent' => 0, 'good' => 0, 'fair' => 0, 'low' => 0, 'no_data' => 0],
             'computed_at_ec' => null,
         ];
@@ -520,7 +520,7 @@ final class AttendanceMonthRollupService
             $band = (string)$row['band'];
             $c = (int)$row['c'];
             $out['bands'][$band] = $c;
-            $out['members'] += $c;
+            $out['students'] += $c;
             $out['below'] += (int)$row['b'];
             if ($band !== 'no_data') {
                 $out['with_data'] += $c;
@@ -543,14 +543,14 @@ final class AttendanceMonthRollupService
         if (!self::available($conn)) {
             return [];
         }
-        $sectionExpr = MemberCategory::sqlSectionExpr('m');
+        $sectionExpr = StudentCategory::sqlSectionExpr('m');
         $sql = $dept === 'edu'
             ? "SELECT DISTINCT cl.id AS id, cl.class_name AS label FROM " . self::TABLE . " r
-               JOIN class_enrollments ce ON ce.id = (SELECT MAX(e.id) FROM class_enrollments e WHERE e.member_id = r.member_id AND e.status = 'active')
+               JOIN class_enrollments ce ON ce.id = (SELECT MAX(e.id) FROM class_enrollments e WHERE e.student_id = r.student_id AND e.status = 'active')
                JOIN classes cl ON cl.id = ce.class_id
                WHERE r.department = ? AND r.ec_year = ? AND r.ec_month = ? ORDER BY cl.class_name"
             : "SELECT DISTINCT {$sectionExpr} AS id, {$sectionExpr} AS label FROM " . self::TABLE . " r
-               JOIN members m ON m.id = r.member_id
+               JOIN students m ON m.id = r.student_id
                WHERE r.department = ? AND r.ec_year = ? AND r.ec_month = ? ORDER BY label";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -567,18 +567,18 @@ final class AttendanceMonthRollupService
         return $out;
     }
 
-    /** Rows of a member across months (profile / drill-down), newest first. @return list<array<string,mixed>> */
-    public static function memberMonths(\mysqli $conn, string $dept, int $memberId, int $limit = 12): array
+    /** Rows of a student across months (profile / drill-down), newest first. @return list<array<string,mixed>> */
+    public static function memberMonths(\mysqli $conn, string $dept, int $studentId, int $limit = 12): array
     {
-        if (!self::available($conn) || $memberId <= 0) {
+        if (!self::available($conn) || $studentId <= 0) {
             return [];
         }
         $stmt = $conn->prepare('SELECT ec_year, ec_month, sessions, present, absent, late, excused, present_eq, absent_eq, rate, band, below_threshold
-                                FROM ' . self::TABLE . ' WHERE department = ? AND member_id = ? ORDER BY ec_year DESC, ec_month DESC LIMIT ?');
+                                FROM ' . self::TABLE . ' WHERE department = ? AND student_id = ? ORDER BY ec_year DESC, ec_month DESC LIMIT ?');
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('sii', $dept, $memberId, $limit);
+        $stmt->bind_param('sii', $dept, $studentId, $limit);
         $stmt->execute();
         $res = $stmt->get_result();
         $out = [];
@@ -603,7 +603,7 @@ final class AttendanceMonthRollupService
      * Information). Lazily refreshes each requested department (10-min bound)
      * and never throws — dashboards must render even when the roll-up is off.
      * @param string[] $departments
-     * @return array{available:bool,month_label:string,month_label_am:string,ec_year:int,ec_month:int,below:int,members:int,avg_rate:?float,per_dept:array<string,array{below:int,members:int,avg_rate:?float,threshold:float}>}
+     * @return array{available:bool,month_label:string,month_label_am:string,ec_year:int,ec_month:int,below:int,students:int,avg_rate:?float,per_dept:array<string,array{below:int,students:int,avg_rate:?float,threshold:float}>}
      */
     public static function dashboardCard(\mysqli $conn, array $departments): array
     {
@@ -615,7 +615,7 @@ final class AttendanceMonthRollupService
             'month_label' => ethio_month_name($m) . ' ' . $y,
             'month_label_am' => AttendanceRiskService::monthLabelAm($y, $m),
             'ec_year' => $y, 'ec_month' => $m,
-            'below' => 0, 'members' => 0, 'avg_rate' => null, 'per_dept' => [],
+            'below' => 0, 'students' => 0, 'avg_rate' => null, 'per_dept' => [],
         ];
         try {
             if (!self::available($conn)) {
@@ -631,11 +631,11 @@ final class AttendanceMonthRollupService
                 self::ensureFresh($conn, $d, $y, $m);
                 $s = self::summary($conn, $d, $y, $m);
                 $out['per_dept'][$d] = [
-                    'below' => (int)$s['below'], 'members' => (int)$s['members'],
+                    'below' => (int)$s['below'], 'students' => (int)$s['students'],
                     'avg_rate' => $s['avg_rate'], 'threshold' => (float)$s['threshold'],
                 ];
                 $out['below'] += (int)$s['below'];
-                $out['members'] += (int)$s['members'];
+                $out['students'] += (int)$s['students'];
                 if ($s['avg_rate'] !== null && (int)$s['with_data'] > 0) {
                     $sum += (float)$s['avg_rate'] * (int)$s['with_data'];
                     $n += (int)$s['with_data'];
