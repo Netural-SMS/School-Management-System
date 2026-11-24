@@ -107,9 +107,9 @@ if (isset($conn)) {
         $conn,
         "SELECT 
             SUM(status != 'archived')           AS total_members,
-            SUM(AND status != 'archived')      AS regular_cnt,
-            SUM(AND status != 'archived') AS special_cnt,
-            SUM(AND status != 'archived')     AS honor_cnt,
+            0 AS regular_cnt,
+            0 AS special_cnt,
+            0 AS honor_cnt,
             0 AS waiting_cnt,
             SUM(gender='male' AND status != 'archived')              AS male_cnt,
             SUM(gender='female' AND status != 'archived')            AS female_cnt,
@@ -117,9 +117,9 @@ if (isset($conn)) {
             SUM(status='warning')           AS warning_cnt,
             SUM(status='inactive')          AS inactive_cnt,
             SUM(status='archived')          AS archived_cnt,
-            AS ag_7_13_cnt,
-            AS ag_14_17_cnt,
-            AS ag_18_plus_cnt
+            0 AS ag_7_13_cnt,
+            0 AS ag_14_17_cnt,
+            0 AS ag_18_plus_cnt
          FROM students"
     );
 

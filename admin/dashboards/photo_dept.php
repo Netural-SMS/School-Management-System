@@ -97,12 +97,12 @@ if (isset($conn)) {
             SUM(status != 'archived') AS total_m,
             SUM(student_photo_path IS NOT NULL AND student_photo_path != '' AND status != 'archived') AS with_p,
             SUM((student_photo_path IS NULL OR student_photo_path='') AND status != 'archived') AS no_p,
-            AS ag7_total,
-            AS ag7_with,
-            AS ag14_total,
-            AS ag14_with,
-            AS ag18_total,
-            AS ag18_with
+            0 AS ag7_total,
+            0 AS ag7_with,
+            0 AS ag14_total,
+            0 AS ag14_with,
+            0 AS ag18_total,
+            0 AS ag18_with
          FROM students");
     if (!empty($cov)) {
         $r = $cov[0];

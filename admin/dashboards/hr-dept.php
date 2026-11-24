@@ -90,13 +90,11 @@ if (isset($conn)) {
         "SELECT 
             id,
             student_code,
-            membership_tier,
             archive_type,
             status,
             student_name,
             father_name,
             grandfather_name,
-            baptismal_name,
             gender,
             phone_number,
             alt_phone_number,
@@ -109,7 +107,6 @@ if (isset($conn)) {
             mender,
             block_number,
             house_number,
-            work_profession,
             education_level,
             registered_at,
             created_at
@@ -127,7 +124,6 @@ if (isset($conn)) {
             student_name,
             father_name,
             grandfather_name, 
-            membership_tier,
             status,
             created_at
          FROM students
@@ -139,7 +135,7 @@ if (isset($conn)) {
     // Eligible new students (temporary, 6+ months) count for badge
     $eligibleNewMembersCount = 0;
     try {
-        $r = $conn->query("SELECT COUNT(*) AS c FROM students WHERE membership_tier='temporary' AND status!='archived' AND registered_at <= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)");
+        $r = $conn->query("SELECT COUNT(*) AS c FROM students WHERE status!='archived' AND registered_at <= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)");
         if ($r && $row = $r->fetch_assoc()) $eligibleNewMembersCount = (int)$row['c'];
     } catch (Throwable $e) {}
 
@@ -154,8 +150,7 @@ if (isset($conn)) {
             phone_number, 
             registered_at
          FROM students
-         WHERE membership_tier = 'temporary' 
-           AND status != 'archived' 
+         WHERE status != 'archived' 
            AND registered_at <= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
          ORDER BY registered_at ASC"
     );
@@ -165,9 +160,9 @@ if (isset($conn)) {
         $conn,
         "SELECT 
             SUM(status != 'archived')           AS total_members,
-            SUM(AND status != 'archived')      AS regular_cnt,
-            SUM(AND status != 'archived') AS special_cnt,
-            SUM(AND status != 'archived')     AS honor_cnt,
+            0 AS regular_cnt,
+            0 AS special_cnt,
+            0 AS honor_cnt,
             0 AS waiting_cnt,
             SUM(gender='male' AND status != 'archived')              AS male_cnt,
             SUM(gender='female' AND status != 'archived')            AS female_cnt,
@@ -175,9 +170,9 @@ if (isset($conn)) {
             SUM(status='warning')           AS warning_cnt,
             SUM(status='inactive')          AS inactive_cnt,
             SUM(status='archived')          AS archived_cnt,
-            AS ag_7_13_cnt,
-            AS ag_14_17_cnt,
-            AS ag_18_plus_cnt
+            0 AS ag_7_13_cnt,
+            0 AS ag_14_17_cnt,
+            0 AS ag_18_plus_cnt
          FROM students"
     );
 

@@ -20,13 +20,12 @@ $csrfToken = generateCsrfToken(); // always issue a token: login.php resets the 
 $isImpersonating = !empty($_SESSION['original_admin_role']);
 
 // ── Stats ──
-$stats = ['total'=>0,'active'=>0,'warning'=>0,'inactive'=>0,'male'=>0,'female'=>0,'sections'=>0,'teachers'=>0,'users'=>0];
+$stats = ['total'=>0,'active'=>0,'warning'=>0,'inactive'=>0,'pending'=>0,'male'=>0,'female'=>0,'sections'=>0,'teachers'=>0,'users'=>0];
 if(isset($conn)){
     $r=$conn->query("SELECT COUNT(*) t,SUM(status='active') a,SUM(status='warning') w,SUM(status='inactive') i,SUM(gender='male') m,SUM(gender='female') f FROM students WHERE status!='archived'");
     if($r&&$row=$r->fetch_assoc()){$stats['total']=(int)($row['t']??0);$stats['active']=(int)($row['a']??0);$stats['warning']=(int)($row['w']??0);$stats['inactive']=(int)($row['i']??0);$stats['male']=(int)($row['m']??0);$stats['female']=(int)($row['f']??0);}
     $stats['sections']=0;
-    $r=$conn->query("SELECT SUM(is_teacher=1) t FROM students WHERE status!='archived'");
-    if($r&&$row=$r->fetch_assoc())$stats['teachers']=(int)($row['t']??0);
+    $stats['teachers']=0;
     $r=$conn->query("SELECT COUNT(*) c FROM users WHERE is_active=1");
     if($r&&$row=$r->fetch_assoc())$stats['users']=(int)($row['c']??0);
 }
