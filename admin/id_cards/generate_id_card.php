@@ -92,7 +92,7 @@ $installedNewFile = false;
 try {
     $pdo->beginTransaction();
     $statement = $pdo->prepare(
-        'SELECT id, student_code,  registration_type,  membership_tier, status, id_card_status
+        'SELECT id, student_code,  membership_tier, status, id_card_status
          FROM students WHERE id = ? FOR UPDATE'
     );
     $statement->execute([(int)$studentId]);

@@ -55,7 +55,7 @@ if ($isImpersonating && !$dashboardHasOwnBar) {
             . 'try{const fd=new FormData();fd.append("action","restore");fd.append("csrf_token",' . json_encode($impersonateCsrf) . ');'
             . 'const r=await fetch("/admin/api_impersonate.php",{method:"POST",body:fd,credentials:"same-origin"});'
             . 'const d=await r.json();'
-            . 'if(d.status==="success")window.location.href="/admin/dashboard.php";'
+            . 'if(d.status==="success")window.location.href="/sms/admin/dashboard.php";'
             . 'else alert(d.message||"Failed to restore");'
             . '}catch(e){alert("Network error");}'
             . '}'

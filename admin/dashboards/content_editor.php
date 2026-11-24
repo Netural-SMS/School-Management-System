@@ -202,9 +202,9 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
     <a href="<?= e(ssms_app_url('admin/account.php')) ?>" class="btn-exit" style="background:rgba(255,255,255,0.15)"><i class="fa-solid fa-user-gear"></i> My Profile</a>
     <a href="<?= SITE_URL ?>" target="_blank" class="btn-exit"><i class="fa-solid fa-globe"></i> View Site</a>
     <?php if ($role !== 'content_editor'): ?>
-    <a href="/admin/dashboard.php" class="btn-exit"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+    <a href="/sms/admin/dashboard.php" class="btn-exit"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
     <?php endif; ?>
-    <a href="/admin/logout.php" class="btn-exit"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+    <a href="/sms/admin/logout.php" class="btn-exit"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
   </div>
 </div>
 
@@ -302,8 +302,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 
 <div class="toast" id="toast"></div>
 
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-<script src="/admin/js/content_editor.js?v=<?= (int) filemtime(__DIR__ . '/../js/content_editor.js') ?>"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/content_editor.js?v=<?= (int) filemtime(__DIR__ . '/../js/content_editor.js') ?>"></script>
 <?php include __DIR__ . '/../components/comm/comm_section.php'; ?>
 <?php include __DIR__ . '/../components/account_link.php'; ?>
 </body>

@@ -252,7 +252,7 @@ final class StudentDirectoryService
             // but legacy permanent+waiting rows were never backfilled by
             // decision — the tier=permanent clause covers them. Keep in
             // sync with generate_id_card.php.
-            $where[] = "(`registration_type` IN ('direct', 'transfer') OR `student_type` = 'honorary' OR `membership_tier` = 'permanent')";
+            $where[] = "(`student_type` = 'honorary' OR `membership_tier` = 'permanent')";
         }
 
         if ($criteria['membership_tier'] !== '') {

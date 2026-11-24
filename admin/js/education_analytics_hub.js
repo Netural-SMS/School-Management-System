@@ -398,10 +398,10 @@
             <strong>${triage.length}</strong> students have been identified for academic or attendance triage intervention.
           </p>
           <div style="display:flex;gap:.75rem;flex-wrap:wrap">
-            <a href="/admin/export_executive_report_pdf.php?${this.buildQs().replace(/^&/, '')}" target="_blank" class="btn btn-p" style="background:#600000;color:#fff">
+            <a href="/sms/admin/export_executive_report_pdf.php?${this.buildQs().replace(/^&/, '')}" target="_blank" class="btn btn-p" style="background:#600000;color:#fff">
               <i class="fa-solid fa-file-pdf"></i> Download Official 5-Page PDF Report
             </a>
-            <a href="/admin/export_executive_report_excel.php?${this.buildQs().replace(/^&/, '')}" class="btn btn-s" style="background:#059669;color:#fff">
+            <a href="/sms/admin/export_executive_report_excel.php?${this.buildQs().replace(/^&/, '')}" class="btn btn-s" style="background:#059669;color:#fff">
               <i class="fa-solid fa-file-excel"></i> Download Multi-Sheet Excel Workbook (.xlsx)
             </a>
             <button class="btn btn-o" type="button" onclick="window.print()">

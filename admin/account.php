@@ -34,7 +34,7 @@ $pageTitle = 'My Account';
 $pageScript = 'account';
 $bodyClass = 'page-account';
 $accountCss = ROOT_PATH . '/admin/css/account.css';
-$extraHead = '<link rel="stylesheet" href="/admin/css/account.css?v=' . rawurlencode((string)filemtime($accountCss)) . '">';
+$extraHead = '<link rel="stylesheet" href="/sms/admin/css/account.css?v=' . rawurlencode((string)filemtime($accountCss)) . '">';
 
 // Ensure the CSRF token exists before the document and JavaScript bootstrap are emitted.
 generateCsrfToken();

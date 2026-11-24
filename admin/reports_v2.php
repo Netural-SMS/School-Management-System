@@ -52,8 +52,8 @@ $assetVer = '20261022r';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reporting Centre · <?= htmlspecialchars($cfg['schoolName'], ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/js/vendor/tabulator/tabulator.min.css?v=<?= $assetVer ?>">
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/js/vendor/tabulator/tabulator.min.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 </head>
 <body>
 <div id="rc-app" class="rc" data-role="<?= htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8') ?>">
@@ -61,7 +61,7 @@ $assetVer = '20261022r';
   <!-- ───────── Header ───────── -->
   <header class="rc-header">
     <div class="rc-header-left">
-      <a class="rc-iconbtn" href="/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
+      <a class="rc-iconbtn" href="/sms/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
         <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
       <div>
@@ -267,9 +267,9 @@ $assetVer = '20261022r';
 
 <script id="rc-config" type="application/json"><?= json_encode($cfg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?></script>
 <?php if (function_exists('wbws_calendar_scripts')) { echo wbws_calendar_scripts(); } // calendar mode is fixed to Ethiopian; no DB access from this shell ?>
-<script src="/admin/js/vendor/tabulator/tabulator.min.js?v=<?= $assetVer ?>"></script>
-<script src="/admin/js/vendor/echarts/echarts.min.js?v=<?= $assetVer ?>"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-<script src="/admin/js/reports/reports_v2.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/vendor/tabulator/tabulator.min.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/vendor/echarts/echarts.min.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/reports/reports_v2.js?v=<?= $assetVer ?>"></script>
 </body>
 </html>

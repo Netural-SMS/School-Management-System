@@ -93,7 +93,7 @@ acm_chrome_open('queue', 'Activation queue', 'Manual review: verify identity, th
             <?php $od = !empty($row['sla_due']) && strtotime((string)$row['sla_due']) < time()
                 && in_array($row['status'], ['submitted', 'in_review', 'changes_requested'], true); ?>
             <tr>
-                <td><a href="/admin/acm_ticket.php?id=<?= (int)$row['id'] ?>"><?= e((string)($row['ticket_no'] ?? '')) ?></a></td>
+                <td><a href="/sms/admin/acm_ticket.php?id=<?= (int)$row['id'] ?>"><?= e((string)($row['ticket_no'] ?? '')) ?></a></td>
                 <td><span class="amharic"><?= e((string)($row['full_name_am'] ?? '')) ?></span></td>
                 <td><?= e((string)($row['phone'] ?? '—')) ?></td>
                 <td><?= e((string)($row['account_type'] ?? '')) ?></td>

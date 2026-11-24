@@ -500,7 +500,7 @@ $fullAddress = !empty($addressParts) ? implode('፣ ', $addressParts) : '—';
             }
         }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
     <!-- Print Controls -->

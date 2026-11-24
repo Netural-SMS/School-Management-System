@@ -57,7 +57,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment Follow-ups · <?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 <style>
 .af-wrap{padding:16px 20px 40px;max-width:1320px;margin:0 auto}
 .af-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
@@ -155,7 +155,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
 
 <div id="af-modal-root"></div>
 <script>window.AF_CONFIG = <?= json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="/admin/js/score_limit.js?v=<?= $assetVer ?>"></script>
-<script src="/admin/js/assessment_followups.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/score_limit.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/assessment_followups.js?v=<?= $assetVer ?>"></script>
 </body>
 </html>

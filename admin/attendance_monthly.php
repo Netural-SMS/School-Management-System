@@ -57,7 +57,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Monthly Attendance · <?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 <style>
 .am-wrap{padding:16px 20px 40px;max-width:1320px;margin:0 auto}
 .am-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
@@ -99,7 +99,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 <div class="rc" data-role="<?= htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8') ?>">
   <header class="rc-header">
     <div class="rc-header-left">
-      <a class="rc-iconbtn" href="/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
+      <a class="rc-iconbtn" href="/sms/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
         <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
       <div>
@@ -108,8 +108,8 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
       </div>
     </div>
     <div class="rc-header-right">
-      <a class="rc-btn rc-btn-ghost rc-btn-sm" id="am-calendar-link" href="/admin/school_calendar.php">School Calendar</a>
-      <a class="rc-btn rc-btn-ghost rc-btn-sm" id="am-warnings-link" href="/admin/attendance_warnings.php">Warnings</a>
+      <a class="rc-btn rc-btn-ghost rc-btn-sm" id="am-calendar-link" href="/sms/admin/school_calendar.php">School Calendar</a>
+      <a class="rc-btn rc-btn-ghost rc-btn-sm" id="am-warnings-link" href="/sms/admin/attendance_warnings.php">Warnings</a>
       <button class="rc-btn rc-btn-ghost rc-btn-sm" id="am-refresh" type="button" title="Recompute this month now">Refresh</button>
       <button class="rc-btn rc-btn-sm" id="am-export" type="button">Export Excel</button>
     </div>
@@ -169,6 +169,6 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 
 <div id="am-modal-root"></div>
 <script>window.AM_CONFIG = <?= json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="/admin/js/attendance_monthly.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/attendance_monthly.js?v=<?= $assetVer ?>"></script>
 </body>
 </html>

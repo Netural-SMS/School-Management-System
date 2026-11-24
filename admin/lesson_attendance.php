@@ -49,7 +49,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lesson Attendance · <?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 <style>
 .la-wrap{padding:16px 20px 40px;max-width:1100px;margin:0 auto}
 .la-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -114,7 +114,7 @@ $backUrl = $userRole === 'teacher' ? '/admin/dashboards/teacher.php' : '/admin/d
 </div>
 
 <script>window.LA_CONFIG = <?= json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
 <script>
 (function () {
   'use strict';

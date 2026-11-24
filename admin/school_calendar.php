@@ -42,7 +42,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>School Calendar · <?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 <style>
 .sc-wrap{padding:16px 20px 40px;max-width:1320px;margin:0 auto}
 .sc-banner{background:#f0f9ff;border:1px solid #bae6fd;border-radius:var(--rc-radius);padding:10px 14px;font-size:13px;color:#0c4a6e;margin-bottom:14px;line-height:1.55}
@@ -97,7 +97,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
      data-canwrite="<?= $canWrite ? '1' : '0' ?>">
   <header class="rc-header">
     <div class="rc-header-left">
-      <a class="rc-iconbtn" href="/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
+      <a class="rc-iconbtn" href="/sms/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
         <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
       <div>
@@ -106,7 +106,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
       </div>
     </div>
     <div class="rc-header-right">
-      <a class="rc-btn rc-btn-ghost rc-btn-sm" href="/admin/attendance_monthly.php">Monthly Attendance</a>
+      <a class="rc-btn rc-btn-ghost rc-btn-sm" href="/sms/admin/attendance_monthly.php">Monthly Attendance</a>
     </div>
   </header>
 
@@ -188,8 +188,8 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
     today: <?= json_encode($today->format('Y-m-d')) ?>
   };
 </script>
-<script src="/admin/js/wbws-calendar.js?v=<?= $assetVer ?>"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-<script src="/admin/js/school_calendar.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/wbws-calendar.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/school_calendar.js?v=<?= $assetVer ?>"></script>
 </body>
 </html>

@@ -110,7 +110,7 @@ if (isset($conn)) {
             SUM(AND status != 'archived')      AS regular_cnt,
             SUM(AND status != 'archived') AS special_cnt,
             SUM(AND status != 'archived')     AS honor_cnt,
-            SUM(registration_type='waiting' AND status != 'archived') AS waiting_cnt,
+            0 AS waiting_cnt,
             SUM(gender='male' AND status != 'archived')              AS male_cnt,
             SUM(gender='female' AND status != 'archived')            AS female_cnt,
             SUM(status='active')            AS active_cnt,
@@ -223,8 +223,8 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
           href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛪</text></svg>">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/admin/js/chart.umd.min.js"></script>
-    <script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/chart.umd.min.js"></script>
+    <script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
@@ -476,7 +476,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
             font-weight: 700;
         }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
 </head>
 <body class="bg-slate-100">
@@ -552,7 +552,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                 <span class="font-semibold">Exports & Reports</span>
             </button>
 
-            <a href="/admin/photo_import.php"
+            <a href="/sms/admin/photo_import.php"
                class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
                 <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
                     <i class="fa-solid fa-file-zipper text-sm text-amber-300"></i>
@@ -560,7 +560,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                 <span class="font-semibold">Photo Import (ZIP)</span>
             </a>
 
-            <a href="/admin/photo_review.php"
+            <a href="/sms/admin/photo_review.php"
                class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
                 <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
                     <i class="fa-solid fa-camera-retro text-sm text-amber-300"></i>
@@ -600,7 +600,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
             require_once __DIR__ . '/../components/sidebar_profile_item.php';
             renderSidebarUserCard($userName, 'Info Dept', $todayFormatted ?? '', strtoupper(substr($userName, 0, 1)), 'linear-gradient(135deg,#059669,#10b981)');
             ?>
-            <a href="/admin/logout.php"
+            <a href="/sms/admin/logout.php"
                class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-red-500/95 text-white text-xs font-semibold shadow hover:bg-red-600 transition">
                 <span>Logout</span>
                 <i class="fa-solid fa-power-off text-xs"></i>
@@ -755,7 +755,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
 
                     <!-- Attendance alerting Phase 2: "Open Attendance Warnings" replaces the
                          students.status-based "At-risk" heuristic (requirements §4–§6, §9). -->
-                    <a href="/admin/attendance_warnings.php" class="stat-card bg-gradient-to-tr from-red-500 via-rose-500 to-orange-400 p-3 sm:p-4 flex flex-col justify-between" id="aw-dashboard-card" title="Open the attendance warnings list" style="text-decoration:none;color:inherit">
+                    <a href="/sms/admin/attendance_warnings.php" class="stat-card bg-gradient-to-tr from-red-500 via-rose-500 to-orange-400 p-3 sm:p-4 flex flex-col justify-between" id="aw-dashboard-card" title="Open the attendance warnings list" style="text-decoration:none;color:inherit">
                         <div class="flex items-center justify-between">
                             <div class="text-xs uppercase tracking-wide">Open Attendance Warnings</div>
                             <div class="w-8 h-8 rounded-2xl bg-white/15 flex items-center justify-center">
@@ -776,7 +776,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         <?php endif; ?>
                     </a>
                     <!-- Attendance alerting Phase 4: Monthly Attendance (current Ethiopian month; both departments, read-only). -->
-                    <a href="/admin/attendance_monthly.php" class="stat-card bg-gradient-to-tr from-teal-600 via-teal-500 to-emerald-400 p-3 sm:p-4 flex flex-col justify-between" id="am-dashboard-card" title="Monthly attendance report (Ethiopian months)" style="text-decoration:none;color:inherit">
+                    <a href="/sms/admin/attendance_monthly.php" class="stat-card bg-gradient-to-tr from-teal-600 via-teal-500 to-emerald-400 p-3 sm:p-4 flex flex-col justify-between" id="am-dashboard-card" title="Monthly attendance report (Ethiopian months)" style="text-decoration:none;color:inherit">
                         <div class="flex items-center justify-between">
                             <div class="text-xs uppercase tracking-wide">Monthly Attendance · <?= htmlspecialchars($attendanceMonthCard['month_label_am'], ENT_QUOTES, 'UTF-8') ?></div>
                             <div class="w-8 h-8 rounded-2xl bg-white/15 flex items-center justify-center">
@@ -1706,12 +1706,12 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                 </div>
             </section>
 
-<script src="/admin/js/paginated-list.js?v=20261022p"></script>
+<script src="/sms/admin/js/paginated-list.js?v=20261022p"></script>
 <script>window.WBWS_SECTIONS=<?= json_encode(array_map(static function($sec){return $sec['am'].' ('.$sec['letter'].')';}, \App\Services\StudentCategory::sections()), JSON_UNESCAPED_UNICODE) ?>;</script>
-        <script src="/admin/js/all-students.js?v=20261022p" defer></script>
-<script src="/admin/js/manage-students.js" defer></script>
+        <script src="/sms/admin/js/all-students.js?v=20261022p" defer></script>
+<script src="/sms/admin/js/manage-students.js" defer></script>
 <script src="/frontend/js/student-picker.js?v=20261022p" defer></script>
-<script src="/admin/js/archive-students.js" defer></script>
+<script src="/sms/admin/js/archive-students.js" defer></script>
 
             <!-- ARCHIVE -->
             <section id="section-archive" class="content-section">
@@ -1878,7 +1878,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                                 <select id="attRiskMonth" class="px-3 py-2 rounded-xl border border-slate-200 text-sm"><option value="">Current month</option></select>
                             </div>
                             <button onclick="loadAtRisk()" class="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold hover:bg-red-600"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Find At-Risk</button>
-                            <a id="attRiskReportLink" href="/admin/attendance_monthly.php?below=1" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-200"><i class="fa-solid fa-calendar-days mr-1"></i>Full monthly report</a>
+                            <a id="attRiskReportLink" href="/sms/admin/attendance_monthly.php?below=1" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-200"><i class="fa-solid fa-calendar-days mr-1"></i>Full monthly report</a>
                         </div>
                         <div id="attRiskCount" class="text-xs text-slate-400 mb-2"></div>
                         <div id="attRiskList" style="max-height:450px;overflow:auto"></div>
@@ -1920,11 +1920,11 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         <p class="text-xs text-slate-500 amharic-text">ሪፖርቶችና ወጪዎች</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <a href="/admin/reports_v2.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-xs font-semibold shadow hover:from-teal-700 hover:to-emerald-700 transition">
+                        <a href="/sms/admin/reports_v2.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-xs font-semibold shadow hover:from-teal-700 hover:to-emerald-700 transition">
                             <i class="fa-solid fa-table-list"></i> New Reporting Centre
                             <span class="px-1.5 py-0.5 rounded-full bg-white/25 text-[9px] font-bold tracking-wide">BETA</span>
                         </a>
-                        <a href="/admin/reports.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-semibold shadow hover:from-blue-700 hover:to-indigo-700 transition">
+                        <a href="/sms/admin/reports.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-semibold shadow hover:from-blue-700 hover:to-indigo-700 transition">
                             <i class="fa-solid fa-chart-line"></i> Open Advanced Analytics Center
                             <i class="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-70"></i>
                         </a>
@@ -2007,7 +2007,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
 
                 <!-- Quick Export Buttons -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    <a href="/admin/export_pdf.php?format=csv&filter=all" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=csv&filter=all" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-users text-emerald-600 text-lg"></i></div>
                             <div>
@@ -2017,7 +2017,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-emerald-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
                     </a>
-                    <a href="/admin/export_pdf.php?format=csv&filter=active" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=csv&filter=active" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-user-check text-blue-600 text-lg"></i></div>
                             <div>
@@ -2027,7 +2027,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-blue-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
                     </a>
-                    <a href="/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-file-pdf text-red-500 text-lg"></i></div>
                             <div>
@@ -2037,7 +2037,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-red-500 font-medium"><i class="fa-solid fa-print mr-1"></i>Open & Print</span></div>
                     </a>
-                    <a href="/admin/export_pdf.php?format=csv&filter=waiting" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=csv&filter=waiting" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-hourglass-half text-amber-600 text-lg"></i></div>
                             <div>
@@ -2047,7 +2047,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-amber-600 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
                     </a>
-                    <a href="/admin/export_pdf.php?format=csv&filter=no_id" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=csv&filter=no_id" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-id-card text-red-500 text-lg"></i></div>
                             <div>
@@ -2057,7 +2057,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         </div>
                         <div class="mt-3 text-right"><span class="text-xs text-red-500 font-medium"><i class="fa-solid fa-download mr-1"></i>Download CSV</span></div>
                     </a>
-                    <a href="/admin/export_pdf.php?format=docx&filter=all" class="panel p-4 hover:shadow-md transition block">
+                    <a href="/sms/admin/export_pdf.php?format=docx&filter=all" class="panel p-4 hover:shadow-md transition block">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-file-word text-indigo-600 text-lg"></i></div>
                             <div>
@@ -2217,11 +2217,11 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                         <div class="panel p-5">
                             <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2"><i class="fa-solid fa-database text-cyan-500"></i> Data Management</h4>
                             <div class="space-y-3">
-                                <a href="/admin/export_pdf.php?format=csv&filter=all" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-emerald-50 transition cursor-pointer">
+                                <a href="/sms/admin/export_pdf.php?format=csv&filter=all" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-emerald-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-file-csv text-emerald-600"></i></div>
                                     <div><div class="text-sm font-medium text-slate-700">Export All Students (CSV)</div><div class="text-[10px] text-slate-400">Download complete student database</div></div>
                                 </a>
-                                <a href="/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-red-50 transition cursor-pointer">
+                                <a href="/sms/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-red-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-file-pdf text-red-500"></i></div>
                                     <div><div class="text-sm font-medium text-slate-700">Full PDF Report</div><div class="text-[10px] text-slate-400">Print-ready student list</div></div>
                                 </a>
@@ -2229,11 +2229,11 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
                                     <div class="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-broom text-amber-600"></i></div>
                                     <div><div class="text-sm font-medium text-slate-700">Clear Cache</div><div class="text-[10px] text-slate-400">Remove temporary files and rate limit data</div></div>
                                 </div>
-                                <a href="/admin/system_health.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-blue-50 transition cursor-pointer">
+                                <a href="/sms/admin/system_health.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-blue-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-stethoscope text-blue-600"></i></div>
                                     <div><div class="text-sm font-medium text-slate-700">System Health Check</div><div class="text-[10px] text-slate-400">Database diagnostics & auto-fix</div></div>
                                 </a>
-                                <a href="/admin/reports.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-violet-50 transition cursor-pointer">
+                                <a href="/sms/admin/reports.php" class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-violet-50 transition cursor-pointer">
                                     <div class="w-9 h-9 bg-violet-100 rounded-lg flex items-center justify-center"><i class="fa-solid fa-chart-line text-violet-600"></i></div>
                                     <div><div class="text-sm font-medium text-slate-700">Advanced Analytics</div><div class="text-[10px] text-slate-400">Charts, reports, filtered exports</div></div>
                                 </a>
@@ -3989,7 +3989,7 @@ function loadAtRisk() {
         countEl.innerHTML = '<span class="font-semibold text-red-600">' + ms.length + '</span> ' + escapeHtml(d.department_label) + ' students below ' + d.threshold + '% in ' + escapeHtml(d.month_label_am) + ' (' + escapeHtml(d.month_label) + ') · at least ' + d.min_sessions + ' sessions · rate = (present + excused + 0.5 × late) ÷ sessions';
         listEl.innerHTML = ms.length === 0 ? '<div class="text-center py-8 text-emerald-500 text-xs"><i class="fa-solid fa-check-circle text-2xl mb-2"></i><p>No student is below the threshold this month.</p></div>' :
             '<table class="w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="px-2 py-1.5 text-left">Name</th><th class="px-2 py-1.5">Code</th><th class="px-2 py-1.5">' + (dept === 'edu' ? 'Class' : 'Section') + '</th><th class="px-2 py-1.5">Sessions</th><th class="px-2 py-1.5">Present</th><th class="px-2 py-1.5">Absent</th><th class="px-2 py-1.5">Rate</th><th class="px-2 py-1.5">Warnings</th><th class="px-2 py-1.5">Status</th><th class="px-2 py-1.5">Action</th></tr></thead><tbody>' +
-            ms.map(m => '<tr class="border-t border-slate-100 hover:bg-red-50"><td class="px-2 py-1.5 font-medium">'+escapeHtml(m.student_name+' '+m.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(m.student_code||'—')+'</code></td><td class="px-2 py-1.5 text-center">'+escapeHtml(m.group||'—')+'</td><td class="px-2 py-1.5 text-center">'+(m.sessions||0)+'</td><td class="px-2 py-1.5 text-center text-emerald-600">'+(m.present_days||0)+'</td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+(m.absent_days||0)+'</td><td class="px-2 py-1.5 text-center" style="color:'+(m.band==='low'?'#dc2626':'#d97706')+'">'+(m.rate==null?'—':m.rate+'%')+'</td><td class="px-2 py-1.5 text-center">'+(m.open_warnings>0?'<a class="text-orange-600 hover:underline" href="/admin/attendance_warnings.php?department='+dept+'&student_id='+m.id+'">'+m.open_warnings+' open</a>':'—')+'</td><td class="px-2 py-1.5 text-center">'+statusBadge(m.status)+(m.department_status==='inactive'?' <span class="text-[10px] text-slate-400">(inactive in dept.)</span>':'')+'</td><td class="px-2 py-1.5 text-center"><button onclick="quickStatusChange('+parseInt(m.id,10)+','+jsArg(m.student_name)+','+jsArg(m.status)+')" class="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"><i class="fa-solid fa-pen"></i></button></td></tr>').join('') +
+            ms.map(m => '<tr class="border-t border-slate-100 hover:bg-red-50"><td class="px-2 py-1.5 font-medium">'+escapeHtml(m.student_name+' '+m.father_name)+'</td><td class="px-2 py-1.5"><code class="text-[10px] bg-slate-100 px-1 rounded">'+(m.student_code||'—')+'</code></td><td class="px-2 py-1.5 text-center">'+escapeHtml(m.group||'—')+'</td><td class="px-2 py-1.5 text-center">'+(m.sessions||0)+'</td><td class="px-2 py-1.5 text-center text-emerald-600">'+(m.present_days||0)+'</td><td class="px-2 py-1.5 text-center text-red-600 font-bold">'+(m.absent_days||0)+'</td><td class="px-2 py-1.5 text-center" style="color:'+(m.band==='low'?'#dc2626':'#d97706')+'">'+(m.rate==null?'—':m.rate+'%')+'</td><td class="px-2 py-1.5 text-center">'+(m.open_warnings>0?'<a class="text-orange-600 hover:underline" href="/sms/admin/attendance_warnings.php?department='+dept+'&student_id='+m.id+'">'+m.open_warnings+' open</a>':'—')+'</td><td class="px-2 py-1.5 text-center">'+statusBadge(m.status)+(m.department_status==='inactive'?' <span class="text-[10px] text-slate-400">(inactive in dept.)</span>':'')+'</td><td class="px-2 py-1.5 text-center"><button onclick="quickStatusChange('+parseInt(m.id,10)+','+jsArg(m.student_name)+','+jsArg(m.status)+')" class="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"><i class="fa-solid fa-pen"></i></button></td></tr>').join('') +
             '</tbody></table>';
     });
 }
@@ -4251,8 +4251,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 <?php include __DIR__ . '/../components/comm/comm_section.php'; ?>
-<script src="/admin/js/student_nav.js?v=<?= SSMS_ASSET_VER ?>"></script>
-<script src="/admin/js/department_status.js?v=<?= SSMS_ASSET_VER ?>-20261022r"></script>
+<script src="/sms/admin/js/student_nav.js?v=<?= SSMS_ASSET_VER ?>"></script>
+<script src="/sms/admin/js/department_status.js?v=<?= SSMS_ASSET_VER ?>-20261022r"></script>
 <script>
 // Explain a permission bounce (access_control.php → index.php → dashboard.php?error=access_denied).
 (function () {

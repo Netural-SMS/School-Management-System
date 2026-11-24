@@ -91,7 +91,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
     <input class="inp" type="search" name="q" value="<?= e($q) ?>" placeholder="Name, phone, ID ref…" aria-label="Search persons" style="min-width:260px">
     <button class="btn bo" type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
     <?php if ($canCreate): ?>
-    <a class="btn bp" href="/admin/acm_person.php?new=1"><i class="fa-solid fa-user-plus"></i> Register person</a>
+    <a class="btn bp" href="/sms/admin/acm_person.php?new=1"><i class="fa-solid fa-user-plus"></i> Register person</a>
     <?php endif; ?>
 </form>
 <div class="cd">
@@ -111,7 +111,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
                 <td><?= e((string)($row['phone'] ?? '—')) ?></td>
                 <td><?= !empty($row['student_id']) ? '#' . (int)$row['student_id'] : '—' ?></td>
                 <td><?= !empty($row['guardian_id']) ? '#' . (int)$row['guardian_id'] : '—' ?></td>
-                <td><a href="/admin/acm_person.php?id=<?= (int)$row['id'] ?>">Open</a></td>
+                <td><a href="/sms/admin/acm_person.php?id=<?= (int)$row['id'] ?>">Open</a></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -163,7 +163,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
         <?php if (!empty($dups['same_phone']) || !empty($dups['same_name_dob'])): ?>
         <div class="acm-alert warn" style="margin-top:.7rem"><i class="fa-solid fa-triangle-exclamation"></i> Possible duplicates:
             <?php foreach (array_merge($dups['same_phone'], $dups['same_name_dob']) as $dd): ?>
-            <a href="/admin/acm_person.php?id=<?= (int)$dd['id'] ?>">#<?= (int)$dd['id'] ?></a>
+            <a href="/sms/admin/acm_person.php?id=<?= (int)$dd['id'] ?>">#<?= (int)$dd['id'] ?></a>
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
@@ -218,7 +218,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
             <tbody>
             <?php foreach ($personTickets as $pt): ?>
                 <tr>
-                    <td><a href="/admin/acm_ticket.php?id=<?= (int)$pt['id'] ?>"><?= e((string)($pt['ticket_no'] ?? '')) ?></a></td>
+                    <td><a href="/sms/admin/acm_ticket.php?id=<?= (int)$pt['id'] ?>"><?= e((string)($pt['ticket_no'] ?? '')) ?></a></td>
                     <td><?= e((string)($pt['account_type'] ?? '')) ?></td>
                     <td><span class="bg <?= acm_status_bg((string)($pt['status'] ?? '')) ?>"><?= e(str_replace('_', ' ', (string)($pt['status'] ?? ''))) ?></span></td>
                 </tr>

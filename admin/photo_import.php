@@ -73,7 +73,7 @@ ul.errors{margin:8px 0 0 18px;padding:0;font-size:12px;}
 </head>
 <body>
 <nav class="pr-nav nav">
-  <div><a href="/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a> &nbsp;·&nbsp; <strong><?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></strong></div>
+  <div><a href="/sms/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a> &nbsp;·&nbsp; <strong><?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></strong></div>
   <div class="user"><i class="fa-solid fa-user-circle"></i> <?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>)</div>
 </nav>
 
@@ -83,7 +83,7 @@ ul.errors{margin:8px 0 0 18px;padding:0;font-size:12px;}
       <h1><i class="fa-solid fa-file-zipper"></i> Import Photos (ZIP Airlock)</h1>
       <p>Upload a ZIP exported from the FKSS mobile app. Photos flow into the same review queue as online syncs.</p>
     </div>
-    <a href="/admin/photo_review.php" class="btn btn-gold"><i class="fa-solid fa-gavel"></i> Review conflicts</a>
+    <a href="/sms/admin/photo_review.php" class="btn btn-gold"><i class="fa-solid fa-gavel"></i> Review conflicts</a>
   </div>
 
   <div class="card">

@@ -523,7 +523,7 @@ try {
         // Non-promotion upgrades (tier stays temporary) also keep stored.
         if (($data['membership_tier'] ?? '') === 'permanent') {
             $storedType = null;
-            $typeStmt = $conn->prepare('SELECT registration_type FROM students WHERE id = ?');
+            $typeStmt = $conn->prepare('SELECT student_code FROM students WHERE id = ?');
             if ($typeStmt) {
                 $typeStmt->bind_param('i', $upgrade_id);
                 $typeStmt->execute();

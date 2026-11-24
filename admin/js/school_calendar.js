@@ -293,7 +293,7 @@
       unc.innerHTML = 'All active classes have working days configured. ✓';
     } else {
       unc.innerHTML = '<strong>These classes cannot take attendance yet</strong> — set their working days in the '
-        + '<a href="/admin/dashboards/edu_dept.php?section=timetable">Timetable builder</a> first:<br><br>'
+        + '<a href="/sms/admin/dashboards/edu_dept.php?section=timetable">Timetable builder</a> first:<br><br>'
         + state.unconfigured.map(function (c) { return esc(c.name); }).join(' · ');
     }
   }

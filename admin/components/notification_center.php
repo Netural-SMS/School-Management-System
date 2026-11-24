@@ -88,7 +88,7 @@ function ncRenderPanel(): string
     $v = ncAssetVersion();
     ob_start();
     ?>
-    <link rel="stylesheet" href="/admin/css/comm.css?v=<?= $v ?>">
+    <link rel="stylesheet" href="/sms/admin/css/comm.css?v=<?= $v ?>">
     <div class="nc-panel" data-nc-panel data-csrf="<?= ncEsc($ncCsrf) ?>" data-api="/admin/api_notifications.php"
          role="dialog" aria-label="Notifications" tabindex="-1" hidden>
         <div class="nc-head">
@@ -109,12 +109,12 @@ function ncRenderPanel(): string
             <div class="nc-list" data-list="tasks" role="tabpanel" hidden><div class="nc-skeleton"><span></span><span></span><span></span></div></div>
         </div>
         <div class="nc-foot">
-            <a href="/admin/notifications.php" class="nc-foot-link" data-comm-open="inbox"><i class="fa-solid fa-inbox" aria-hidden="true"></i> Open inbox</a>
-            <a href="/admin/messages.php" class="nc-foot-link nc-msg-link" data-comm-open="messages"><i class="fa-solid fa-comments" aria-hidden="true"></i> Messages <span class="nc-count" data-count="messages" hidden>0</span></a>
+            <a href="/sms/admin/notifications.php" class="nc-foot-link" data-comm-open="inbox"><i class="fa-solid fa-inbox" aria-hidden="true"></i> Open inbox</a>
+            <a href="/sms/admin/messages.php" class="nc-foot-link nc-msg-link" data-comm-open="messages"><i class="fa-solid fa-comments" aria-hidden="true"></i> Messages <span class="nc-count" data-count="messages" hidden>0</span></a>
         </div>
     </div>
     <div class="nc-scrim" data-nc-scrim hidden></div>
-    <script src="/admin/js/comm.js?v=<?= $v ?>" defer></script>
+    <script src="/sms/admin/js/comm.js?v=<?= $v ?>" defer></script>
     <?php
     return ob_get_clean();
 }

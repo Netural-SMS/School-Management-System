@@ -80,12 +80,12 @@ if (isset($conn)) {
     $r = $conn->query("SELECT COUNT(*) as cnt FROM users");
     if ($r) $totalUsers = (int)$r->fetch_assoc()['cnt'];
     
-    $r = $conn->query("SELECT COUNT(*) as total, SUM(status='active') as active, SUM(registration_type='waiting') as pending FROM students WHERE status != 'archived'");
+    $r = $conn->query("SELECT COUNT(*) as total, SUM(status='active') as active FROM students WHERE status != 'archived'");
     if ($r) {
         $row = $r->fetch_assoc();
         $totalMembers = (int)($row['total'] ?? 0);
         $activeMembers = (int)($row['active'] ?? 0);
-        $pendingRegistrations = (int)($row['pending'] ?? 0);
+        $pendingRegistrations = 0;
     }
     
     // information_schema on shared hosting can take seconds. Overview
@@ -605,9 +605,9 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
          render-blocking and fights the chrome CSS (the sa-section-lock block
          below exists because of it). Do not re-add without re-auditing. -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
-    <link rel="stylesheet" href="/admin/css/super_admin.css?v=20261006a">
+    <link rel="stylesheet" href="/sms/admin/css/super_admin.css?v=20261006a">
 <?= wbws_calendar_scripts($conn) ?>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
     <style id="sa-section-lock">
         /* Last in head so Tailwind/theme cannot stack every page. */
@@ -634,7 +634,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
             <ul class="nav-list">
                 <li><button class="nav-link <?= $activeSection === 'overview' ? 'active' : '' ?>" data-section="overview"><i class="fa-solid fa-gauge-high"></i> Overview</button></li>
                 <li><button class="nav-link <?= $activeSection === 'users' ? 'active' : '' ?>" data-section="users"><i class="fa-solid fa-users"></i> User Management</button></li>
-                <li><a class="nav-link" href="/admin/dashboards/content_editor.php" title="Open the Website Content (CMS) dashboard"><i class="fa-solid fa-globe"></i> Website Content</a></li>
+                <li><a class="nav-link" href="/sms/admin/dashboards/content_editor.php" title="Open the Website Content (CMS) dashboard"><i class="fa-solid fa-globe"></i> Website Content</a></li>
             </ul>
         </nav>
         
@@ -647,10 +647,10 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                 <li><button class="nav-link <?= $activeSection === 'app_telemetry' ? 'active' : '' ?>" data-section="app_telemetry"><i class="fa-solid fa-chart-line"></i> Fleet Analytics</button></li>
                 <li><button class="nav-link <?= $activeSection === 'failure_intelligence' ? 'active' : '' ?>" data-section="failure_intelligence"><i class="fa-solid fa-triangle-exclamation"></i> Failure Intelligence</button></li>
                 <li><button class="nav-link <?= $activeSection === 'health' ? 'active' : '' ?>" data-section="health"><i class="fa-solid fa-heart-pulse"></i> Site Health</button></li>
-                <li><a href="/admin/telegram_registration.php" class="nav-link" style="text-decoration:none"><i class="fa-brands fa-telegram"></i> Telegram Registration</a></li>
-                <li><a href="/admin/dashboards/photo_dept.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-camera-retro" style="color:#F0C000"></i> Photo Dept Dashboard</a></li>
-                <li><a href="/admin/photo_import.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-file-zipper" style="color:#F0C000"></i> Photo Import (ZIP)</a></li>
-                <li><a href="/admin/photo_review.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-images" style="color:#F0C000"></i> Photo Review</a></li>
+                <li><a href="/sms/admin/telegram_registration.php" class="nav-link" style="text-decoration:none"><i class="fa-brands fa-telegram"></i> Telegram Registration</a></li>
+                <li><a href="/sms/admin/dashboards/photo_dept.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-camera-retro" style="color:#F0C000"></i> Photo Dept Dashboard</a></li>
+                <li><a href="/sms/admin/photo_import.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-file-zipper" style="color:#F0C000"></i> Photo Import (ZIP)</a></li>
+                <li><a href="/sms/admin/photo_review.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-images" style="color:#F0C000"></i> Photo Review</a></li>
                 <li><button class="nav-link <?= $activeSection === 'settings' ? 'active' : '' ?>" data-section="settings"><i class="fa-solid fa-gear"></i> Settings</button></li>
                 <li><button class="nav-link <?= $activeSection === 'branding' ? 'active' : '' ?>" data-section="branding"><i class="fa-solid fa-palette"></i> Branding</button></li>
             </ul>
@@ -662,7 +662,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                 <li><button class="nav-link <?= $activeSection === 'logs' ? 'active' : '' ?>" data-section="logs"><i class="fa-solid fa-clock-rotate-left"></i> Activity Logs</button></li>
                 <li><button class="nav-link <?= $activeSection === 'backup' ? 'active' : '' ?>" data-section="backup"><i class="fa-solid fa-database"></i> Backup & Data</button></li>
                 <li><button class="nav-link <?= $activeSection === 'syshealth' ? 'active' : '' ?>" data-section="syshealth"><i class="fa-solid fa-stethoscope"></i> System Health</button></li>
-                <li><a href="/admin/dashboards/ai_assistant.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-robot"></i> AI Assistant <span style="font-size:.55rem;padding:.1rem .35rem;border-radius:99px;background:linear-gradient(135deg,#10b981,#3b82f6);color:#fff;font-weight:600;margin-left:auto">NEW</span></a></li>
+                <li><a href="/sms/admin/dashboards/ai_assistant.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-robot"></i> AI Assistant <span style="font-size:.55rem;padding:.1rem .35rem;border-radius:99px;background:linear-gradient(135deg,#10b981,#3b82f6);color:#fff;font-weight:600;margin-left:auto">NEW</span></a></li>
                 <li><button class="nav-link" data-comm-open="inbox"><i class="fa-solid fa-comments"></i> Communication</button></li>
             </ul>
         </nav>
@@ -679,7 +679,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
             require_once __DIR__ . '/../components/sidebar_profile_item.php';
             renderSidebarUserCard($fullName, 'Super Admin', $todayFormatted, strtoupper(substr($fullName, 0, 1)), 'linear-gradient(135deg,#0284c7,#0369a1)');
             ?>
-            <a href="/admin/logout.php" class="logout-btn"><i class="fa-solid fa-power-off"></i> Logout</a>
+            <a href="/sms/admin/logout.php" class="logout-btn"><i class="fa-solid fa-power-off"></i> Logout</a>
         </div>
     </aside>
 
@@ -1174,10 +1174,10 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                     ? \App\Services\BrandingAssetService::cardBackgroundUrl($conn)
                     : $saDefaultCardBg;
                 ?>
-                <link rel="stylesheet" href="/admin/css/id_card_designer.css?v=20260823c">
+                <link rel="stylesheet" href="/sms/admin/css/id_card_designer.css?v=20260823c">
                 <script>window.ID_DESIGNER={csrf:<?= json_encode($csrfToken) ?>,bg:<?= json_encode($saLiveCardBg) ?>,defaultBg:<?= json_encode($saDefaultCardBg) ?>};</script>
                 <div id="idDesigner"></div>
-                <script src="/admin/js/id_card_designer.js?v=20261122b"></script>
+                <script src="/sms/admin/js/id_card_designer.js?v=20261122b"></script>
 
             </section>
 
@@ -1211,7 +1211,7 @@ if (!in_array($activeSection, $saAllowedSections, true)) {
                         <?php if (empty($backupFiles)): ?>
                         <p style="color:#7c8aa5;font-size:.8rem">No backups yet</p>
                         <?php else: foreach (array_slice($backupFiles, 0, 5) as $f): ?>
-                        <div class="backup-item"><div class="backup-info"><div class="backup-icon"><i class="fa-solid fa-file-code"></i></div><div><div class="backup-name"><?= e($f['name']) ?></div><div class="backup-meta"><?= e($f['size']) ?> • <?= e($f['date']) ?> • <?= !empty($f['encrypted']) ? 'Encrypted' : 'Legacy plaintext' ?></div></div></div><a href="/admin/tools/download_backup.php?file=<?= urlencode($f['name']) ?>" class="btn btn-primary btn-sm" title="Download backup"><i class="fa-solid fa-download"></i></a></div>
+                        <div class="backup-item"><div class="backup-info"><div class="backup-icon"><i class="fa-solid fa-file-code"></i></div><div><div class="backup-name"><?= e($f['name']) ?></div><div class="backup-meta"><?= e($f['size']) ?> • <?= e($f['date']) ?> • <?= !empty($f['encrypted']) ? 'Encrypted' : 'Legacy plaintext' ?></div></div></div><a href="/sms/admin/tools/download_backup.php?file=<?= urlencode($f['name']) ?>" class="btn btn-primary btn-sm" title="Download backup"><i class="fa-solid fa-download"></i></a></div>
                         <?php endforeach; endif; ?>
                     </div>
                 </div>
@@ -1496,13 +1496,13 @@ require __DIR__ . '/../components/bottom_nav.php';
     </script>
 
     <script>window.SA_BOOT=<?= json_encode(['section' => $activeSection, 'csrf' => $csrfToken, 'upload_owner' => (int)($_SESSION['admin_id'] ?? 0)], JSON_UNESCAPED_SLASHES) ?>;</script>
-    <script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-    <script src="/admin/js/danger_user_forms.js?v=20261022dc"></script>
-    <script src="/admin/js/app_release.js?v=20261027upload3"></script>
-    <script src="/admin/js/app_telemetry.js?v=20261022p"></script>
-    <script src="/admin/js/list_pager.js?v=20261022p"></script>
-    <script src="/admin/js/failure_intelligence.js?v=20261022p"></script>
-    <script src="/admin/js/super_admin.js?v=20261006a"></script>
+    <script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/danger_user_forms.js?v=20261022dc"></script>
+    <script src="/sms/admin/js/app_release.js?v=20261027upload3"></script>
+    <script src="/sms/admin/js/app_telemetry.js?v=20261022p"></script>
+    <script src="/sms/admin/js/list_pager.js?v=20261022p"></script>
+    <script src="/sms/admin/js/failure_intelligence.js?v=20261022p"></script>
+    <script src="/sms/admin/js/super_admin.js?v=20261006a"></script>
     <script>
         // Calendar mode is fixed to Ethiopian system-wide (no save handler).
 

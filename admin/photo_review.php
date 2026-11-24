@@ -106,7 +106,7 @@ body {
 <body>
 <nav class="pr-nav">
   <div>
-    <a href="/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+    <a href="/sms/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
     &nbsp;·&nbsp; <strong><?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></strong>
   </div>
   <div class="user">
@@ -123,7 +123,7 @@ body {
       <p>Resolve photos where more than one photographer captured a student. Pick the better shot.</p>
     </div>
     <div style="display:flex;gap:8px;">
-      <a class="btn btn-primary" href="/admin/photo_import.php"><i class="fa-solid fa-file-zipper"></i> Import ZIP</a>
+      <a class="btn btn-primary" href="/sms/admin/photo_import.php"><i class="fa-solid fa-file-zipper"></i> Import ZIP</a>
       <button class="btn btn-primary" onclick="load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
     </div>
   </div>

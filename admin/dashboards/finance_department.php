@@ -76,7 +76,7 @@ main{flex:1;padding:1.5rem 2rem 6rem;overflow-y:auto;max-width:calc(100vw - 260p
 @media(max-width:768px){aside{display:none}main{max-width:100%;padding:1rem 1rem 5rem}.bn{display:block}.sg{grid-template-columns:repeat(2,1fr)}.sc .val{font-size:1.2rem}}
 @media print{aside,.bn,.no-print{display:none!important}main{max-width:100%;padding:0}body{background:#fff;color:#000}}
 </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
 </head>
 <body>
@@ -96,12 +96,12 @@ main{flex:1;padding:1.5rem 2rem 6rem;overflow-y:auto;max-width:calc(100vw - 260p
 require_once __DIR__ . '/../components/sidebar_profile_item.php';
 renderSidebarUserCard($fullName, 'Finance Dept', $todayFormatted, $initials, 'linear-gradient(135deg,#059669,#10b981)');
 ?>
-<a href="/admin/logout.php" class="np" style="color:var(--bd)"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+<a href="/sms/admin/logout.php" class="np" style="color:var(--bd)"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
 </aside>
 <main>
 <!-- Mobile Header -->
 <div class="wbws-mob-header">
-    <a href="/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
+    <a href="/sms/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="mob-title">
         <h1>Finance Dept</h1>
         <p class="mob-sub"><?= $todayFormatted ?></p>
@@ -216,8 +216,8 @@ require __DIR__ . '/../components/bottom_nav.php';
 <script>(function(){const sc=document.getElementById('bnScroll'),sl=document.getElementById('bnScrollL'),sr=document.getElementById('bnScrollR');if(!sc)return;function upd(){sl.classList.toggle('visible',sc.scrollLeft>10);sr.classList.toggle('visible',sc.scrollLeft<sc.scrollWidth-sc.clientWidth-10);}sc.addEventListener('scroll',upd,{passive:true});setTimeout(upd,100);sc.querySelectorAll('.wbws-bnav-btn[data-section]').forEach(b=>{b.addEventListener('click',function(){const s=this.dataset.section;if(typeof nav==='function')nav(s);sc.querySelectorAll('.wbws-bnav-btn').forEach(x=>x.classList.remove('active'));this.classList.add('active');});});})();</script>
 <div class="toast" id="toast"></div>
 <script src="/frontend/js/student-picker.js?v=20261022p"></script>
-<script src="/admin/js/list_pager.js?v=20261022p"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/list_pager.js?v=20261022p"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
 <script>
 let cats=[],students=[],txns={income:[],expense:[]};
 const API='/admin/api_finance.php';

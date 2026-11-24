@@ -550,7 +550,7 @@ function updateAttendanceSummary($conn, $studentId, $academicYearId = null, $att
  */
 function onMemberRegistered($conn, $studentId) {
     try {
-    $stmt = $conn->prepare("SELECT student_name, father_name, student_code, registration_type FROM students WHERE id = ?");
+    $stmt = $conn->prepare("SELECT student_name, father_name, student_code FROM students WHERE id = ?");
     $stmt->bind_param("i", $studentId);
     $stmt->execute();
     $student = $stmt->get_result()->fetch_assoc();

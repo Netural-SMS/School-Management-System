@@ -31,7 +31,7 @@ if (isset($conn) && $conn) {
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Groups Management - <?= SCHOOL_NAME_SHORT ?></title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
@@ -105,7 +105,7 @@ th{background:#f8fafc;color:#64748b;font-weight:600;font-size:.75rem;text-transf
 .section-page{display:none}.section-page.active{display:block}
 .checkbox-wrapper{display:flex;align-items:center;gap:.5rem}.checkbox-wrapper input[type="checkbox"]{width:18px;height:18px;accent-color:#059669}
 </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
 <div class="sidebar-overlay" onclick="toggleSidebar()"></div>

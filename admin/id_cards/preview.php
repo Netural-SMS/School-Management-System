@@ -60,7 +60,7 @@ $DISPLAY = [
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ID preview</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;700;900&display=swap">
-<link rel="stylesheet" href="/admin/css/id_card.css?v=20260823c">
+<link rel="stylesheet" href="/sms/admin/css/id_card.css?v=20260823c">
 <style>
 html,body{margin:0;padding:0;background:transparent;overflow:hidden}
 </style>

@@ -273,7 +273,7 @@ $healthLabel = $healthScore >= 80 ? 'Healthy' : ($healthScore >= 60 ? 'Warning' 
         .nav-back:hover { color: #e2e8f0; }
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr !important; } }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
     <div style="max-width: 1200px; margin: 0 auto; padding: 24px;">
@@ -550,7 +550,7 @@ $healthLabel = $healthScore >= 80 ? 'Healthy' : ($healthScore >= 60 ? 'Warning' 
             <?= SCHOOL_NAME ?> • System Health Dashboard • <?= DEVELOPER_SHOW_CREDIT ? 'Built by ' . DEVELOPER_NAME : '' ?>
         </div>
     </div>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
 <script>
 // Danger confirmation (LOW) for the maintenance forms on this page.
 document.querySelectorAll('form[data-dc-low]').forEach(function (f) {

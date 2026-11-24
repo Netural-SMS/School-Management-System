@@ -43,7 +43,7 @@ $NC_COMM_CTX  = [
 </head>
 <body style="margin:0">
 <div class="nc-page-top">
-    <a href="/admin/dashboard.php" class="nc-back"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
+    <a href="/sms/admin/dashboard.php" class="nc-back"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
     <div class="nc-page-title">
         <div><i class="fa-solid fa-bell" aria-hidden="true"></i> Notifications
             <div class="nc-page-sub"><?= e($todayFormatted) ?> · <?= e($NC_COMM_CTX['roleLabel']) ?></div>

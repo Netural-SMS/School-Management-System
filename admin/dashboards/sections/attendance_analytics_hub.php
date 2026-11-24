@@ -131,4 +131,4 @@ $hubAssetVer = defined('SSMS_ASSET_VER') ? SSMS_ASSET_VER : '1';
         </div>
     </div>
 </div>
-<script src="/admin/js/attendance_analytics_hub.js?v=<?= htmlspecialchars((string)$hubAssetVer, ENT_QUOTES, 'UTF-8') ?>-20261022t"></script>
+<script src="/sms/admin/js/attendance_analytics_hub.js?v=<?= htmlspecialchars((string)$hubAssetVer, ENT_QUOTES, 'UTF-8') ?>-20261022t"></script>

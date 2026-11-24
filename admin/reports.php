@@ -36,7 +36,7 @@ $todayFormatted = ethio_date_format($today, 'F j, Y');
     <title>Reports & Analytics - <?= SCHOOL_NAME_SHORT ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/admin/js/chart.umd.min.js"></script>
+    <script src="/sms/admin/js/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Ethiopic:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
@@ -75,14 +75,14 @@ $todayFormatted = ethio_date_format($today, 'F j, Y');
         .exp-card:hover{background:#f0fdf4;box-shadow:0 2px 8px rgba(0,0,0,.04)}
         @media(max-width:768px){.cw,.cw-s{height:200px}}
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
     <!-- Header -->
     <header class="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 text-white px-4 md:px-8 py-4">
         <div class="max-w-[1400px] mx-auto flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <a href="/admin/dashboard.php" class="btn btn-ghost text-white/70 hover:text-white hover:bg-white/10"><i class="fa-solid fa-arrow-left"></i></a>
+                <a href="/sms/admin/dashboard.php" class="btn btn-ghost text-white/70 hover:text-white hover:bg-white/10"><i class="fa-solid fa-arrow-left"></i></a>
                 <div>
                     <h1 class="text-lg font-bold flex items-center gap-2"><i class="fa-solid fa-chart-line"></i> Reports & Analytics</h1>
                     <p class="text-xs text-emerald-100 amh">የ<?= SCHOOL_NAME_SHORT_AM ?> ሪፖርቶችና ትንተናዎች</p>
@@ -118,7 +118,7 @@ $todayFormatted = ethio_date_format($today, 'F j, Y');
                     <span class="amh block text-xs text-teal-800/70">አዲሱ የሪፖርት ማዕከል (ሙከራ) — ይህ ገጽ እስከ ማጽደቅ ድረስ ይቀጥላል።</span>
                 </div>
             </div>
-            <a href="/admin/reports_v2.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold shadow hover:bg-teal-700 transition">
+            <a href="/sms/admin/reports_v2.php" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold shadow hover:bg-teal-700 transition">
                 <i class="fa-solid fa-table-list"></i> Open Reporting Centre <span class="px-1.5 py-0.5 rounded-full bg-white/25 text-[9px] font-bold">BETA</span>
             </a>
         </div>
@@ -209,32 +209,32 @@ $todayFormatted = ethio_date_format($today, 'F j, Y');
                 <div class="card">
                     <div class="card-hd bg-emerald-50"><span class="text-sm font-semibold text-emerald-800"><i class="fa-solid fa-file-csv mr-1"></i> Report CSV (up to 5,000)</span></div>
                     <div class="card-bd space-y-2">
-                        <a href="/admin/api_export_students.php?tier=all&amp;format=csv" class="exp-card"><span><i class="fa-solid fa-database text-emerald-700 mr-2"></i>Complete Roster CSV</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=all" class="exp-card"><span><i class="fa-solid fa-users text-emerald-600 mr-2"></i>All Students Report</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=active" class="exp-card"><span><i class="fa-solid fa-user-check text-blue-600 mr-2"></i>Active Only</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=waiting" class="exp-card"><span><i class="fa-solid fa-hourglass-half text-amber-600 mr-2"></i>Waiting Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=no_id" class="exp-card"><span><i class="fa-solid fa-id-card text-red-500 mr-2"></i>Without ID Card</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=male" class="exp-card"><span><i class="fa-solid fa-person text-sky-600 mr-2"></i>Male Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=csv&filter=female" class="exp-card"><span><i class="fa-solid fa-person-dress text-pink-600 mr-2"></i>Female Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/api_export_students.php?tier=all&amp;format=csv" class="exp-card"><span><i class="fa-solid fa-database text-emerald-700 mr-2"></i>Complete Roster CSV</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=all" class="exp-card"><span><i class="fa-solid fa-users text-emerald-600 mr-2"></i>All Students Report</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=active" class="exp-card"><span><i class="fa-solid fa-user-check text-blue-600 mr-2"></i>Active Only</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=waiting" class="exp-card"><span><i class="fa-solid fa-hourglass-half text-amber-600 mr-2"></i>Waiting Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=no_id" class="exp-card"><span><i class="fa-solid fa-id-card text-red-500 mr-2"></i>Without ID Card</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=male" class="exp-card"><span><i class="fa-solid fa-person text-sky-600 mr-2"></i>Male Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=csv&filter=female" class="exp-card"><span><i class="fa-solid fa-person-dress text-pink-600 mr-2"></i>Female Students</span><i class="fa-solid fa-download text-slate-400"></i></a>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-hd bg-red-50"><span class="text-sm font-semibold text-red-800"><i class="fa-solid fa-file-pdf mr-1"></i> PDF Reports</span></div>
                     <div class="card-bd space-y-2">
-                        <a href="/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="exp-card"><span><i class="fa-solid fa-users text-red-600 mr-2"></i>All Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=pdf&filter=active" target="_blank" class="exp-card"><span><i class="fa-solid fa-user-check text-red-600 mr-2"></i>Active Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=pdf&filter=waiting" target="_blank" class="exp-card"><span><i class="fa-solid fa-hourglass-half text-red-600 mr-2"></i>Waiting List</span><i class="fa-solid fa-print text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=pdf&filter=no_id" target="_blank" class="exp-card"><span><i class="fa-solid fa-id-card text-red-600 mr-2"></i>Without ID Card</span><i class="fa-solid fa-print text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=pdf&filter=male" target="_blank" class="exp-card"><span><i class="fa-solid fa-person text-red-600 mr-2"></i>Male Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=pdf&filter=female" target="_blank" class="exp-card"><span><i class="fa-solid fa-person-dress text-red-600 mr-2"></i>Female Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=all" target="_blank" class="exp-card"><span><i class="fa-solid fa-users text-red-600 mr-2"></i>All Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=active" target="_blank" class="exp-card"><span><i class="fa-solid fa-user-check text-red-600 mr-2"></i>Active Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=waiting" target="_blank" class="exp-card"><span><i class="fa-solid fa-hourglass-half text-red-600 mr-2"></i>Waiting List</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=no_id" target="_blank" class="exp-card"><span><i class="fa-solid fa-id-card text-red-600 mr-2"></i>Without ID Card</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=male" target="_blank" class="exp-card"><span><i class="fa-solid fa-person text-red-600 mr-2"></i>Male Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=pdf&filter=female" target="_blank" class="exp-card"><span><i class="fa-solid fa-person-dress text-red-600 mr-2"></i>Female Students</span><i class="fa-solid fa-print text-slate-400"></i></a>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-hd bg-blue-50"><span class="text-sm font-semibold text-blue-800"><i class="fa-solid fa-file-word mr-1"></i> Word Documents</span></div>
                     <div class="card-bd space-y-2">
-                        <a href="/admin/export_pdf.php?format=docx&filter=all" class="exp-card"><span><i class="fa-solid fa-users text-blue-600 mr-2"></i>All Students</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=docx&filter=active" class="exp-card"><span><i class="fa-solid fa-user-check text-blue-600 mr-2"></i>Active Students</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
-                        <a href="/admin/export_pdf.php?format=docx&filter=no_id" class="exp-card"><span><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Missing ID List</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=docx&filter=all" class="exp-card"><span><i class="fa-solid fa-users text-blue-600 mr-2"></i>All Students</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=docx&filter=active" class="exp-card"><span><i class="fa-solid fa-user-check text-blue-600 mr-2"></i>Active Students</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
+                        <a href="/sms/admin/export_pdf.php?format=docx&filter=no_id" class="exp-card"><span><i class="fa-solid fa-id-card text-blue-600 mr-2"></i>Missing ID List</span><i class="fa-solid fa-file-word text-slate-400"></i></a>
                     </div>
                 </div>
             </div>

@@ -21,8 +21,8 @@ function acm_head(string $title): void
         . '<link rel="icon" href="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'><text y=\'.9em\' font-size=\'90\'>🛡️</text></svg>">'
         . '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"'
         . ' integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous">'
-        . '<link rel="stylesheet" href="/admin/css/acm.css?v=' . urlencode($assetVer) . '">'
-        . '<link rel="stylesheet" href="/admin/css/mobile.css?v=' . urlencode($assetVer) . '">'
+        . '<link rel="stylesheet" href="/sms/admin/css/acm.css?v=' . urlencode($assetVer) . '">'
+        . '<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=' . urlencode($assetVer) . '">'
         . '<script>(function(){try{var s=localStorage.getItem("efc-theme");'
         . 'if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-theme",s);}}catch(e){}})();</script>';
     if (!function_exists('_hRgb') && is_file(__DIR__ . '/theme.php')) {
@@ -67,12 +67,12 @@ function acm_chrome_open(string $active, string $title, string $sub, int $openCo
         $cls = $key === $active ? 'np active' : 'np';
         $badge = ($key === 'queue' && $openCount > 0)
             ? '<span class="badge">' . (int)$openCount . '</span>' : '';
-        echo '<a class="' . $cls . '" href="/admin/' . $item[0] . '">'
+        echo '<a class="' . $cls . '" href="/sms/admin/' . $item[0] . '">'
             . '<i class="fa-solid ' . $item[1] . '"></i><span>' . $item[2] . '</span>' . $badge . '</a>';
     }
     echo '<div class="nt">Account</div>'
-        . '<a class="np" href="/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i><span>Back to dashboard</span></a>'
-        . '<a class="np" href="/admin/logout.php" style="color:var(--bad)"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>'
+        . '<a class="np" href="/sms/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i><span>Back to dashboard</span></a>'
+        . '<a class="np" href="/sms/admin/logout.php" style="color:var(--bad)"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>'
         . '<div class="uc"><div class="ua">'
         . htmlspecialchars($initial, ENT_QUOTES, 'UTF-8') . '</div><div><div class="un">'
         . htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8') . '</div><div class="ur">'
@@ -82,12 +82,12 @@ function acm_chrome_open(string $active, string $title, string $sub, int $openCo
         . htmlspecialchars($sub, ENT_QUOTES, 'UTF-8') . '</p></div>'
         . '<div class="topbar-right">'
         . '<button class="icon-btn" onclick="toggleTheme()" title="Toggle theme"><i class="fa-solid fa-sun" id="themeIcon"></i></button>'
-        . '<a class="btn bo bs" href="/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>'
+        . '<a class="btn bo bs" href="/sms/admin/dashboard.php"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>'
         . '</div></div>'
         . '<div class="acm-mobnav">';
     foreach ($nav as $key => $item) {
         $cls = $key === $active ? 'btn bp bs' : 'btn bo bs';
-        echo '<a class="' . $cls . '" href="/admin/' . $item[0] . '"><i class="fa-solid ' . $item[1] . '"></i> ' . $item[2] . '</a>';
+        echo '<a class="' . $cls . '" href="/sms/admin/' . $item[0] . '"><i class="fa-solid ' . $item[1] . '"></i> ' . $item[2] . '</a>';
     }
     echo '</div>';
 }

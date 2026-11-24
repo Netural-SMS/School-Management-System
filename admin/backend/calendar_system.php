@@ -118,7 +118,7 @@ function wbws_calendar_scripts($conn = null) {
     $mode = wbws_get_calendar_mode($conn) === 'gregorian' ? 'gregorian' : 'ethiopian';
     $version = (string)filemtime(__DIR__ . '/../js/wbws-calendar.js');
     return '<script>window.WBWS_CALENDAR_MODE=' . json_encode($mode) . ';</script>' . "\n" .
-           '<script src="/admin/js/wbws-calendar.js?v=' . $version . '"></script>' . "\n";
+           '<script src="/sms/admin/js/wbws-calendar.js?v=' . $version . '"></script>' . "\n";
 }
 
 /**

@@ -178,7 +178,7 @@ final class StudentReportRenderer
             . '</style></head><body>';
         echo '<div class="no-print toolbar"><button type="button" onclick="window.print()" class="btn green">Print / Save as PDF</button>'
             . '<a href="' . self::h($csvUrl) . '" class="btn blue">Download CSV Instead</a>'
-            . '<a href="/admin/reports.php" class="btn gray">Back to Reports</a>'
+            . '<a href="/sms/admin/reports.php" class="btn gray">Back to Reports</a>'
             . '<span style="color:#475569;font-size:11px">In the print dialog, choose “Save as PDF”.</span></div>';
         echo '<div class="header"><h1>' . self::h($title) . '</h1><div class="meta">'
             . self::h($schoolLine) . ' | Generated: ' . self::h($generatedAt)

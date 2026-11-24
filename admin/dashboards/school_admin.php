@@ -20,10 +20,10 @@ $csrfToken = generateCsrfToken(); // always issue a token: login.php resets the 
 $isImpersonating = !empty($_SESSION['original_admin_role']);
 
 // ── Stats ──
-$stats = ['total'=>0,'active'=>0,'warning'=>0,'inactive'=>0,'pending'=>0,'transfer'=>0,'direct'=>0,'male'=>0,'female'=>0,'sections'=>0,'teachers'=>0,'users'=>0];
+$stats = ['total'=>0,'active'=>0,'warning'=>0,'inactive'=>0,'male'=>0,'female'=>0,'sections'=>0,'teachers'=>0,'users'=>0];
 if(isset($conn)){
-    $r=$conn->query("SELECT COUNT(*) t,SUM(status='active') a,SUM(status='warning') w,SUM(status='inactive') i,SUM(registration_type='waiting') p,SUM(registration_type='transfer') tr,SUM(registration_type='direct') d,SUM(gender='male') m,SUM(gender='female') f FROM students WHERE status!='archived'");
-    if($r&&$row=$r->fetch_assoc()){$stats['total']=(int)($row['t']??0);$stats['active']=(int)($row['a']??0);$stats['warning']=(int)($row['w']??0);$stats['inactive']=(int)($row['i']??0);$stats['pending']=(int)($row['p']??0);$stats['transfer']=(int)($row['tr']??0);$stats['direct']=(int)($row['d']??0);$stats['male']=(int)($row['m']??0);$stats['female']=(int)($row['f']??0);}
+    $r=$conn->query("SELECT COUNT(*) t,SUM(status='active') a,SUM(status='warning') w,SUM(status='inactive') i,SUM(gender='male') m,SUM(gender='female') f FROM students WHERE status!='archived'");
+    if($r&&$row=$r->fetch_assoc()){$stats['total']=(int)($row['t']??0);$stats['active']=(int)($row['a']??0);$stats['warning']=(int)($row['w']??0);$stats['inactive']=(int)($row['i']??0);$stats['male']=(int)($row['m']??0);$stats['female']=(int)($row['f']??0);}
     $stats['sections']=0;
     $r=$conn->query("SELECT SUM(is_teacher=1) t FROM students WHERE status!='archived'");
     if($r&&$row=$r->fetch_assoc())$stats['teachers']=(int)($row['t']??0);
@@ -50,7 +50,7 @@ $usersList=[];if(isset($conn)){$r=$conn->query("SELECT id,username,full_name,rol
 $recentRegs=0;$recentMembers=[];
 if(isset($conn)){
     try{$r=$conn->query("SELECT COUNT(*) c FROM students WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND status!='archived'");if($r&&$row=$r->fetch_assoc())$recentRegs=(int)$row['c'];}catch(Exception $e){}
-    try{$r=$conn->query("SELECT id,student_code,student_name,father_name,gender,status, registration_type,created_at FROM students WHERE status!='archived' ORDER BY created_at DESC LIMIT 10");if($r)while($row=$r->fetch_assoc())$recentMembers[]=$row;}catch(Exception $e){}
+    try{$r=$conn->query("SELECT id,student_code,student_name,father_name,gender,status,created_at FROM students WHERE status!='archived' ORDER BY created_at DESC LIMIT 10");if($r)while($row=$r->fetch_assoc())$recentMembers[]=$row;}catch(Exception $e){}
 }
 
 // ── Department stats ──
@@ -89,8 +89,8 @@ $mStroke=round($mPct*3.14);$fStroke=round($fPct*3.14);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" integrity="sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3" crossorigin="anonymous"></script>
-<script src="/admin/js/report-format.js"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/report-format.js"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;500;600;700&family=Noto+Serif+Ethiopic:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -263,7 +263,7 @@ select.inp{cursor:pointer}
 @media(max-width:768px){aside{display:none}main{max-width:100%;padding:1rem .85rem 5rem}.bn{display:block}.sg{grid-template-columns:repeat(2,1fr);gap:.5rem}.sc .val{font-size:1.1rem}.two-col{grid-template-columns:1fr!important}.three-col{grid-template-columns:1fr!important}.search-box{width:100%}.topbar{flex-direction:column;align-items:stretch}.topbar-right{justify-content:flex-end}.dept-grid{grid-template-columns:1fr 1fr}}
 @media print{aside,.bn,.no-print,.topbar-right{display:none!important}main{max-width:100%;padding:0}body{background:#fff;color:#000}body::before{display:none}.sc,.cd{border:1px solid #ddd;background:#fff;color:#000}.sc .val,.ct{color:#000}}
 </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
 </head>
 <body>
@@ -289,7 +289,7 @@ select.inp{cursor:pointer}
 require_once __DIR__ . '/../components/sidebar_profile_item.php';
 renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'linear-gradient(135deg,#0284c7,#38bdf8)');
 ?>
-<a href="/admin/logout.php" class="np" style="color:var(--bad);margin-top:.2rem"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+<a href="/sms/admin/logout.php" class="np" style="color:var(--bad);margin-top:.2rem"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
 </aside>
 
 <main>
@@ -383,7 +383,7 @@ renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'li
 <div id="section-students" class="cs">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem">
 <h2 style="font-size:1.1rem;font-weight:700;color:var(--bright)"><i class="fa-solid fa-users" style="color:var(--ac)"></i> Students Browser</h2>
-<div style="display:flex;gap:.35rem;flex-wrap:wrap" class="no-print"><button class="btn bo bs" onclick="exportData('excel')" title="Export the visible page"><i class="fa-solid fa-file-excel" style="color:var(--ok)"></i> Page Excel</button><button class="btn bo bs" onclick="exportData('pdf')" title="Export the visible page"><i class="fa-solid fa-file-pdf" style="color:var(--bad)"></i> Page PDF</button><button class="btn bo bs" onclick="exportData('word')" title="Export the visible page"><i class="fa-solid fa-file-word" style="color:var(--info)"></i> Page Word</button><a class="btn bo bs" href="/admin/api_export_students.php?tier=all&amp;format=csv"><i class="fa-solid fa-download"></i> Complete CSV</a></div>
+<div style="display:flex;gap:.35rem;flex-wrap:wrap" class="no-print"><button class="btn bo bs" onclick="exportData('excel')" title="Export the visible page"><i class="fa-solid fa-file-excel" style="color:var(--ok)"></i> Page Excel</button><button class="btn bo bs" onclick="exportData('pdf')" title="Export the visible page"><i class="fa-solid fa-file-pdf" style="color:var(--bad)"></i> Page PDF</button><button class="btn bo bs" onclick="exportData('word')" title="Export the visible page"><i class="fa-solid fa-file-word" style="color:var(--info)"></i> Page Word</button><a class="btn bo bs" href="/sms/admin/api_export_students.php?tier=all&amp;format=csv"><i class="fa-solid fa-download"></i> Complete CSV</a></div>
 </div>
 <div class="cd no-print"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem"><div class="ct" style="margin-bottom:0"><i class="fa-solid fa-filter" style="color:var(--ac)"></i> Filters</div><button class="btn bs bo" onclick="resetFilters()"><i class="fa-solid fa-rotate-left"></i> Reset</button></div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:.55rem">
@@ -430,7 +430,7 @@ renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'li
 
 <!-- ═══ ACADEMIC YEAR ═══ -->
 <div id="section-academicyear" class="cs">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem"><div><h2 style="font-size:1.1rem;font-weight:700;color:var(--bright)"><i class="fa-solid fa-calendar-days" style="color:var(--purple)"></i> Academic Year & Semesters</h2><p style="font-size:.72rem;color:var(--dim)">Create the school year, set the active one, and manage semesters. Only one year is <b>Active</b> at a time.</p></div><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button class="btn bo bs" onclick="toggleYearHelp()" title="Explain what each button here does"><i class="fa-solid fa-circle-question"></i> Help</button><button class="btn bo bs" onclick="openRolloverModal()" title="Start the next school year and move students forward in one safe step"><i class="fa-solid fa-rotate"></i> Year Rollover</button><button class="btn bo bs" onclick="openCopyAssessmentsModal()" title="Copy assessment templates from a prior year into the active year"><i class="fa-solid fa-copy"></i> Copy Assessments</button><a class="btn bo bs" href="/admin/school_calendar.php" title="Yearly calendar: holidays and Day Off days (attendance is taken only on class days)"><i class="fa-solid fa-calendar-check"></i> School Calendar</a><button class="btn bp bs" onclick="openYearModal()"><i class="fa-solid fa-plus"></i> Add Year</button></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem"><div><h2 style="font-size:1.1rem;font-weight:700;color:var(--bright)"><i class="fa-solid fa-calendar-days" style="color:var(--purple)"></i> Academic Year & Semesters</h2><p style="font-size:.72rem;color:var(--dim)">Create the school year, set the active one, and manage semesters. Only one year is <b>Active</b> at a time.</p></div><div style="display:flex;gap:.4rem;flex-wrap:wrap"><button class="btn bo bs" onclick="toggleYearHelp()" title="Explain what each button here does"><i class="fa-solid fa-circle-question"></i> Help</button><button class="btn bo bs" onclick="openRolloverModal()" title="Start the next school year and move students forward in one safe step"><i class="fa-solid fa-rotate"></i> Year Rollover</button><button class="btn bo bs" onclick="openCopyAssessmentsModal()" title="Copy assessment templates from a prior year into the active year"><i class="fa-solid fa-copy"></i> Copy Assessments</button><a class="btn bo bs" href="/sms/admin/school_calendar.php" title="Yearly calendar: holidays and Day Off days (attendance is taken only on class days)"><i class="fa-solid fa-calendar-check"></i> School Calendar</a><button class="btn bp bs" onclick="openYearModal()"><i class="fa-solid fa-plus"></i> Add Year</button></div></div>
 <div id="rolloverHint" style="display:none;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:.7rem .9rem;margin-bottom:.85rem;font-size:.76rem;align-items:center;gap:.7rem;flex-wrap:wrap"><i class="fa-solid fa-calendar-check" style="color:var(--warn)"></i><span id="rolloverHintText" style="color:var(--text);flex:1;min-width:200px"></span><button class="btn bp bs" onclick="openRolloverModal()"><i class="fa-solid fa-rotate"></i> Run Year Rollover</button><button class="btn bo bs" onclick="document.getElementById('rolloverHint').style.display='none'" title="Hide until the page is opened again">Dismiss</button></div>
 <div id="yearHelp" style="display:none;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:.85rem 1rem;margin-bottom:.85rem;font-size:.76rem;line-height:1.5">
 <div style="font-weight:700;color:var(--bright);margin-bottom:.4rem"><i class="fa-solid fa-circle-info" style="color:#60a5fa"></i> What each control does</div>
@@ -477,7 +477,7 @@ renderSidebarUserCard($fullName, 'School Admin', $todayFormatted, $initials, 'li
 <div id="section-reports" class="cs">
 <h2 style="font-size:1.1rem;font-weight:700;color:var(--bright);margin-bottom:.85rem"><i class="fa-solid fa-chart-line" style="color:var(--ac)"></i> Reports & Analytics</h2>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem" class="two-col">
-<div class="cd"><div class="ct"><i class="fa-solid fa-download" style="color:var(--info)"></i> Quick Export</div><p style="font-size:.72rem;color:var(--dim);margin-bottom:.75rem">Stream the complete student roster without loading it into this page.</p><div style="display:flex;flex-wrap:wrap;gap:.35rem"><a class="btn bo bs" href="/admin/api_export_students.php?tier=all&amp;format=csv"><i class="fa-solid fa-file-csv" style="color:var(--ok)"></i> Complete CSV</a></div></div>
+<div class="cd"><div class="ct"><i class="fa-solid fa-download" style="color:var(--info)"></i> Quick Export</div><p style="font-size:.72rem;color:var(--dim);margin-bottom:.75rem">Stream the complete student roster without loading it into this page.</p><div style="display:flex;flex-wrap:wrap;gap:.35rem"><a class="btn bo bs" href="/sms/admin/api_export_students.php?tier=all&amp;format=csv"><i class="fa-solid fa-file-csv" style="color:var(--ok)"></i> Complete CSV</a></div></div>
 <div class="cd"><div class="ct"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--purple)"></i> Custom Report</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:.6rem"><div><label class="flbl">Type</label><select id="crType" class="inp" style="width:100%"><option value="sections">Sections</option><option value="gender">Gender</option><option value="registration">Registration</option></select></div><div><label class="flbl">Format</label><select id="crFmt" class="inp" style="width:100%"><option value="pdf">PDF</option><option value="excel">Excel</option><option value="word">Word</option></select></div></div><button class="btn bp bs" onclick="genCustomReport()"><i class="fa-solid fa-download"></i> Generate</button></div>
 </div>
 <div class="cd"><div class="ct"><i class="fa-solid fa-chart-bar" style="color:var(--warn)"></i> Membership Analysis</div><div id="membershipAnalysis" style="font-size:.78rem;color:var(--dim)">Load Students first.</div></div>
@@ -888,7 +888,7 @@ function exportMemberPDF(m){
     table.f{width:100%;border-collapse:collapse}table.f td{padding:5px 8px;border-bottom:1px solid #f1f5f9;font-size:10pt}
     .lbl{color:#6b7280;font-size:8pt;text-transform:uppercase;letter-spacing:0.5px;display:block}.val{color:#111827;font-weight:500}
     .footer{margin-top:16px;padding-top:6px;border-top:2px solid #16a34a;color:#94a3b8;font-size:8pt;text-align:center}
-    </style><link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+    </style><link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head><body>
     <div class="toolbar no-print"><button class="btn-g" onclick="window.print()">🖨️ Print / Save as PDF</button><button class="btn-o" onclick="window.close()">← Close</button><span style="color:#64748b;font-size:11px;margin-left:8px">Tip: Select "Save as PDF" in print dialog</span></div>
     <div class="header"><h1><?= SCHOOL_NAME_SHORT ?> <?= SCHOOL_TYPE ?> — Student Profile</h1><p>Official Student Record • Generated: ${genStamp()}</p></div>
@@ -922,7 +922,7 @@ function exportMemberWord(m){
     table.fields{width:100%;border-collapse:collapse;font-size:10pt}table.fields td{padding:5px 8px;border-bottom:1px solid #f3f4f6}
     .label{color:#6b7280;font-size:8pt;text-transform:uppercase;letter-spacing:0.5px}.value{color:#111827;font-weight:500;font-size:10pt}
     .footer{margin-top:16px;padding-top:8px;border-top:2px solid #16a34a;color:#9ca3af;font-size:8pt;text-align:center}
-    </style><link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+    </style><link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head><body>
     <div class="header"><h1><?= SCHOOL_NAME_SHORT ?> Student Profile</h1><p><?= SCHOOL_TAGLINE ?> — Official Record</p></div>
     <div class="profile-card"><div class="avatar">${(m.student_name||'?')[0].toUpperCase()}</div><div>
@@ -1036,7 +1036,7 @@ function exportPDFPro(data){
     .status{padding:2px 6px;border-radius:8px;font-size:7pt;font-weight:600}
     .s-active{background:#d1fae5;color:#065f46}.s-warning{background:#fef3c7;color:#92400e}.s-inactive{background:#fee2e2;color:#991b1b}
     .footer{text-align:center;padding:8px;font-size:7pt;color:#94a3b8;border-top:2px solid #16a34a;margin-top:10px}
-    </style><link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+    </style><link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head><body>
     <div class="toolbar no-print"><button class="btn-g" onclick="window.print()">🖨️ Print / Save as PDF</button><button class="btn-o" onclick="window.close()">← Close</button><span style="color:#64748b;font-size:11px;margin-left:8px">Tip: In print dialog, select "Save as PDF"</span></div>
     <div class="header"><h1><?= SCHOOL_NAME_SHORT ?> <?= SCHOOL_TYPE ?> — Student Report</h1>
@@ -1092,7 +1092,7 @@ function exportWordPro(data){
     .badge{display:inline-block;padding:1px 6px;border-radius:10px;font-size:6.5pt;font-weight:600}
     .bg-active{background:#d1fae5;color:#065f46}.bg-warning{background:#fef3c7;color:#92400e}.bg-inactive{background:#fee2e2;color:#991b1b}
     .footer{margin-top:20px;padding-top:6px;border-top:2px solid #16a34a;color:#9ca3af;font-size:7pt;text-align:center}
-    </style><link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+    </style><link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head><body>
     <div class="header"><h1>⛪ <?= SCHOOL_NAME_SHORT ?> <?= SCHOOL_TYPE ?> — Student Report</h1>
     <p>${isFiltered?'Filtered Report: '+data.length+' of '+allMembers.length+' students':'Complete Report: '+data.length+' students'}</p>
@@ -1180,7 +1180,7 @@ function genCustomReport(){
         table{width:100%;border-collapse:collapse;margin-top:10px}th{background:#06b6d4;color:white;padding:6px 10px;text-align:left;font-size:8pt}
         td{padding:5px 10px;border-bottom:1px solid #e5e7eb;font-size:9pt}tr:nth-child(even){background:#f8fafc}
         .footer{margin-top:15px;padding-top:5px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:7pt;text-align:center}
-        </style><link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+        </style><link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head><body><div class="header"><h1>⛪ ${title}</h1><p>${allMembers.length} students analyzed • ${genDate()}</p></div>
         <table><tr>${h.slice(0,3).map(x=>'<th>'+x+'</th>').join('')}</tr>
         ${r.map((x,i)=>'<tr'+(i%2?' style="background:#f8fafc"':'')+'>'+x.slice(0,3).map(c=>'<td>'+esc(c+'')+'</td>').join('')+'</tr>').join('')}</table>

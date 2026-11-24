@@ -57,7 +57,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Attendance Warnings · <?= htmlspecialchars($schoolName, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="stylesheet" href="/admin/css/reports_v2.css?v=<?= $assetVer ?>">
+<link rel="stylesheet" href="/sms/admin/css/reports_v2.css?v=<?= $assetVer ?>">
 <style>
 .aw-wrap{padding:16px 20px 40px;max-width:1280px;margin:0 auto}
 .aw-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
@@ -104,7 +104,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 <div class="rc" data-role="<?= htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8') ?>">
   <header class="rc-header">
     <div class="rc-header-left">
-      <a class="rc-iconbtn" href="/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
+      <a class="rc-iconbtn" href="/sms/admin/dashboard.php" title="Back to dashboard" aria-label="Back">
         <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
       <div>
@@ -168,7 +168,7 @@ $schoolName = defined('SCHOOL_NAME_SHORT') ? SCHOOL_NAME_SHORT : 'SSMS';
 
 <div id="aw-modal-root"></div>
 <script>window.AW_CONFIG = <?= json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="/admin/js/list_pager.js?v=20261022p"></script>
-<script src="/admin/js/attendance_warnings.js?v=<?= $assetVer ?>"></script>
+<script src="/sms/admin/js/list_pager.js?v=20261022p"></script>
+<script src="/sms/admin/js/attendance_warnings.js?v=<?= $assetVer ?>"></script>
 </body>
 </html>

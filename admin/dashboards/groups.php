@@ -48,7 +48,7 @@ if (isset($conn)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Groups Management - <?= SCHOOL_NAME_SHORT ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Ethiopic:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -128,7 +128,7 @@ if (isset($conn)) {
         .tab-btn{padding:.5rem 1rem;border-radius:.5rem;font-size:.8rem;font-weight:500;cursor:pointer;border:1px solid transparent;background:transparent;color:#64748b;transition:all .15s}
         .tab-btn.active{background:#dcfce7;color:#166534;border-color:#bbf7d0}
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
     <aside class="sidebar">
@@ -146,7 +146,7 @@ if (isset($conn)) {
             <a href="info-dept.php" class="nav-link"><i class="fa-solid fa-arrow-left"></i> Back to Info Dept</a>
             <button class="nav-link active" onclick="showTab('list')"><i class="fa-solid fa-list"></i> All Groups</button>
             <button class="nav-link" onclick="openGroupModal()"><i class="fa-solid fa-plus"></i> Register Group</button>
-            <a href="/admin/account.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-user-gear"></i> My Profile</a>
+            <a href="/sms/admin/account.php" class="nav-link" style="text-decoration:none"><i class="fa-solid fa-user-gear"></i> My Profile</a>
         </nav>
         
         <div class="mt-auto pt-4 border-t border-white/20">
@@ -169,7 +169,7 @@ if (isset($conn)) {
         <div class="content">
             <!-- Mobile Header -->
             <div class="wbws-mob-header">
-                <a href="/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
+                <a href="/sms/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
                 <div class="mob-title">
                     <h1>Groups</h1>
                     <p class="mob-sub"><?= $todayFormatted ?></p>

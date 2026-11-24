@@ -36,8 +36,8 @@ if (isset($conn)) {
 <?= wbws_calendar_scripts($conn) ?>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛪</text></svg>">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-<script src="/admin/js/list_pager.js?v=20261022p"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/list_pager.js?v=20261022p"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <style>
@@ -70,7 +70,7 @@ main{flex:1;padding:1.5rem 2rem 6rem;overflow-y:auto;max-width:calc(100vw - 260p
 @media(max-width:768px){aside{display:none}main{max-width:100%;padding:1rem 1rem 5rem}.bn{display:block}.sg{grid-template-columns:repeat(2,1fr)}.sc .val{font-size:1.2rem}}
 @media print{aside,.bn,.no-print{display:none!important}main{max-width:100%;padding:0}body{background:#fff;color:#000}}
 </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
 </head>
 <body>
@@ -91,12 +91,12 @@ main{flex:1;padding:1.5rem 2rem 6rem;overflow-y:auto;max-width:calc(100vw - 260p
 require_once __DIR__ . '/../components/sidebar_profile_item.php';
 renderSidebarUserCard($fullName, 'Material Dept', $todayFormatted, $initials, 'linear-gradient(135deg,#059669,#10b981)');
 ?>
-<a href="/admin/logout.php" class="np" style="color:var(--bd)"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+<a href="/sms/admin/logout.php" class="np" style="color:var(--bd)"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
 </aside>
 <main>
 <!-- Mobile Header -->
 <div class="wbws-mob-header">
-    <a href="/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
+    <a href="/sms/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="mob-title">
         <h1>Material Dept</h1>
         <p class="mob-sub"><?= $todayFormatted ?></p>

@@ -139,6 +139,10 @@ if (!defined('JWT_SECRET')) {
 // ============================================================
 // SESSION CONFIGURATION
 // ============================================================
+// Use a writable session save path inside the SMS installation so that
+// sessions (and CSRF tokens) persist across requests even when the system
+// session directory is not writable by the web user.
+ini_set('session.save_path', __DIR__ . '/sessions');
 require_once __DIR__ . '/backend/core/browser.php';
 $isHttps = ssms_request_is_https();
 ssms_start_browser_session();

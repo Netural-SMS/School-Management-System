@@ -277,7 +277,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
             <span class="font-semibold">Dashboard</span>
         </button>
 
-        <a href="/admin/photo_import.php"
+        <a href="/sms/admin/photo_import.php"
            class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
             <span class="w-8 h-8 rounded-xl bg-amber-500/25 flex items-center justify-center">
                 <i class="fa-solid fa-file-zipper text-sm text-amber-300"></i>
@@ -285,7 +285,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
             <span class="font-semibold">ZIP Import (Airlock)</span>
         </a>
 
-        <a href="/admin/photo_review.php"
+        <a href="/sms/admin/photo_review.php"
            class="mobile-touch-target flex items-center gap-3 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition text-white">
             <span class="w-8 h-8 rounded-xl <?= $kpi['pending_review'] > 0 ? 'bg-red-500/30 animate-pulse' : 'bg-amber-500/25' ?> flex items-center justify-center relative">
                 <i class="fa-solid fa-camera-retro text-sm text-amber-300"></i>
@@ -334,7 +334,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
         require_once __DIR__ . '/../components/sidebar_profile_item.php';
         renderSidebarUserCard($userName, 'Photo Dept', $todayFormatted, strtoupper(substr($userName, 0, 1)), "linear-gradient(135deg,{$DEPT_DARK},{$DEPT_COLOR})");
         ?>
-        <a href="/admin/logout.php"
+        <a href="/sms/admin/logout.php"
            class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-red-500/95 text-white text-xs font-semibold shadow hover:bg-red-600 transition">
             <span>Logout</span>
             <i class="fa-solid fa-power-off text-xs"></i>
@@ -382,7 +382,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                 <i class="fa-regular fa-calendar mr-1"></i><?= htmlspecialchars($todayFormatted) ?>
             </span>
             <?php if ($kpi['pending_review'] > 0): ?>
-            <a href="/admin/photo_review.php" class="px-3 py-1.5 rounded-full bg-red-500 text-white font-semibold animate-pulse">
+            <a href="/sms/admin/photo_review.php" class="px-3 py-1.5 rounded-full bg-red-500 text-white font-semibold animate-pulse">
                 <i class="fa-solid fa-triangle-exclamation mr-1"></i><?= $kpi['pending_review'] ?> pending review
             </a>
             <?php endif; ?>
@@ -434,7 +434,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                 </div>
 
                 <!-- Pending Review -->
-                <a href="/admin/photo_review.php" class="stat-card bg-gradient-to-tr from-red-500 via-rose-500 to-orange-400 p-3 sm:p-4 flex flex-col justify-between" style="text-decoration:none;color:inherit">
+                <a href="/sms/admin/photo_review.php" class="stat-card bg-gradient-to-tr from-red-500 via-rose-500 to-orange-400 p-3 sm:p-4 flex flex-col justify-between" style="text-decoration:none;color:inherit">
                     <div class="flex items-center justify-between">
                         <div class="text-xs uppercase tracking-wide">Pending Review</div>
                         <div class="w-8 h-8 rounded-2xl bg-white/15 flex items-center justify-center">
@@ -479,7 +479,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
 
             <!-- Quick actions -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <a href="/admin/photo_import.php" class="quick-card panel p-5 flex items-center gap-4" style="text-decoration:none;color:inherit">
+                <a href="/sms/admin/photo_import.php" class="quick-card panel p-5 flex items-center gap-4" style="text-decoration:none;color:inherit">
                     <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background:#fef3c7;color:#b45309">
                         <i class="fa-solid fa-file-zipper text-2xl"></i>
                     </div>
@@ -489,7 +489,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                     </div>
                     <i class="fa-solid fa-chevron-right text-slate-400"></i>
                 </a>
-                <a href="/admin/photo_review.php" class="quick-card panel p-5 flex items-center gap-4" style="text-decoration:none;color:inherit">
+                <a href="/sms/admin/photo_review.php" class="quick-card panel p-5 flex items-center gap-4" style="text-decoration:none;color:inherit">
                     <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background:#fee2e2;color:#991b1b">
                         <i class="fa-solid fa-camera-retro text-2xl"></i>
                     </div>
@@ -520,7 +520,7 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
                             <span class="w-7 h-7 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i class="fa-solid fa-clock"></i></span>
                             Pending Review Queue
                         </h3>
-                        <a href="/admin/photo_review.php" class="text-xs font-semibold text-red-600 hover:text-red-800">Open all <i class="fa-solid fa-arrow-right ml-1"></i></a>
+                        <a href="/sms/admin/photo_review.php" class="text-xs font-semibold text-red-600 hover:text-red-800">Open all <i class="fa-solid fa-arrow-right ml-1"></i></a>
                     </div>
                     <?php if (empty($pendingCandidates)): ?>
                         <div class="text-center py-8 text-slate-400">
@@ -791,10 +791,10 @@ $DEPT_SUB_AM  = 'የአባላት ፎቶ ማስተዳደሪያ · ከስልክ �
     <button data-section="dashboard" class="flex flex-col items-center gap-0.5 text-xs px-3 py-1 text-amber-700">
         <i class="fa-solid fa-gauge text-base"></i><span>Home</span>
     </button>
-    <a href="/admin/photo_import.php" class="flex flex-col items-center gap-0.5 text-xs px-3 py-1 text-slate-500">
+    <a href="/sms/admin/photo_import.php" class="flex flex-col items-center gap-0.5 text-xs px-3 py-1 text-slate-500">
         <i class="fa-solid fa-file-zipper text-base"></i><span>Import</span>
     </a>
-    <a href="/admin/photo_review.php" class="flex flex-col items-center gap-0.5 text-xs px-3 py-1 text-slate-500 relative">
+    <a href="/sms/admin/photo_review.php" class="flex flex-col items-center gap-0.5 text-xs px-3 py-1 text-slate-500 relative">
         <i class="fa-solid fa-camera-retro text-base"></i><span>Review</span>
         <?php if ($kpi['pending_review'] > 0): ?>
         <span class="absolute top-0 right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold"><?= $kpi['pending_review'] > 9 ? '9+' : $kpi['pending_review'] ?></span>

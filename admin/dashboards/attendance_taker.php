@@ -101,7 +101,7 @@ $csrfToken = generateCsrfToken();
         .class-card { transition: all 0.2s; cursor: pointer; }
         .class-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?php include __DIR__ . "/../theme.php"; ?>
 </head>
 <body class="min-h-screen">
@@ -140,7 +140,7 @@ $csrfToken = generateCsrfToken();
                 require_once __DIR__ . '/../components/sidebar_profile_item.php';
                 renderSidebarUserCard($userName, 'Attendance Taker', $todayFormatted ?? '', strtoupper(substr($userName, 0, 1)), 'linear-gradient(135deg,#d97706,#f59e0b)');
                 ?>
-                <a href="/admin/logout.php" class="nav-link text-red-200 hover:bg-red-500/20">
+                <a href="/sms/admin/logout.php" class="nav-link text-red-200 hover:bg-red-500/20">
                     <i class="fa-solid fa-power-off w-5"></i> Logout
                 </a>
             </div>
@@ -182,7 +182,7 @@ $csrfToken = generateCsrfToken();
             <main class="flex-1 p-4 md:p-6 overflow-y-auto">
                 <!-- Mobile Header -->
                 <div class="wbws-mob-header">
-                    <a href="/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
+                    <a href="/sms/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
                     <div class="mob-title">
                         <h1>Attendance</h1>
                         <p class="mob-sub"><?= $todayDate ?></p>
@@ -382,8 +382,8 @@ $csrfToken = generateCsrfToken();
     
     <div id="toastContainer"></div>
     
-    <script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-    <script src="/admin/js/attendance-sheet.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/attendance-sheet.js?v=20261022dc4"></script>
     <script>
         function showSection(name) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -718,6 +718,6 @@ require __DIR__ . '/../components/bottom_nav.php';
 <?php include __DIR__ . '/../components/comm/comm_section.php'; ?>
 
 <?php include __DIR__ . '/../components/account_link.php'; ?>
-<script src="/admin/js/school_calendar_widget.js"></script>
+<script src="/sms/admin/js/school_calendar_widget.js"></script>
 </body>
 </html>

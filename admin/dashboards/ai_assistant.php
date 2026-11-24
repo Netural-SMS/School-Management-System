@@ -141,14 +141,14 @@ $csrfToken = generateCsrfToken();
             .topbar{padding:.5rem .8rem}
         }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 <?= function_exists('wbws_calendar_scripts') ? wbws_calendar_scripts($conn ?? null) : '' ?>
 </head>
 <body>
 
 <div class="topbar">
     <div class="topbar-left">
-        <a href="/admin/dashboard.php" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+        <a href="/sms/admin/dashboard.php" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
         <div class="topbar-title">
             <div class="ai-icon"><i class="fa-solid fa-robot"></i></div>
             <h1>AI Assistant</h1>

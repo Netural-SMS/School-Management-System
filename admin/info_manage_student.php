@@ -963,7 +963,7 @@ $mmRoles = [
 
                 <div class="mm-hero-actions">
                     <button class="mm-ha primary" type="button" onclick="switchManageTab('edit')"><i class="fas fa-pen-to-square"></i> Edit student</button>
-                    <a class="mm-ha" target="_blank" href="/admin/print_student.php?id=<?= (int)$m['id'] ?>"><i class="fas fa-id-card"></i> ID / Print</a>
+                    <a class="mm-ha" target="_blank" href="/sms/admin/print_student.php?id=<?= (int)$m['id'] ?>"><i class="fas fa-id-card"></i> ID / Print</a>
                     <button class="mm-ha" type="button" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
                     <?php if ($phonePrimary !== ''): ?>
                     <a class="mm-ha" href="tel:<?= e($phonePrimary) ?>"><i class="fas fa-phone"></i> Call</a>
@@ -976,7 +976,7 @@ $mmRoles = [
     <?php if (empty($_GET['embed'])): ?>
     <div class="mm-standalone-bar">
         <span><i class="fas fa-circle-info"></i> Opening this student inside the dashboard…</span>
-        <a href="/admin/dashboard.php?student=<?= (int)$m['id'] ?>"><i class="fas fa-arrow-right"></i> Continue</a>
+        <a href="/sms/admin/dashboard.php?student=<?= (int)$m['id'] ?>"><i class="fas fa-arrow-right"></i> Continue</a>
         <a href="javascript:history.back()"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
     <script>try { window.location.replace('/admin/dashboard.php?student=<?= (int)$m['id'] ?>'); } catch (e) {}</script>
@@ -1140,7 +1140,7 @@ $mmRoles = [
                             </div>
                             <?php if ($famCanManage && $famGuardians): ?>
                             <div class="hdr-actions">
-                                <a class="mm-fam-btn" href="/admin/dashboard.php?section=family" onclick="if(window.FamilyLink&&window.navigateToSection){if(typeof closeManageSheet==='function')closeManageSheet();navigateToSection('family');return false;}"><i class="fas fa-link"></i> Family Link</a>
+                                <a class="mm-fam-btn" href="/sms/admin/dashboard.php?section=family" onclick="if(window.FamilyLink&&window.navigateToSection){if(typeof closeManageSheet==='function')closeManageSheet();navigateToSection('family');return false;}"><i class="fas fa-link"></i> Family Link</a>
                             </div>
                             <?php endif; ?>
                         </div>
@@ -1149,7 +1149,7 @@ $mmRoles = [
                                 <div class="mm-fam-empty">
                                     <?php if (trim((string)($m['guardian_name'] ?? '')) !== ''): ?>
                                         <b><?= e($m['guardian_name']) ?></b> is typed on this record but has no Family Link guardian record yet, so siblings cannot be detected.
-                                        <?php if ($famCanManage): ?><div style="margin-top:8px"><a class="mm-fam-btn" href="/admin/dashboard.php?section=family" onclick="if(window.FamilyLink&&window.navigateToSection){if(typeof closeManageSheet==='function')closeManageSheet();navigateToSection('family');if(FamilyLink&&FamilyLink.go)FamilyLink.go('unlinked');return false;}"><i class="fas fa-link"></i> Link in Family Link → Not linked yet</a></div><?php endif; ?>
+                                        <?php if ($famCanManage): ?><div style="margin-top:8px"><a class="mm-fam-btn" href="/sms/admin/dashboard.php?section=family" onclick="if(window.FamilyLink&&window.navigateToSection){if(typeof closeManageSheet==='function')closeManageSheet();navigateToSection('family');if(FamilyLink&&FamilyLink.go)FamilyLink.go('unlinked');return false;}"><i class="fas fa-link"></i> Link in Family Link → Not linked yet</a></div><?php endif; ?>
                                     <?php else: ?>
                                         No guardian details on this record. Add the guardian's name and phone in <b>Edit</b> — a guardian record is created and siblings are detected automatically.
                                     <?php endif; ?>
@@ -1171,7 +1171,7 @@ $mmRoles = [
                                         </div>
                                     </div>
                                     <?php if ($famCanManage): ?>
-                                        <a class="mm-fam-btn" href="/admin/dashboard.php?section=family&guardian=<?= (int)$famG['id'] ?>" title="Open in Family Link" onclick="return window.MemberNav ? MemberNav.manageFamily(<?= (int)$famG['id'] ?>) : true;"><i class="fas fa-people-roof"></i> Manage</a>
+                                        <a class="mm-fam-btn" href="/sms/admin/dashboard.php?section=family&guardian=<?= (int)$famG['id'] ?>" title="Open in Family Link" onclick="return window.MemberNav ? MemberNav.manageFamily(<?= (int)$famG['id'] ?>) : true;"><i class="fas fa-people-roof"></i> Manage</a>
                                     <?php endif; ?>
                                 </div>
                             <?php endforeach; endif; ?>
@@ -1186,7 +1186,7 @@ $mmRoles = [
                                     <?php foreach ($famSiblings as $famS):
                                         $famSName = (string)($famS['student_name'] ?: ($famS['full_name_am'] ?? ''));
                                     ?>
-                                    <a class="mm-sib" href="/admin/dashboard.php?student=<?= (int)$famS['id'] ?>" onclick="return window.MemberNav ? MemberNav.go(<?= (int)$m['id'] ?>, <?= (int)$famS['id'] ?>) : true;" title="Open <?= e($famSName) ?>">
+                                    <a class="mm-sib" href="/sms/admin/dashboard.php?student=<?= (int)$famS['id'] ?>" onclick="return window.MemberNav ? MemberNav.go(<?= (int)$m['id'] ?>, <?= (int)$famS['id'] ?>) : true;" title="Open <?= e($famSName) ?>">
                                         <div class="av"><?= e($initials($famSName)) ?></div>
                                         <div>
                                             <div class="nm"><?= e($famSName) ?></div>
@@ -1328,9 +1328,9 @@ $mmRoles = [
                             <div><div class="mm-card-title">Quick Actions</div></div>
                         </div>
                         <div class="mm-card-body" style="display:flex;flex-direction:column;gap:6px;">
-                            <a class="mm-fam-btn" style="justify-content:center;padding:10px;" target="_blank" href="/admin/print_student.php?id=<?= (int)$m['id'] ?>"><i class="fas fa-id-card"></i> Print / ID Card</a>
+                            <a class="mm-fam-btn" style="justify-content:center;padding:10px;" target="_blank" href="/sms/admin/print_student.php?id=<?= (int)$m['id'] ?>"><i class="fas fa-id-card"></i> Print / ID Card</a>
                             <?php if ($famCanManage && $famGuardians): $g0 = $famGuardians[0]; ?>
-                            <a class="mm-fam-btn" style="justify-content:center;padding:10px;color:#6d28d9;background:rgba(124,58,237,.1);border-color:rgba(124,58,237,.2);" href="/admin/dashboard.php?section=family&guardian=<?= (int)$g0['id'] ?>" onclick="return window.MemberNav ? MemberNav.manageFamily(<?= (int)$g0['id'] ?>) : true;"><i class="fas fa-people-roof"></i> Manage Family</a>
+                            <a class="mm-fam-btn" style="justify-content:center;padding:10px;color:#6d28d9;background:rgba(124,58,237,.1);border-color:rgba(124,58,237,.2);" href="/sms/admin/dashboard.php?section=family&guardian=<?= (int)$g0['id'] ?>" onclick="return window.MemberNav ? MemberNav.manageFamily(<?= (int)$g0['id'] ?>) : true;"><i class="fas fa-people-roof"></i> Manage Family</a>
                             <?php endif; ?>
                             <?php if (in_array((string)($_SESSION['admin_role'] ?? ''), ['super_admin','school_admin','hr_dept','info_dept'], true)): ?>
                             <button type="button" class="mm-fam-btn" style="justify-content:center;padding:10px;color:#7f1d1d;background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2);" onclick="if(confirm('Archive this student? They will move to Old Students Archive.')){archiveMember(<?= (int)$m['id'] ?>, <?= json_encode($fullName) ?>);}"><i class="fas fa-box-archive"></i> Archive Student</button>

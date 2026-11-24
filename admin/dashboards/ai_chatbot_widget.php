@@ -174,7 +174,7 @@ $_aiCsrf = generateCsrfToken();
       else{
         const su=$('aipSetupMsg'),isSA=ROLE==='super_admin';
         su.style.display='block';
-        su.innerHTML=isSA?'AI is not set up yet. <a href="/admin/dashboards/ai_assistant.php">Open AI Setup</a>':'AI is not set up yet. Ask a Super Admin to configure a provider.';
+        su.innerHTML=isSA?'AI is not set up yet. <a href="/sms/admin/dashboards/ai_assistant.php">Open AI Setup</a>':'AI is not set up yet. Ask a Super Admin to configure a provider.';
         $('aipInputRow').style.display='none';
       }
     }catch(e){}

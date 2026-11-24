@@ -97,17 +97,17 @@ const CAN_REOPEN_ATTENDANCE=<?= json_encode($userRole === 'edu_dept') ?>;
 /* P71: section/age-group definition injected from App\Services\StudentCategory (single source of truth). secCode('ህጻናት') maps legacy section names onto codes. */
 const EDU_SECTIONS=<?= json_encode(\App\Services\StudentCategory::sections(), JSON_UNESCAPED_UNICODE) ?>;function eduSecLabel(code){const s=EDU_SECTIONS[code];return s?s.am+' · '+s.ages:(code||'—');}function eduSecCode(name){if(!name)return '';if(EDU_SECTIONS[name])return name;for(const c in EDU_SECTIONS){if(EDU_SECTIONS[c].am===name)return c;}return '';}</script>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="/admin/js/chart.umd.min.js"></script>
+<script src="/sms/admin/js/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha384-/o6I2CkkWC//PSjvWC/eYN7l3xM3tJm8ZzVkCOfp//W05QcE3mlGskpoHB6XqI+B" crossorigin="anonymous"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
-<script src="/admin/js/advanced_analytics.js?v=20260927"></script>
-<script src="/admin/js/education_analytics_hub.js?v=20260927"></script>
-<script src="/admin/js/academic_intelligence.js?v=20261003"></script>
-<script src="/admin/js/academic_tracking.js?v=20261022t"></script>
-<script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-<script src="/admin/js/score_limit.js?v=20261022s"></script>
-<script src="/admin/js/list_pager.js?v=20261022p"></script>
-<script src="/admin/js/edu_timetable.js?v=20261025wd"></script>
+<script src="/sms/admin/js/advanced_analytics.js?v=20260927"></script>
+<script src="/sms/admin/js/education_analytics_hub.js?v=20260927"></script>
+<script src="/sms/admin/js/academic_intelligence.js?v=20261003"></script>
+<script src="/sms/admin/js/academic_tracking.js?v=20261022t"></script>
+<script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+<script src="/sms/admin/js/score_limit.js?v=20261022s"></script>
+<script src="/sms/admin/js/list_pager.js?v=20261022p"></script>
+<script src="/sms/admin/js/edu_timetable.js?v=20261025wd"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Ethiopic:wght@400;600;700&family=Poppins:wght@300;400;600;700&display=swap');
 /* Field footer: inline validation errors + live character counters (patch 8) */
@@ -170,8 +170,8 @@ main{padding:0!important;background:#fff!important;color:#1a0a0a!important}
 }
 </style>
 <?= wbws_calendar_scripts($conn) ?>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
-<link rel="stylesheet" href="/admin/css/report_card.css?v=20261022s">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/report_card.css?v=20261022s">
 <?php include __DIR__ . "/../theme.php"; ?>
 <style id="p70-edu-mobile">
 /* ═══════════════════════════════════════════════════════════════════
@@ -544,13 +544,13 @@ main{padding:0!important;background:#fff!important;color:#1a0a0a!important}
 require_once __DIR__ . '/../components/sidebar_profile_item.php';
 renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, 'linear-gradient(135deg,#7c3aed,#6366f1)');
 ?>
-<a href="/admin/logout.php" class="nl" style="color:#fca5a5"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+<a href="/sms/admin/logout.php" class="nl" style="color:#fca5a5"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
 </aside>
 
 <main style="flex:1;padding:1.5rem 2rem 4rem;overflow-y:auto">
 <!-- Mobile Header (visible only on mobile) -->
 <div class="wbws-mob-header">
-    <a href="/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
+    <a href="/sms/admin/dashboard.php" class="mob-back"><i class="fa-solid fa-arrow-left"></i></a>
     <div class="mob-title">
         <h1>Education Dept</h1>
         <p class="mob-sub"><?= $todayFormatted ?></p>
@@ -567,7 +567,7 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 
 <!-- ═══ DASHBOARD ═══ -->
 <div id="sec-dashboard" class="sec act">
-<div style="margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap"><div><h1 style="font-size:1.4rem;font-weight:700;color:#1e293b"><?= $greeting ?>, <?= e(explode(' ',$userName)[0]) ?> 📚</h1><p style="color:#64748b;font-size:.8rem"><?= $todayFormatted ?> • Education Department<?php if($currentYear): ?> • <span class="ch ch-p"><?= e($currentYear['year_name']) ?></span><?php endif; ?></p></div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><a href="/admin/notifications.php#compose" class="btn btn-p" style="text-decoration:none"><i class="fa-solid fa-bullhorn"></i> Announce</a><a href="/admin/messages.php" class="btn btn-o" style="text-decoration:none"><i class="fa-solid fa-comments"></i> Message Teachers</a></div></div>
+<div style="margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap"><div><h1 style="font-size:1.4rem;font-weight:700;color:#1e293b"><?= $greeting ?>, <?= e(explode(' ',$userName)[0]) ?> 📚</h1><p style="color:#64748b;font-size:.8rem"><?= $todayFormatted ?> • Education Department<?php if($currentYear): ?> • <span class="ch ch-p"><?= e($currentYear['year_name']) ?></span><?php endif; ?></p></div><div style="display:flex;gap:.5rem;flex-wrap:wrap"><a href="/sms/admin/notifications.php#compose" class="btn btn-p" style="text-decoration:none"><i class="fa-solid fa-bullhorn"></i> Announce</a><a href="/sms/admin/messages.php" class="btn btn-o" style="text-decoration:none"><i class="fa-solid fa-comments"></i> Message Teachers</a></div></div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
 <div class="sc" style="background:linear-gradient(135deg,#7c3aed,#6366f1)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><?= $totalStudents ?></div><div style="font-size:.75rem;opacity:.8">Total Students</div></div><i class="fa-solid fa-users" style="font-size:1.5rem;opacity:.3"></i></div></div>
 <div class="sc" style="background:linear-gradient(135deg,#059669,#10b981)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><?= $totalTeachers ?></div><div style="font-size:.75rem;opacity:.8">Teachers</div></div><i class="fa-solid fa-chalkboard-teacher" style="font-size:1.5rem;opacity:.3"></i></div></div>
@@ -575,13 +575,13 @@ renderSidebarUserCard($userName, 'Education Dept', $todayFormatted, $initials, '
 <div class="sc" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><?= $totalSubjects ?></div><div style="font-size:.75rem;opacity:.8">Subjects</div></div><i class="fa-solid fa-book" style="font-size:1.5rem;opacity:.3"></i></div></div>
 <div class="sc" style="background:linear-gradient(135deg,#ec4899,#d946ef)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><?= $totalEnrolled ?></div><div style="font-size:.75rem;opacity:.8">Enrolled</div></div><i class="fa-solid fa-user-graduate" style="font-size:1.5rem;opacity:.3"></i></div></div>
 <?php // Attendance alerting Phase 2: Open Attendance Warnings (Education only — server-scoped) ?>
-<a class="sc" id="aw-dashboard-card" href="/admin/attendance_warnings.php?department=edu" style="background:linear-gradient(135deg,#dc2626,#f97316);text-decoration:none;color:inherit" title="Open attendance warnings"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-aw-total><?= $attendanceWarningsAvailable ? (int)$attendanceWarningCounts['edu']['total'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Open Attendance Warnings<?= $attendanceWarningsAvailable && (int)$attendanceWarningCounts['edu']['critical'] > 0 ? ' · ' . (int)$attendanceWarningCounts['edu']['critical'] . ' critical' : '' ?></div></div><i class="fa-solid fa-triangle-exclamation" style="font-size:1.5rem;opacity:.3"></i></div></a>
+<a class="sc" id="aw-dashboard-card" href="/sms/admin/attendance_warnings.php?department=edu" style="background:linear-gradient(135deg,#dc2626,#f97316);text-decoration:none;color:inherit" title="Open attendance warnings"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-aw-total><?= $attendanceWarningsAvailable ? (int)$attendanceWarningCounts['edu']['total'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Open Attendance Warnings<?= $attendanceWarningsAvailable && (int)$attendanceWarningCounts['edu']['critical'] > 0 ? ' · ' . (int)$attendanceWarningCounts['edu']['critical'] . ' critical' : '' ?></div></div><i class="fa-solid fa-triangle-exclamation" style="font-size:1.5rem;opacity:.3"></i></div></a>
 <?php // Attendance alerting Phase 5: Assessment follow-ups (make-up queue opened when a student returns to Education) ?>
-<a class="sc" id="af-dashboard-card" href="/admin/assessment_followups.php" style="background:linear-gradient(135deg,#7c3aed,#a855f7);text-decoration:none;color:inherit" title="Assessments missed during an inactive period — decide make-up / exempt"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-af-pending><?= $assessmentFollowupCard['available'] ? (int)$assessmentFollowupCard['pending'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Assessment Follow-ups · pending decision<?= $assessmentFollowupCard['available'] && (int)$assessmentFollowupCard['makeup_required'] > 0 ? ' · ' . (int)$assessmentFollowupCard['makeup_required'] . ' make-up' : '' ?></div></div><i class="fa-solid fa-clipboard-check" style="font-size:1.5rem;opacity:.3"></i></div></a>
+<a class="sc" id="af-dashboard-card" href="/sms/admin/assessment_followups.php" style="background:linear-gradient(135deg,#7c3aed,#a855f7);text-decoration:none;color:inherit" title="Assessments missed during an inactive period — decide make-up / exempt"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-af-pending><?= $assessmentFollowupCard['available'] ? (int)$assessmentFollowupCard['pending'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Assessment Follow-ups · pending decision<?= $assessmentFollowupCard['available'] && (int)$assessmentFollowupCard['makeup_required'] > 0 ? ' · ' . (int)$assessmentFollowupCard['makeup_required'] . ' make-up' : '' ?></div></div><i class="fa-solid fa-clipboard-check" style="font-size:1.5rem;opacity:.3"></i></div></a>
 <?php // Attendance alerting Phase 4: Monthly Attendance (current EC month, Education only — server-scoped) ?>
-<a class="sc" id="am-dashboard-card" href="/admin/attendance_monthly.php?department=edu" style="background:linear-gradient(135deg,#0f766e,#14b8a6);text-decoration:none;color:inherit" title="Monthly attendance report (Ethiopian months)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-am-below><?= $attendanceMonthCard['available'] ? (int)$attendanceMonthCard['below'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Monthly Attendance · <?= e($attendanceMonthCard['month_label_am']) ?> · below threshold<?= $attendanceMonthCard['available'] && $attendanceMonthCard['avg_rate'] !== null ? ' · avg ' . $attendanceMonthCard['avg_rate'] . '%' : '' ?></div></div><i class="fa-solid fa-calendar-days" style="font-size:1.5rem;opacity:.3"></i></div></a>
+<a class="sc" id="am-dashboard-card" href="/sms/admin/attendance_monthly.php?department=edu" style="background:linear-gradient(135deg,#0f766e,#14b8a6);text-decoration:none;color:inherit" title="Monthly attendance report (Ethiopian months)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700" data-am-below><?= $attendanceMonthCard['available'] ? (int)$attendanceMonthCard['below'] : '—' ?></div><div style="font-size:.75rem;opacity:.8">Monthly Attendance · <?= e($attendanceMonthCard['month_label_am']) ?> · below threshold<?= $attendanceMonthCard['available'] && $attendanceMonthCard['avg_rate'] !== null ? ' · avg ' . $attendanceMonthCard['avg_rate'] . '%' : '' ?></div></div><i class="fa-solid fa-calendar-days" style="font-size:1.5rem;opacity:.3"></i></div></a>
 <?php // Class-day-only attendance (2026-10-20): Yearly calendar — holidays + Day Off days ?>
-<a class="sc" id="sc-dashboard-card" href="/admin/school_calendar.php" style="background:linear-gradient(135deg,#6d28d9,#8b5cf6);text-decoration:none;color:inherit" title="Yearly calendar: prepare holidays, mark Day Off days (attendance only on class days)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><i class="fa-solid fa-calendar-check"></i></div><div style="font-size:.75rem;opacity:.8">School Calendar · holidays & Day Off days</div></div><i class="fa-solid fa-calendar-days" style="font-size:1.5rem;opacity:.3"></i></div></a>
+<a class="sc" id="sc-dashboard-card" href="/sms/admin/school_calendar.php" style="background:linear-gradient(135deg,#6d28d9,#8b5cf6);text-decoration:none;color:inherit" title="Yearly calendar: prepare holidays, mark Day Off days (attendance only on class days)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:1.75rem;font-weight:700"><i class="fa-solid fa-calendar-check"></i></div><div style="font-size:.75rem;opacity:.8">School Calendar · holidays & Day Off days</div></div><i class="fa-solid fa-calendar-days" style="font-size:1.5rem;opacity:.3"></i></div></a>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
 <div class="crd" style="padding:1.25rem"><h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem"><i class="fa-solid fa-bolt" style="color:#7c3aed"></i> Quick Actions</h3>
@@ -1609,7 +1609,7 @@ include __DIR__ . '/../components/comm/comm_section.php';
 <script>(function(){const sc=document.getElementById('bnScroll'),sl=document.getElementById('bnScrollL'),sr=document.getElementById('bnScrollR');if(!sc)return;function upd(){sl.classList.toggle('visible',sc.scrollLeft>10);sr.classList.toggle('visible',sc.scrollLeft<sc.scrollWidth-sc.clientWidth-10);}sc.addEventListener('scroll',upd,{passive:true});setTimeout(upd,100);sc.querySelectorAll('.wbws-bnav-btn[data-sec]').forEach(b=>{b.addEventListener('click',function(){const s=this.dataset.sec;if(typeof nav==='function')nav(s);sc.querySelectorAll('.wbws-bnav-btn').forEach(x=>x.classList.remove('active'));this.classList.add('active');});});})();</script>
 
 <div id="toastC"></div>
-<script src="/admin/js/report_card.js?v=20261022s"></script>
+<script src="/sms/admin/js/report_card.js?v=20261022s"></script>
 <script>
 let allTeachers=[],currentTeacherId=null,asgRows=[],homeroomClassIds=[],homeroomHolders={};
 const EDU_CLASSES=<?= json_encode(array_map(static function ($c) {

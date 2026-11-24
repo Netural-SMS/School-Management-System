@@ -404,7 +404,7 @@ $currentStatus = (int) field_value('is_active', $editUser, $oldForm, 1);
             border:1px solid #fecaca;
         }
     </style>
-<link rel="stylesheet" href="/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
+<link rel="stylesheet" href="/sms/admin/css/mobile.css?v=<?= SSMS_ASSET_VER ?>">
 </head>
 <body>
     <aside class="sidebar">
@@ -701,8 +701,8 @@ $currentStatus = (int) field_value('is_active', $editUser, $oldForm, 1);
             });
         });
     </script>
-    <script src="/admin/js/danger_confirm.js?v=20261022dc4"></script>
-    <script src="/admin/js/danger_user_forms.js?v=20261022dc"></script>
+    <script src="/sms/admin/js/danger_confirm.js?v=20261022dc4"></script>
+    <script src="/sms/admin/js/danger_user_forms.js?v=20261022dc"></script>
     <?php include __DIR__ . '/components/account_link.php'; ?>
 </body>
 </html>

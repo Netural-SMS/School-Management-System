@@ -73,11 +73,11 @@ try {
                 COALESCE(SUM(status='archived'),0) as archived,
                 COALESCE(SUM(gender='male' AND status!='archived'),0) as male,
                 COALESCE(SUM(gender='female' AND status!='archived'),0) as female,
-                COALESCE(SUM(AND status!='archived'),0) as regular,
-                COALESCE(SUM(AND status!='archived'),0) as honorary,
-                COALESCE(SUM(registration_type='waiting' AND status!='archived'),0) as waiting,
-                COALESCE(SUM(registration_type='direct' AND status!='archived'),0) as direct,
-                COALESCE(SUM(registration_type='transfer' AND status!='archived'),0) as transfer_reg,
+                0 as regular,
+                0 as honorary,
+                0 as waiting,
+                0 as direct,
+                0 as transfer_reg,
                 COALESCE(0) as ag_7_13,
                 COALESCE(0) as ag_14_17,
                 COALESCE(0) as ag_18_plus,
@@ -152,7 +152,7 @@ try {
                 $where[] = "status = ?"; $params[] = $_GET['status']; $types .= 's';
             }
             if (!empty($_GET['student_type'])) { $where[] = "student_type = ?"; $params[] = $_GET['student_type']; $types .= 's'; }
-            if (!empty($_GET['registration_type'])) { $where[] = "registration_type = ?"; $params[] = $_GET['registration_type']; $types .= 's'; }
+            // registration_type column removed (member type system decommissioned)
             if (!empty($_GET['city'])) { $where[] = "city = ?"; $params[] = $_GET['city']; $types .= 's'; }
             if (!empty($_GET['sub_city'])) { $where[] = "sub_city = ?"; $params[] = $_GET['sub_city']; $types .= 's'; }
             if (!empty($_GET['education_level'])) { $where[] = "education_level = ?"; $params[] = $_GET['education_level']; $types .= 's'; }

@@ -72,7 +72,7 @@ body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background
             <i class="fa-solid fa-comments" style="margin-right:6px"></i>Communication
         </button>
         <?php include __DIR__ . '/../components/notification_center.php'; ?><?= renderNotificationCenter() ?>
-        <a class="exit" href="/admin/logout.php">Exit</a>
+        <a class="exit" href="/sms/admin/logout.php">Exit</a>
     </div>
 </header>
 

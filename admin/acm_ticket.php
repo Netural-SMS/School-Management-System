@@ -140,7 +140,7 @@ acm_chrome_open('queue', (string)($ticket['ticket_no'] ?? 'Ticket'), 'Activation
         <?php endif; ?>
     </div>
     <dl class="acm-kv">
-        <dt>Person</dt><dd><a href="/admin/acm_person.php?id=<?= (int)$ticket['person_id'] ?>"><span class="amharic"><?= e((string)($ticket['full_name_am'] ?? '')) ?></span></a></dd>
+        <dt>Person</dt><dd><a href="/sms/admin/acm_person.php?id=<?= (int)$ticket['person_id'] ?>"><span class="amharic"><?= e((string)($ticket['full_name_am'] ?? '')) ?></span></a></dd>
         <dt>Submitted by</dt><dd><?= e((string)($ticket['submitter_name'] ?? '—')) ?> · <?= e((string)($ticket['created_at'] ?? '')) ?></dd>
         <dt>SLA due</dt><dd class="<?= $od ? 'acm-overdue' : '' ?>"><?= e((string)($ticket['sla_due'] ?? '—')) ?><?= $od ? ' · OVERDUE' : '' ?></dd>
         <dt>Assignee</dt><dd><?= e((string)($ticket['assignee_name'] ?? 'Unclaimed')) ?></dd>

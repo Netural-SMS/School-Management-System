@@ -55,7 +55,7 @@ acm_chrome_open('overview', 'Access Control — Overview', 'Activation workload 
 <div class="acm-alert err"><i class="fa-solid fa-triangle-exclamation"></i> <?= e($pageError) ?></div>
 <?php endif; ?>
 <?php if (!$lastMonthAttested): ?>
-<div class="acm-alert warn"><i class="fa-solid fa-file-circle-exclamation"></i> <?= e($lastMonth) ?> is not attested yet. <a href="/admin/acm_audit.php?month=<?= e($lastMonth) ?>">Open the monthly audit</a>.</div>
+<div class="acm-alert warn"><i class="fa-solid fa-file-circle-exclamation"></i> <?= e($lastMonth) ?> is not attested yet. <a href="/sms/admin/acm_audit.php?month=<?= e($lastMonth) ?>">Open the monthly audit</a>.</div>
 <?php endif; ?>
 <div class="sg">
     <div class="sc"><div class="ico" style="background:rgba(245,158,11,.1);color:var(--warn)"><i class="fa-solid fa-inbox"></i></div><div class="val"><?= (int)($stats['open'] ?? 0) ?></div><div class="lbl">Open tickets</div></div>
@@ -75,7 +75,7 @@ acm_chrome_open('overview', 'Access Control — Overview', 'Activation workload 
         <?php foreach ($spotlight as $row): ?>
             <?php $od = !empty($row['sla_due']) && strtotime((string)$row['sla_due']) < time(); ?>
             <tr>
-                <td><a href="/admin/acm_ticket.php?id=<?= (int)$row['id'] ?>"><?= e((string)($row['ticket_no'] ?? '')) ?></a></td>
+                <td><a href="/sms/admin/acm_ticket.php?id=<?= (int)$row['id'] ?>"><?= e((string)($row['ticket_no'] ?? '')) ?></a></td>
                 <td><span class="amharic"><?= e((string)($row['full_name_am'] ?? '')) ?></span></td>
                 <td><?= e((string)($row['account_type'] ?? '')) ?></td>
                 <td><span class="bg <?= acm_status_bg((string)($row['status'] ?? '')) ?>"><?= e(str_replace('_', ' ', (string)($row['status'] ?? ''))) ?></span></td>
@@ -85,7 +85,7 @@ acm_chrome_open('overview', 'Access Control — Overview', 'Activation workload 
         <?php endforeach; ?>
         </tbody>
     </table></div>
-    <div class="acm-btn-row"><a class="btn bo" href="/admin/acm_queue.php"><i class="fa-solid fa-inbox"></i> Open full queue</a></div>
+    <div class="acm-btn-row"><a class="btn bo" href="/sms/admin/acm_queue.php"><i class="fa-solid fa-inbox"></i> Open full queue</a></div>
     <?php endif; ?>
 </div>
 
