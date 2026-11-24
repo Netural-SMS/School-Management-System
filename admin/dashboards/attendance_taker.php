@@ -574,7 +574,7 @@ $csrfToken = generateCsrfToken();
             formData.append('csrf_token', CSRF_TOKEN);
             
             if (saveBtn) saveBtn.disabled = true;
-            fetch('/admin/api_attendance.php', { method: 'POST', body: formData, credentials: 'same-origin' })
+            fetch('/sms/admin/api_attendance.php', { method: 'POST', body: formData, credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     if (saveBtn) saveBtn.disabled = false;
@@ -607,7 +607,7 @@ $csrfToken = generateCsrfToken();
             formData.append('date', date);
             formData.append('csrf_token', CSRF_TOKEN);
             
-            fetch('/admin/api_attendance.php', { method: 'POST', body: formData })
+            fetch('/sms/admin/api_attendance.php', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(data => {
                     inputField.disabled = false;

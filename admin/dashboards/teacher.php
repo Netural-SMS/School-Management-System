@@ -731,7 +731,7 @@ $csrfToken = generateCsrfToken();
             function ecDate(iso){try{if(window.WBWSCalendar&&WBWSCalendar.formatDate)return WBWSCalendar.formatDate(iso,'long');}catch(e){}return iso;}
             var todayBox=document.getElementById('tt-today'),weekBox=document.getElementById('tt-week'),mkBox=document.getElementById('tt-makeups');
             if(!todayBox)return;
-            fetch('/admin/api_timetable.php?action=my_schedule',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+            fetch('/sms/admin/api_timetable.php?action=my_schedule',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
                 if(!d||d.status!=='success'){todayBox.textContent=(d&&d.message)||'Timetable unavailable.';return;}
                 var lessons=d.lessons||[],tIso=d.today_iso,now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
                 var today=lessons.filter(function(l){return l.day_of_week===tIso;});
@@ -986,7 +986,7 @@ $csrfToken = generateCsrfToken();
             formData.append('grades', JSON.stringify(grades));
             formData.append('csrf_token', CSRF_TOKEN);
             
-            fetch('/admin/api_subjects.php', { method: 'POST', body: formData })
+            fetch('/sms/admin/api_subjects.php', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(data => {
                     showToast(data.message, data.status === 'success' ? 'success' : 'error');
@@ -1398,7 +1398,7 @@ $csrfToken = generateCsrfToken();
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
             
-            fetch('/admin/api_communication.php', { method: 'POST', body: fd })
+            fetch('/sms/admin/api_communication.php', { method: 'POST', body: fd })
                 .then(r => r.json())
                 .then(d => {
                     showToast(d.message, d.status === 'success' ? 'success' : 'error');
@@ -1414,7 +1414,7 @@ $csrfToken = generateCsrfToken();
             // No-assignment teachers see an empty-state card, not this list.
             const area = document.getElementById('mySubmissionsList');
             if (!area) return;
-            fetch('/admin/api_communication.php?action=get_submissions')
+            fetch('/sms/admin/api_communication.php?action=get_submissions')
                 .then(r => r.json())
                 .then(d => {
                     if (d.status === 'success') {
@@ -1631,7 +1631,7 @@ $csrfToken = generateCsrfToken();
             const cid = document.getElementById('reportClassSelect')?.value;
             if (!cid) return showToast('Select a class first', 'error');
             if (!classReportData.length) return showToast('No data to export', 'error');
-            window.location = '/admin/export_class_report.php?class_id=' + encodeURIComponent(cid);
+            window.location = '/sms/admin/export_class_report.php?class_id=' + encodeURIComponent(cid);
         }
     </script>
 <!-- ADVANCED MOBILE BOTTOM NAV -->

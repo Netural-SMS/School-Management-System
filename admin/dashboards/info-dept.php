@@ -3003,7 +3003,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
         content.innerHTML = 'Loading...';
 
         const cacheBust = Date.now();
-        fetch('/admin/info_manage_student.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
+        fetch('/sms/admin/info_manage_student.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
             .then(res => res.text())
             .then(html => {
                 content.innerHTML = html;
@@ -3093,7 +3093,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Archiving...';
         
-        fetch('/admin/info_archive_student.php', {
+        fetch('/sms/admin/info_archive_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -3123,7 +3123,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
     async function restoreMember(id, name) {
         if (!(await dcAsk({tier:'low', title:'Restore ' + name + ' to active students?', summary:'The student appears again in active lists, rosters and attendance.', confirmLabel:'Restore student'}))) return;
         
-        fetch('/admin/info_restore_student.php', {
+        fetch('/sms/admin/info_restore_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({id: id, csrf_token: CSRF_TOKEN})
@@ -3309,7 +3309,7 @@ $nextMemberCode = isset($conn) ? generate_next_student_code($conn) : '0001';
         }
         if (alertBox){ alertBox.style.display='none'; alertBox.className='mm-alert'; alertBox.innerHTML=''; }
 
-        fetch('/admin/info_manage_student.php', {
+        fetch('/sms/admin/info_manage_student.php', {
             method: 'POST',
             body: formData
         })
@@ -3537,7 +3537,7 @@ function checkForDuplicates() {
         phone: phone
     });
     
-    fetch('/admin/api_check_duplicate.php?' + params.toString())
+    fetch('/sms/admin/api_check_duplicate.php?' + params.toString())
         .then(r => r.json())
         .then(data => {
             duplicateCheckPending = false;
@@ -3680,7 +3680,7 @@ function handleMemberFormSubmitWithCheck(event) {
     const overlay = document.getElementById('formLoadingOverlay');
     if (overlay) overlay.classList.remove('hidden');
     
-    fetch('/admin/api_check_duplicate.php?' + params.toString())
+    fetch('/sms/admin/api_check_duplicate.php?' + params.toString())
         .then(r => r.json())
         .then(data => {
             if (overlay) overlay.classList.add('hidden');
@@ -3711,7 +3711,7 @@ function submitRegistrationForm(formData) {
         formData.append('csrf_token', CSRF_TOKEN);
     }
     
-    fetch('/admin/info_register_student.php', {
+    fetch('/sms/admin/info_register_student.php', {
         method: 'POST',
         body: formData,
         headers: { 'Accept': 'application/json' }
@@ -3962,7 +3962,7 @@ function loadAtRiskMonths() {
     const dept = (document.getElementById('attRiskDept') || {}).value || 'edu';
     const sel = document.getElementById('attRiskMonth');
     if (!sel) return Promise.resolve();
-    return fetch('/admin/api_attendance_monthly.php?action=months&department=' + encodeURIComponent(dept), {credentials:'same-origin', headers:{'Accept':'application/json'}})
+    return fetch('/sms/admin/api_attendance_monthly.php?action=months&department=' + encodeURIComponent(dept), {credentials:'same-origin', headers:{'Accept':'application/json'}})
         .then(r => r.json()).then(d => {
             const cur = sel.value;
             const months = (d && d.status === 'success' && d.available && Array.isArray(d.months)) ? d.months : [];
@@ -4031,7 +4031,7 @@ async function quickStatusChange(studentId, name, currentStatus) {
     const reason = String(dc.reason || '').trim();
     if (!['active','inactive'].includes(newStatus)) { attToast('Invalid status', false); return; }
     if (newStatus === 'inactive' && reason.length < 3) { attToast('A reason is required to deactivate a student', false); return; }
-    fetch('/admin/api_attendance_info.php?action=update_status', {
+    fetch('/sms/admin/api_attendance_info.php?action=update_status', {
         method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({student_id: studentId, new_status: newStatus, reason: reason, csrf_token: (typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : '')})
     }).then(r => r.json()).then(d => {
@@ -4068,14 +4068,14 @@ function settingsToast(msg, ok) {
 }
 
 function sApiPost(action, data) {
-    return fetch('/admin/api_settings.php?action=' + action, {
+    return fetch('/sms/admin/api_settings.php?action=' + action, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     }).then(r => r.json());
 }
 function sApiGet(action) {
-    return fetch('/admin/api_settings.php?action=' + action, { credentials: 'same-origin' }).then(r => r.json());
+    return fetch('/sms/admin/api_settings.php?action=' + action, { credentials: 'same-origin' }).then(r => r.json());
 }
 
 // --- Department ---

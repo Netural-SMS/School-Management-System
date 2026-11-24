@@ -23,7 +23,7 @@
         var q = input.value.trim();
         if (q.length < 2) { hide(); return; }
         timer = setTimeout(function () {
-          fetch('/admin/api_guardians.php?action=search&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+          fetch('/sms/admin/api_guardians.php?action=search&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
               if (!d || d.status !== 'success' || !d.guardians.length) {

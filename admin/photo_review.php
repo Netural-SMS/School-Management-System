@@ -133,7 +133,7 @@ body {
 <script>
 async function load() {
   try {
-    const r = await fetch('/admin/api_photo_candidates.php?action=list-pending', {credentials:'same-origin'});
+    const r = await fetch('/sms/admin/api_photo_candidates.php?action=list-pending', {credentials:'same-origin'});
     const j = await r.json();
     if (j.status === 'session_expired' || j.action === 'reload') {
       document.getElementById('list').innerHTML =
@@ -186,7 +186,7 @@ function render(items) {
 async function decide(id, decision, btn) {
   btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
   try {
-    const r = await fetch('/admin/api_photo_candidates.php?action=decide',{
+    const r = await fetch('/sms/admin/api_photo_candidates.php?action=decide',{
       method:'POST', credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({candidate_id:id, decision:decision}),

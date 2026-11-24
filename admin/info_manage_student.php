@@ -979,7 +979,7 @@ $mmRoles = [
         <a href="/sms/admin/dashboard.php?student=<?= (int)$m['id'] ?>"><i class="fas fa-arrow-right"></i> Continue</a>
         <a href="javascript:history.back()"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
-    <script>try { window.location.replace('/admin/dashboard.php?student=<?= (int)$m['id'] ?>'); } catch (e) {}</script>
+    <script>try { window.location.replace('/sms/admin/dashboard.php?student=<?= (int)$m['id'] ?>'); } catch (e) {}</script>
     <?php endif; ?>
 
     <!-- QUICK FACTS -->

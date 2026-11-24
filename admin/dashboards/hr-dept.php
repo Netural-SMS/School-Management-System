@@ -3114,7 +3114,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         }
 
         // 2) Fallback: fetch from authoritative endpoint
-        fetch('/admin/info_manage_student.php?id=' + encodeURIComponent(studentId) + '&format=json&v=' + new Date().getTime())
+        fetch('/sms/admin/info_manage_student.php?id=' + encodeURIComponent(studentId) + '&format=json&v=' + new Date().getTime())
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (data && data.status === 'success' && data.student) {
@@ -3526,7 +3526,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         content.innerHTML = 'Loading...';
 
         const cacheBust = Date.now();
-        fetch('/admin/info_manage_student.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
+        fetch('/sms/admin/info_manage_student.php?id=' + encodeURIComponent(id) + '&embed=1&v=' + cacheBust)
             .then(res => res.text())
             .then(html => {
                 content.innerHTML = html;
@@ -3616,7 +3616,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Archiving...';
         
-        fetch('/admin/info_archive_student.php', {
+        fetch('/sms/admin/info_archive_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -3646,7 +3646,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
     async function restoreMember(id, name) {
         if (!(await dcAsk({tier:'low', title:'Restore ' + name + ' to active students?', summary:'The student appears again in active lists, rosters and attendance.', confirmLabel:'Restore student'}))) return;
         
-        fetch('/admin/info_restore_student.php', {
+        fetch('/sms/admin/info_restore_student.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({id: id, csrf_token: CSRF_TOKEN})
@@ -3832,7 +3832,7 @@ if (isset($conn) && $conn instanceof mysqli && !$conn->connect_error) {
         }
         if (alertBox){ alertBox.style.display='none'; alertBox.className='mm-alert'; alertBox.innerHTML=''; }
 
-        fetch('/admin/info_manage_student.php', {
+        fetch('/sms/admin/info_manage_student.php', {
             method: 'POST',
             body: formData
         })
@@ -4052,7 +4052,7 @@ function requestDuplicateCheck({ studentName, fatherName, grandfatherName, phone
         phone: phone,
         csrf_token: CSRF_TOKEN
     });
-    return fetch('/admin/api_check_duplicate.php', {
+    return fetch('/sms/admin/api_check_duplicate.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -4276,7 +4276,7 @@ function submitRegistrationForm(formData) {
         formData.append('csrf_token', CSRF_TOKEN);
     }
     
-    fetch('/admin/hr_register_student.php', {
+    fetch('/sms/admin/hr_register_student.php', {
         method: 'POST',
         body: formData,
         headers: { 'Accept': 'application/json' }
@@ -4388,14 +4388,14 @@ function settingsToast(msg, ok) {
 }
 
 function sApiPost(action, data) {
-    return fetch('/admin/api_settings.php?action=' + action, {
+    return fetch('/sms/admin/api_settings.php?action=' + action, {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     }).then(r => r.json());
 }
 function sApiGet(action) {
-    return fetch('/admin/api_settings.php?action=' + action, { credentials: 'same-origin' }).then(r => r.json());
+    return fetch('/sms/admin/api_settings.php?action=' + action, { credentials: 'same-origin' }).then(r => r.json());
 }
 
 // --- Department ---

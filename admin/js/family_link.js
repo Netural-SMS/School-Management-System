@@ -73,7 +73,7 @@
   function debounce(fn, ms) { var t; return function () { var a = arguments, c = this; clearTimeout(t); t = setTimeout(function () { fn.apply(c, a); }, ms); }; }
   function openProfile(studentId) {
     if (typeof window.openManageSheet === 'function') { window.openManageSheet(studentId); return; }
-    window.location.href = '/admin/info_manage_student.php?id=' + encodeURIComponent(studentId);
+    window.location.href = '/sms/admin/info_manage_student.php?id=' + encodeURIComponent(studentId);
   }
 
   // ── stats strip ──────────────────────────────────────────────────
@@ -301,7 +301,7 @@
     var input = $('famKidQ'), list = $('famKidL'); if (!input || !list) return;
     var run = debounce(function () {
       var q = input.value.trim(); if (q.length < 2) { list.style.display = 'none'; return; }
-      fetch('/admin/api_list_students.php?q=' + encodeURIComponent(q) + '&limit=8', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      fetch('/sms/admin/api_list_students.php?q=' + encodeURIComponent(q) + '&limit=8', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
         var rows = (d && d.students) || [];
         if (!rows.length) { list.innerHTML = '<div class="fam-dd-empty">No student found</div>'; list.style.display = 'block'; return; }
         list.innerHTML = rows.map(function (m) { return '<button type="button" data-mid="' + parseInt(m.id, 10) + '" class="fam-dd-item"><b>' + esc(m.student_name || m.full_name_am) + '</b> <span class="text-slate-400">' + esc(m.student_code || '') + ( ? ' · ' + esc() : '') + '</span>' + (m.guardian_name ? '<div class="text-[11px] text-slate-400">guardian on record: ' + esc(m.guardian_name) + '</div>' : '') + '</button>'; }).join('');

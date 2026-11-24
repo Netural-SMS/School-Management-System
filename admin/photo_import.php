@@ -170,7 +170,7 @@ function humanBytes(n){if(n<1024)return n+' B';if(n<1024*1024)return(n/1024).toF
 function fmtDate(s){if(!s)return '—';try{return new Date(s.replace(' ','T')+'Z').toLocaleString();}catch(e){return s;}}
 
 async function loadRecent() {
-  const r = await fetch('/admin/api_photo_zip_import.php?action=recent', {credentials:'same-origin', headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+  const r = await fetch('/sms/admin/api_photo_zip_import.php?action=recent', {credentials:'same-origin', headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
   const j = await r.json();
   const root = document.getElementById('recent');
   if (j.status === 'session_expired' || j.action === 'reload') {

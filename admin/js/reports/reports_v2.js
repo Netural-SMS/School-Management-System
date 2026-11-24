@@ -127,7 +127,7 @@
     }
     let body = null;
     try { body = await res.json(); } catch (e) { body = null; }
-    if (res.status === 401) { window.location.href = '/admin/index.php?error=session_expired'; return null; }
+    if (res.status === 401) { window.location.href = '/sms/admin/index.php?error=session_expired'; return null; }
     if (!res.ok || !body || body.status !== 'success') {
       const msg = (body && body.message) || ('Request failed (' + res.status + ')');
       throw new Error(msg);
@@ -449,7 +449,7 @@
     }
     const res = await fetch(url, init);
     let body = null; try { body = await res.json(); } catch (e) { body = null; }
-    if (res.status === 401) { window.location.href = '/admin/index.php?error=session_expired'; return null; }
+    if (res.status === 401) { window.location.href = '/sms/admin/index.php?error=session_expired'; return null; }
     if (!res.ok || !body || body.status !== 'success') throw new Error((body && body.message) || ('Request failed (' + res.status + ')'));
     return body.data;
   }
@@ -779,7 +779,7 @@
         return { last_page: Math.max(1, Math.ceil(shown / (params.size || state.pageSize))), data: d.rows };
       },
       ajaxError: function (xhr) {
-        if (xhr && xhr.status === 401) window.location.href = '/admin/index.php?error=session_expired';
+        if (xhr && xhr.status === 401) window.location.href = '/sms/admin/index.php?error=session_expired';
         else toast('Could not load the list', true);
       },
       initialSort: state.sort.map((s) => ({ column: s.field, dir: s.dir })).filter((s) => state.columns.includes(s.column)),

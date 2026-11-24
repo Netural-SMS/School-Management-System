@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fd.append('tier', tier);
             fd.append('dry_run', '1');
             if (typeof CSRF_TOKEN !== 'undefined' && CSRF_TOKEN) fd.append('csrf_token', CSRF_TOKEN);
-            return fetch('/admin/api_import_students.php', { method: 'POST', body: fd }).then((r) => r.json()).then((res) => {
+            return fetch('/sms/admin/api_import_students.php', { method: 'POST', body: fd }).then((r) => r.json()).then((res) => {
                 const sm = res.summary || {};
                 if (!res.success) {
                     const n = Number(res.error_count || (res.errors || []).length || 0);
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let keepFile = false;
             try {
-                const response = await fetch('/admin/api_import_students.php', { method: 'POST', body: formData });
+                const response = await fetch('/sms/admin/api_import_students.php', { method: 'POST', body: formData });
                 const result = await response.json();
                 if (result.success) {
                     line('✓ ' + String(result.message || ''), 'text-green-400 font-bold mt-2');

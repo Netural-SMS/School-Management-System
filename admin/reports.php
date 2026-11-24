@@ -267,7 +267,7 @@ function showTab(el,name){
 
 // ============ ANALYTICS ============
 function loadA(){
-    fetch('/admin/api_reports.php?action=get_analytics',{credentials:'same-origin'})
+    fetch('/sms/admin/api_reports.php?action=get_analytics',{credentials:'same-origin'})
     .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(d=>{
         if(d.status!=='success'){document.getElementById('aLoad').innerHTML='<p class="text-red-500 text-sm">'+esc(d.message||'Error')+'</p>';return;}
@@ -313,7 +313,7 @@ function renderCharts(){
 
 // ============ DATA EXPLORER ============
 let foL=false;
-function loadFO(){if(foL)return;fetch('/admin/api_reports.php?action=get_filter_options',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d.status!=='success')return;const o=d.options;pS('fCity',o.city||[]);pS('fSubCity',o.sub_city||[]);pS('fEdu',o.education_level||[]);foL=true;});}
+function loadFO(){if(foL)return;fetch('/sms/admin/api_reports.php?action=get_filter_options',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d.status!=='success')return;const o=d.options;pS('fCity',o.city||[]);pS('fSubCity',o.sub_city||[]);pS('fEdu',o.education_level||[]);foL=true;});}
 function pS(id,v){const s=document.getElementById(id);v.forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;s.appendChild(o);});}
 
 function getP(){
@@ -329,7 +329,7 @@ function applyF(){
     // Remap f_status to status for API
     if(p.has('f_status')){p.set('status',p.get('f_status'));p.delete('f_status');}
     ['expRes','expEmpty'].forEach(id=>document.getElementById(id).style.display='none');
-    fetch('/admin/api_reports.php?'+p.toString(),{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
+    fetch('/sms/admin/api_reports.php?'+p.toString(),{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
         if(d.status!=='success'){toast(d.message||'Error',false);return;}
         FM=d.students;const sm=d.summary;
         document.getElementById('expSum').style.display='grid';

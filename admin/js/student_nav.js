@@ -23,7 +23,7 @@
       window.openManageSheet(toId);
       return false;
     }
-    window.location.href = '/admin/dashboard.php?student=' + encodeURIComponent(toId);
+    window.location.href = '/sms/admin/dashboard.php?student=' + encodeURIComponent(toId);
     return false;
   }
 
@@ -60,7 +60,7 @@
       window.FamilyLink.open(guardianId);
       return false;
     }
-    window.location.href = '/admin/dashboard.php?section=family&guardian=' + encodeURIComponent(guardianId);
+    window.location.href = '/sms/admin/dashboard.php?section=family&guardian=' + encodeURIComponent(guardianId);
     return false;
   }
 

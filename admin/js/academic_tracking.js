@@ -888,7 +888,7 @@
   AcademicTracking.prototype.loadClassOptions = function () {
     var self = this;
     if (this.classOptions) return Promise.resolve(this.classOptions);
-    return fetch('/admin/api_education.php?action=get_classes&status=active', { credentials: 'same-origin' })
+    return fetch('/sms/admin/api_education.php?action=get_classes&status=active', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         self.classOptions = (d && d.classes) ? d.classes : [];

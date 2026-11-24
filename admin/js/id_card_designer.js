@@ -235,7 +235,7 @@
     fd.append('settings', JSON.stringify(state));
     fd.append('csrf_token', cfg.csrf || (window.CSRF || ''));
     try {
-      var r = await fetch('/admin/api_branding.php', { method: 'POST', body: fd, credentials: 'same-origin' });
+      var r = await fetch('/sms/admin/api_branding.php', { method: 'POST', body: fd, credentials: 'same-origin' });
       var d = await r.json();
       toast(d.message || 'Saved.', d.status === 'success');
     } catch (e) {
@@ -255,7 +255,7 @@
 
   async function load() {
     try {
-      var r = await fetch('/admin/api_branding.php?action=get_assets', { credentials: 'same-origin' });
+      var r = await fetch('/sms/admin/api_branding.php?action=get_assets', { credentials: 'same-origin' });
       var d = await r.json();
       if (d.status === 'success') {
         if (d.schema && d.schema.elements) schema = d.schema;

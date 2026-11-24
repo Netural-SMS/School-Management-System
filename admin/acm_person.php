@@ -255,7 +255,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
             save.disabled = true;
             try {
                 var d = await acmApi('person_create', params, 'POST');
-                window.location.href = '/admin/acm_person.php?id=' + d.person.id;
+                window.location.href = '/sms/admin/acm_person.php?id=' + d.person.id;
             } catch (err) { acmToast(err.message || 'Save failed.', false); save.disabled = false; }
         });
     }
@@ -292,7 +292,7 @@ acm_chrome_open('persons', 'Persons & accounts', 'One human, independently manag
                     account_type: document.getElementById('t_type').value,
                     note: document.getElementById('t_note').value
                 }, 'POST');
-                window.location.href = '/admin/acm_ticket.php?id=' + d.ticket.id;
+                window.location.href = '/sms/admin/acm_ticket.php?id=' + d.ticket.id;
             } catch (err) { acmToast(err.message || 'Submit failed.', false); sub.disabled = false; }
         });
     }

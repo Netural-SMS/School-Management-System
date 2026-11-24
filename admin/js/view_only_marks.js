@@ -132,7 +132,7 @@
     document.addEventListener('keydown', onKey, true);
     back.querySelector('[data-fk-rc-close]').focus();
 
-    fetch('/admin/api_subjects.php?action=student_results&assessment_id=' + encodeURIComponent(opts.assessmentId) +
+    fetch('/sms/admin/api_subjects.php?action=student_results&assessment_id=' + encodeURIComponent(opts.assessmentId) +
       '&student_id=' + encodeURIComponent(studentId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (d) {

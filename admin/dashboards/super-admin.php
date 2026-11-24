@@ -1517,7 +1517,7 @@ require __DIR__ . '/../components/bottom_nav.php';
             if(_brandBusy && !force)return;
             _brandBusy=true;
             try{
-                const r=await fetch('/admin/api_branding.php?action=get_assets&_t='+Date.now(),{credentials:'same-origin'});
+                const r=await fetch('/sms/admin/api_branding.php?action=get_assets&_t='+Date.now(),{credentials:'same-origin'});
                 if(!r.ok) throw new Error('HTTP '+r.status);
                 const txt=await r.text();
                 let d;
@@ -1613,7 +1613,7 @@ require __DIR__ . '/../components/bottom_nav.php';
             const fd=new FormData();
             fd.append('action','upload_asset');fd.append('asset_key',key);fd.append('file',file);fd.append('csrf_token',CSRF);
             try{
-                const r=await fetch('/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
+                const r=await fetch('/sms/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
                 const txt=await r.text();
                 let d;
                 try{d=JSON.parse(txt);}catch(e){
@@ -1663,7 +1663,7 @@ require __DIR__ . '/../components/bottom_nav.php';
             if(!dc)return;
             const fd=new FormData();fd.append('action','delete_asset');fd.append('asset_key',key);fd.append('csrf_token',CSRF);
             try{
-                const r=await fetch('/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
+                const r=await fetch('/sms/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
                 const txt=await r.text();
                 let d;try{d=JSON.parse(txt);}catch(e){_toast('Server error (HTTP '+r.status+')','err');return;}
                 _toast(d.message||'Done',(r.ok && d.status==='success')?'ok':'err');
@@ -1734,7 +1734,7 @@ require __DIR__ . '/../components/bottom_nav.php';
         async function saveControls(){
             const fd=new FormData();fd.append('action','save_settings');fd.append('settings',JSON.stringify(brandSettings));fd.append('csrf_token',CSRF);
             try{
-                const r=await fetch('/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
+                const r=await fetch('/sms/admin/api_branding.php',{method:'POST',body:fd,credentials:'same-origin'});
                 const txt=await r.text();
                 let d;try{d=JSON.parse(txt);}catch(e){_toast('Server error saving','err');return;}
                 _toast(d.message||'Saved!',d.status==='success'?'ok':'err');
@@ -1794,7 +1794,7 @@ require __DIR__ . '/../components/bottom_nav.php';
                 fd.append('action',action);
                 if(phrase)fd.append('confirm_phrase',phrase);
                 fd.append('csrf_token','<?= $csrfToken ?>');
-                const r=await fetch('/admin/api_test_seed.php',{method:'POST',body:fd,credentials:'same-origin'});
+                const r=await fetch('/sms/admin/api_test_seed.php',{method:'POST',body:fd,credentials:'same-origin'});
                 const d=await r.json();
                 if(msg)msg.textContent=d.message||'Done';
                 setTimeout(function(){location.reload();},800);

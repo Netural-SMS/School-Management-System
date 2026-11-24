@@ -651,7 +651,7 @@ document.querySelectorAll('[data-section]').forEach(el=>{el.addEventListener('cl
 
 // GLOBAL SEARCH
 let searchTimer;
-function globalSearchHandler(q){clearTimeout(searchTimer);const box=document.getElementById('searchResults');q=q.trim();if(q.length<2){box.classList.remove('show');return;}searchTimer=setTimeout(async()=>{try{const params=new URLSearchParams({q:q,limit:'8',page:'1'});const r=await fetch('/admin/api_list_students.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok||d.status!=='success')throw new Error(d.message||'Search failed');globalSearchMembers=d.students||[];showSearchResults(globalSearchMembers);}catch(_){globalSearchMembers=[];showSearchResults([]);}},250);}
+function globalSearchHandler(q){clearTimeout(searchTimer);const box=document.getElementById('searchResults');q=q.trim();if(q.length<2){box.classList.remove('show');return;}searchTimer=setTimeout(async()=>{try{const params=new URLSearchParams({q:q,limit:'8',page:'1'});const r=await fetch('/sms/admin/api_list_students.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok||d.status!=='success')throw new Error(d.message||'Search failed');globalSearchMembers=d.students||[];showSearchResults(globalSearchMembers);}catch(_){globalSearchMembers=[];showSearchResults([]);}},250);}
 function showSearchResults(matches){const box=document.getElementById('searchResults');if(!matches.length){box.innerHTML='<div class="sr-item" style="color:var(--dim)">No results</div>';box.classList.add('show');return;}box.innerHTML=matches.map(m=>`<div class="sr-item" onclick="viewMember(${parseInt(m.id,10)});document.getElementById('searchResults').classList.remove('show');document.getElementById('globalSearch').value='';"><span class="bg bg-info" style="font-size:.55rem">${esc(m.student_code||'')}</span><span style="font-weight:500;color:var(--bright)">${esc(m.student_name)}</span><span style="color:var(--dim);font-size:.62rem">${esc('')}</span></div>`).join('');box.classList.add('show');}
 document.addEventListener('click',e=>{if(!e.target.closest('.search-box'))document.getElementById('searchResults').classList.remove('show');});
 
@@ -664,8 +664,8 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search-box'))docume
 // IMPERSONATE
 // Danger confirmation dialog (admin/js/danger_confirm.js) — owner decisions 2026-10-21.
 function dcAsk(o){if(window.DangerConfirm&&window.DangerConfirm.ask)return window.DangerConfirm.ask(o);toast('The confirmation dialog did not load. Reload the page (Ctrl+F5) and try again.','e');return Promise.resolve(false);}
-async function switchRole(role){const rn=role.replace(/_/g,' ');if(!(await dcAsk({tier:'low',title:'Open the '+rn+' dashboard?',summary:'You will act as '+rn+' until you return. Actions you take there are recorded under your account.',confirmLabel:'Switch dashboard'})))return;try{const fd=new FormData();fd.append('action','switch');fd.append('role',role);fd.append('csrf_token',CSRF);const r=await fetch('/admin/api_impersonate.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'){toast('Switching...','s');setTimeout(()=>window.location.href='/admin/dashboard.php',400);}else toast(d.message||'Failed','e');}catch(e){toast('Network error','e');}}
-async function restoreRole(){try{const fd=new FormData();fd.append('action','restore');fd.append('csrf_token',CSRF);const r=await fetch('/admin/api_impersonate.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success')window.location.href='/admin/dashboard.php';else toast(d.message||'Failed','e');}catch(e){toast('Failed','e');}}
+async function switchRole(role){const rn=role.replace(/_/g,' ');if(!(await dcAsk({tier:'low',title:'Open the '+rn+' dashboard?',summary:'You will act as '+rn+' until you return. Actions you take there are recorded under your account.',confirmLabel:'Switch dashboard'})))return;try{const fd=new FormData();fd.append('action','switch');fd.append('role',role);fd.append('csrf_token',CSRF);const r=await fetch('/sms/admin/api_impersonate.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'){toast('Switching...','s');setTimeout(()=>window.location.href='/sms/admin/dashboard.php',400);}else toast(d.message||'Failed','e');}catch(e){toast('Network error','e');}}
+async function restoreRole(){try{const fd=new FormData();fd.append('action','restore');fd.append('csrf_token',CSRF);const r=await fetch('/sms/admin/api_impersonate.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success')window.location.href='/sms/admin/dashboard.php';else toast(d.message||'Failed','e');}catch(e){toast('Failed','e');}}
 
 // SECTION BARS
 (function(){const el=document.getElementById('secBars');if(!el||!secDist.length){if(el)el.innerHTML='<p style="font-size:.72rem;color:var(--dim)">No data</p>';return;}const mx=Math.max(...secDist.map(s=>parseInt(s.c)));const clrs=['var(--ac)','var(--ok)','var(--purple)','var(--warn)','var(--pink)','#f97316','#06b6d4','#84cc16'];el.innerHTML=secDist.slice(0,8).map((s,i)=>{const p=mx>0?Math.round(parseInt(s.c)/mx*100):0;return`<div style="margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;font-size:.65rem;margin-bottom:.15rem"><span style="color:var(--text);font-weight:500">${s.s}</span><span style="font-weight:700;color:${clrs[i%8]}">${s.c}</span></div><div class="progress"><div class="progress-bar" style="width:${p}%;background:${clrs[i%8]}"></div></div></div>`;}).join('');})();
@@ -683,7 +683,7 @@ async function loadMembers(page=1,append=false){
     if(window.memberListRequest)window.memberListRequest.abort();
     window.memberListRequest=new AbortController();
     try{
-        const r=await fetch('/admin/api_list_students.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'},signal:window.memberListRequest.signal});
+        const r=await fetch('/sms/admin/api_list_students.php?'+params.toString(),{credentials:'same-origin',headers:{Accept:'application/json'},signal:window.memberListRequest.signal});
         let d;try{d=await r.json();}catch(_){throw new Error('Server returned an unexpected response (HTTP '+r.status+').');}
         if(!r.ok||d.status!=='success')throw new Error(d.message||'Could not load students');
         const rows=Array.isArray(d.students)?d.students:[];
@@ -728,13 +728,13 @@ async function loadAttReport(){const from=document.getElementById('attFrom').val
 function exportAtt(){const rows=[];document.querySelectorAll('#attBody tr').forEach(tr=>{rows.push([...tr.querySelectorAll('td')].map(td=>td.textContent.trim()));});if(!rows.length)return toast('No data','e');expTbl(['Name','Section','Present','Absent','Late','Rate'],rows,'Attendance_Report','excel');}
 
 // CLASSES
-async function loadClasses(){const el=document.getElementById('classesContent');try{const r=await fetch('/admin/api_education.php?action=dashboard',{credentials:'same-origin'});const d=await r.json();if(d.status==='success'){const cls=d.data?.classes||[];if(!cls.length){el.innerHTML='<div class="cd" style="text-align:center;padding:2rem"><i class="fa-solid fa-chalkboard" style="font-size:1.5rem;color:var(--dim);display:block;margin-bottom:.5rem"></i><p style="color:var(--dim);font-size:.75rem">No classes yet. Managed by Education Dept.</p></div>';return;}el.innerHTML=`<div class="sg"><div class="sc"><div class="ico" style="background:rgba(6,182,212,.1);color:var(--ac)"><i class="fa-solid fa-chalkboard"></i></div><div class="val">${cls.length}</div><div class="lbl">Classes</div></div><div class="sc"><div class="ico" style="background:rgba(16,185,129,.1);color:var(--ok)"><i class="fa-solid fa-user-graduate"></i></div><div class="val">${cls.reduce((s,c)=>s+(parseInt(c.student_count)||0),0)}</div><div class="lbl">Enrolled</div></div></div><div class="cd"><div class="ct"><i class="fa-solid fa-list" style="color:var(--ac)"></i> Classes</div><div class="tw"><table><thead><tr><th>Class</th><th>Level</th><th>Students</th><th>Teacher</th></tr></thead><tbody>${cls.map(c=>`<tr><td style="font-weight:600;color:var(--bright)">${esc(c.class_name||c.name||'—')}</td><td>${esc(c.level||c.grade_level||'—')}</td><td><span class="bg bg-info">${c.student_count||0}</span></td><td>${esc(c.teacher_name||'—')}</td></tr>`).join('')}</tbody></table></div></div>`;}else el.innerHTML='<div class="cd" style="text-align:center;padding:1.5rem;color:var(--dim)">Could not load</div>';}catch(e){el.innerHTML='<div class="cd" style="text-align:center;padding:1.5rem;color:var(--dim)"><i class="fa-solid fa-info-circle" style="color:var(--warn)"></i> Education setup needed</div>';}}
+async function loadClasses(){const el=document.getElementById('classesContent');try{const r=await fetch('/sms/admin/api_education.php?action=dashboard',{credentials:'same-origin'});const d=await r.json();if(d.status==='success'){const cls=d.data?.classes||[];if(!cls.length){el.innerHTML='<div class="cd" style="text-align:center;padding:2rem"><i class="fa-solid fa-chalkboard" style="font-size:1.5rem;color:var(--dim);display:block;margin-bottom:.5rem"></i><p style="color:var(--dim);font-size:.75rem">No classes yet. Managed by Education Dept.</p></div>';return;}el.innerHTML=`<div class="sg"><div class="sc"><div class="ico" style="background:rgba(6,182,212,.1);color:var(--ac)"><i class="fa-solid fa-chalkboard"></i></div><div class="val">${cls.length}</div><div class="lbl">Classes</div></div><div class="sc"><div class="ico" style="background:rgba(16,185,129,.1);color:var(--ok)"><i class="fa-solid fa-user-graduate"></i></div><div class="val">${cls.reduce((s,c)=>s+(parseInt(c.student_count)||0),0)}</div><div class="lbl">Enrolled</div></div></div><div class="cd"><div class="ct"><i class="fa-solid fa-list" style="color:var(--ac)"></i> Classes</div><div class="tw"><table><thead><tr><th>Class</th><th>Level</th><th>Students</th><th>Teacher</th></tr></thead><tbody>${cls.map(c=>`<tr><td style="font-weight:600;color:var(--bright)">${esc(c.class_name||c.name||'—')}</td><td>${esc(c.level||c.grade_level||'—')}</td><td><span class="bg bg-info">${c.student_count||0}</span></td><td>${esc(c.teacher_name||'—')}</td></tr>`).join('')}</tbody></table></div></div>`;}else el.innerHTML='<div class="cd" style="text-align:center;padding:1.5rem;color:var(--dim)">Could not load</div>';}catch(e){el.innerHTML='<div class="cd" style="text-align:center;padding:1.5rem;color:var(--dim)"><i class="fa-solid fa-info-circle" style="color:var(--warn)"></i> Education setup needed</div>';}}
 
 // STAFF
 function renderUsers(){document.getElementById('usersBody').innerHTML=usersData.map(u=>`<tr><td style="color:var(--dim)">${u.id}</td><td style="font-weight:600;color:var(--bright)">${esc(u.username)}</td><td>${esc(u.full_name||'—')}</td><td>${rlBg(u.role)}</td><td>${stBg(u.status)}</td><td style="font-size:.62rem;color:var(--dim)">${u.last_login?fmtDate(u.last_login):'Never'}</td><td><button class="btn bs ${u.status==='active'?'bo':''}" style="${u.status!=='active'?'background:var(--ok);color:#fff':''}" onclick="toggleUser(${u.id},'${u.status}')"><i class="fa-solid fa-${u.status==='active'?'ban':'check'}"></i></button></td></tr>`).join('');}
 function openAddUser(){document.getElementById('addUserModal').classList.add('show');}
-async function saveNewUser(){const nm=document.getElementById('nuName').value.trim(),un=document.getElementById('nuUser').value.trim(),pw=document.getElementById('nuPass').value,rl=document.getElementById('nuRole').value;if(!nm||!un||!pw)return toast('All fields required','e');if(pw.length<12)return toast('Password must be at least 12 characters','e');if(new TextEncoder().encode(pw).length>72)return toast('Password is too long','e');try{const fd=new FormData();fd.append('full_name',nm);fd.append('username',un);fd.append('password',pw);fd.append('role',rl);fd.append('status','active');fd.append('csrf_token',CSRF);const r=await fetch('/admin/backend/user-save.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'||d.success){toast('User created!','s');document.getElementById('addUserModal').classList.remove('show');usersData.unshift({id:d.id||Date.now(),username:un,full_name:nm,role:rl,status:'active',last_login:null});renderUsers();['nuName','nuUser','nuPass'].forEach(id=>document.getElementById(id).value='');}else toast(d.message||'Failed','e');}catch(e){toast('Network error','e');}}
-async function toggleUser(id,cur){const act=cur==='active'?'deactivate':'activate';const dc=await dcAsk(act==='deactivate'?{tier:'medium',title:'Deactivate this user account?',summary:'The account is switched off but not deleted.',intent:'I want to deactivate this account',consequences:['The user can no longer log in on the web dashboard or the mobile app.','Work assigned to this account (classes, tasks) stops reaching them.'],keeps:['Everything they recorded stays and keeps their name.','You can activate the account again later.'],phrase:'DEACTIVATE USER',confirmLabel:'Deactivate account'}:{tier:'low',title:'Activate this user account?',summary:'The user can log in again with their existing password.',confirmLabel:'Activate account'});if(!dc)return;try{const fd=new FormData();fd.append('id',id);fd.append('action',act);fd.append('csrf_token',CSRF);const r=await fetch('/admin/backend/user-toggle.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'||d.success){const u=usersData.find(x=>x.id==id);if(u)u.status=cur==='active'?'inactive':'active';renderUsers();toast('Done','s');}}catch(e){toast('Failed','e');}}
+async function saveNewUser(){const nm=document.getElementById('nuName').value.trim(),un=document.getElementById('nuUser').value.trim(),pw=document.getElementById('nuPass').value,rl=document.getElementById('nuRole').value;if(!nm||!un||!pw)return toast('All fields required','e');if(pw.length<12)return toast('Password must be at least 12 characters','e');if(new TextEncoder().encode(pw).length>72)return toast('Password is too long','e');try{const fd=new FormData();fd.append('full_name',nm);fd.append('username',un);fd.append('password',pw);fd.append('role',rl);fd.append('status','active');fd.append('csrf_token',CSRF);const r=await fetch('/sms/admin/backend/user-save.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'||d.success){toast('User created!','s');document.getElementById('addUserModal').classList.remove('show');usersData.unshift({id:d.id||Date.now(),username:un,full_name:nm,role:rl,status:'active',last_login:null});renderUsers();['nuName','nuUser','nuPass'].forEach(id=>document.getElementById(id).value='');}else toast(d.message||'Failed','e');}catch(e){toast('Network error','e');}}
+async function toggleUser(id,cur){const act=cur==='active'?'deactivate':'activate';const dc=await dcAsk(act==='deactivate'?{tier:'medium',title:'Deactivate this user account?',summary:'The account is switched off but not deleted.',intent:'I want to deactivate this account',consequences:['The user can no longer log in on the web dashboard or the mobile app.','Work assigned to this account (classes, tasks) stops reaching them.'],keeps:['Everything they recorded stays and keeps their name.','You can activate the account again later.'],phrase:'DEACTIVATE USER',confirmLabel:'Deactivate account'}:{tier:'low',title:'Activate this user account?',summary:'The user can log in again with their existing password.',confirmLabel:'Activate account'});if(!dc)return;try{const fd=new FormData();fd.append('id',id);fd.append('action',act);fd.append('csrf_token',CSRF);const r=await fetch('/sms/admin/backend/user-toggle.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();if(d.status==='success'||d.success){const u=usersData.find(x=>x.id==id);if(u)u.status=cur==='active'?'inactive':'active';renderUsers();toast('Done','s');}}catch(e){toast('Failed','e');}}
 
 // REPORTS
 function loadAnalysis(){buildAnalysis();}
@@ -1212,7 +1212,7 @@ window._yearData={};window._termData={};window._termYearId=0;
 async function loadYears(){
     const tb=document.getElementById('yearBody');if(!tb)return;
     try{
-        const r=await fetch('/admin/api_education.php?action=get_academic_years',{credentials:'same-origin'});const d=await r.json();
+        const r=await fetch('/sms/admin/api_education.php?action=get_academic_years',{credentials:'same-origin'});const d=await r.json();
         if(d.status==='success'){
             const y=d.years||[];window._yearData={};y.forEach(x=>window._yearData[x.id]=x);
             updateRolloverHint(y);
@@ -1324,7 +1324,7 @@ async function saveYear(){
     fd.append('s1_weight_pct',document.getElementById('yearS1Weight').value);
     fd.append('s2_weight_pct',document.getElementById('yearS2Weight').value);
     fd.append('csrf_token',CSRF);
-    try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
+    try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
     if(d.status==='success'){toast('Academic year saved!','s');(d.warnings||[]).forEach(w=>toast(w,'e'));document.getElementById('yearModal').classList.remove('show');loadYears();}
     else toast(d.message||'Save failed','e');}catch(e){toast('Network error','e');}
 }
@@ -1344,7 +1344,7 @@ async function setCurrentYear(id){
     if(!dc)return;
     const fd=new FormData();fd.append('action','set_current_year');fd.append('year_id',id);fd.append('confirm',phrase);fd.append('csrf_token',CSRF);
     try{
-        const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});let d=await r.json();
+        const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});let d=await r.json();
         // A changed target returns a fresh challenge. Display every current issue
         // and require a new explicit acknowledgement; cancellation never writes.
         while(d.code==='confirm_activate_empty' || d.code==='confirm_activate_invalid'){
@@ -1360,7 +1360,7 @@ async function setCurrentYear(id){
             if(!dc2)return;
             const fd2=new FormData();fd2.append('action','set_current_year');fd2.append('year_id',id);fd2.append('confirm',phrase);
             fd2.append('issues_fingerprint',d.issues_fingerprint);fd2.append('csrf_token',CSRF);
-            const r2=await fetch('/admin/api_education.php',{method:'POST',body:fd2,credentials:'same-origin'});d=await r2.json();
+            const r2=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd2,credentials:'same-origin'});d=await r2.json();
         }
         (d.warnings||[]).forEach(w=>toast(w,'e'));
         toast(d.message||(d.status==='success'?'Active year changed':'Failed'),d.status==='success'?'s':'e');
@@ -1372,7 +1372,7 @@ async function deleteYear(id){
     const y=window._yearData?.[id];const nm=y?y.year_name:'';
     const dc=await dcAsk({tier:'medium',title:'Delete the upcoming year '+nm+'?',object:nm,summary:'Only a year with NO records can be deleted.',intent:'I want to delete this year',consequences:['The year and its semesters are deleted permanently.','If the year already has any records, the system refuses.'],irreversible:true,phrase:'DELETE YEAR',confirmLabel:'Delete year'});if(!dc)return;
     const fd=new FormData();fd.append('action','delete_year');fd.append('year_id',id);fd.append('csrf_token',CSRF);
-    try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
+    try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
         toast(d.message||(d.status==='success'?'Deleted':'Failed'),d.status==='success'?'s':'e');
         if(d.status==='success')loadYears();
     }catch(e){toast('Error','e');}
@@ -1387,7 +1387,7 @@ async function openRolloverModal(){
     document.getElementById('roPreview').textContent='Loading…';
     m.classList.add('show');
     try{
-        const r=await fetch('/admin/tools/year_rollover.php?action=preview',{credentials:'same-origin'});const d=await r.json();
+        const r=await fetch('/sms/admin/tools/year_rollover.php?action=preview',{credentials:'same-origin'});const d=await r.json();
         if(d.status!=='success'){toast(d.message||'Could not load years','e');return;}
         const years=d.years||[];window._roCurrentId=d.current_id;
         const stTag=x=>{const s=x.status||(x.is_current==1?'active':'upcoming');return s==='active'?'Active':(s==='closed'?'Closed':'Upcoming');};
@@ -1403,7 +1403,7 @@ async function updateRolloverPreview(){
     const oldId=document.getElementById('roOld')?.value;if(!oldId)return;
     document.getElementById('roPreview').textContent='Counting students…';
     try{
-        const r=await fetch('/admin/tools/year_rollover.php?action=preview&old_year_id='+encodeURIComponent(oldId),{credentials:'same-origin'});const d=await r.json();
+        const r=await fetch('/sms/admin/tools/year_rollover.php?action=preview&old_year_id='+encodeURIComponent(oldId),{credentials:'same-origin'});const d=await r.json();
         if(d.status==='success'){document.getElementById('roPreview').innerHTML=`About <b>${parseInt(d.count)||0}</b> active student(s) will move out of the selected year.`;}
     }catch(e){document.getElementById('roPreview').textContent='';}
 }
@@ -1425,7 +1425,7 @@ async function runRollover(){
     const btn=document.getElementById('roRunBtn');btn.disabled=true;btn.style.opacity=.6;
     const fd=new FormData();fd.append('action','run');fd.append('old_year_id',oldId);fd.append('new_year_id',newId);fd.append('mode',mode);fd.append('confirm','ROLLOVER');fd.append('csrf_token',CSRF);
     try{
-        let r=await fetch('/admin/tools/year_rollover.php',{method:'POST',body:fd,credentials:'same-origin'});let d=await r.json();
+        let r=await fetch('/sms/admin/tools/year_rollover.php',{method:'POST',body:fd,credentials:'same-origin'});let d=await r.json();
         if(d.code==='confirm_rollover_invalid'){
             if(!Array.isArray(d.details)||!d.details.length||typeof d.issues_fingerprint!=='string'||!/^\w{64}$/.test(d.issues_fingerprint)){
                 toast('Year validation could not be confirmed. Check year settings before retrying.','e');return;
@@ -1436,7 +1436,7 @@ async function runRollover(){
                 phrase:'ACTIVATE ANYWAY',confirmLabel:'Activate Anyway'});
             if(!force)return;
             fd.set('confirm_issues','ACTIVATE ANYWAY');fd.set('issues_fingerprint',d.issues_fingerprint);
-            r=await fetch('/admin/tools/year_rollover.php',{method:'POST',body:fd,credentials:'same-origin'});d=await r.json();
+            r=await fetch('/sms/admin/tools/year_rollover.php',{method:'POST',body:fd,credentials:'same-origin'});d=await r.json();
             if(d.code==='confirm_rollover_invalid'){
                 toast('Target year settings changed. Review the year and run rollover again.','e');return;
             }
@@ -1451,7 +1451,7 @@ async function openCopyAssessmentsModal(){
     m.classList.add('show');
     document.getElementById('caPreview').textContent='Loading years…';
     try{
-        const r=await fetch('/admin/tools/year_rollover.php?action=preview',{credentials:'same-origin'});const d=await r.json();
+        const r=await fetch('/sms/admin/tools/year_rollover.php?action=preview',{credentials:'same-origin'});const d=await r.json();
         if(d.status!=='success'){toast(d.message||'Could not load years','e');return;}
         const years=d.years||[];
         const stTag=x=>{const s=x.status||(x.is_current==1?'active':'upcoming');return s==='active'?'Active':(s==='closed'?'Closed':'Upcoming');};
@@ -1474,7 +1474,7 @@ async function runCopyAssessments(){
     const btn=document.getElementById('caRunBtn');btn.disabled=true;btn.style.opacity=.6;
     const fd=new FormData();fd.append('action','copy_assessments');fd.append('source_year_id',src);fd.append('target_year_id',tgt);fd.append('confirm','COPY');fd.append('csrf_token',CSRF);
     try{
-        const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
+        const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
         toast(d.message||(d.status==='success'?'Copy complete':'Failed'),d.status==='success'?'s':'e');
         if(d.status==='success'){document.getElementById('copyAssessmentsModal').classList.remove('show');}
     }catch(e){toast('Connection lost. The copy outcome may be unknown. Do not retry until an administrator checks the target assessments.','e');}
@@ -1483,7 +1483,7 @@ async function runCopyAssessments(){
 async function viewTerms(yearId){
     window._termYearId=yearId;const area=document.getElementById('termArea');
     area.innerHTML='<div class="cd" style="text-align:center;padding:1.25rem;color:var(--dim)"><i class="fa-solid fa-spinner fa-spin"></i> Loading semesters...</div>';
-    try{const r=await fetch('/admin/api_education.php?action=get_terms&year_id='+yearId,{credentials:'same-origin'});const d=await r.json();
+    try{const r=await fetch('/sms/admin/api_education.php?action=get_terms&year_id='+yearId,{credentials:'same-origin'});const d=await r.json();
     const terms=d.terms||[];window._termData={};terms.forEach(t=>window._termData[t.id]=t);
     const yn=window._yearData?.[yearId]?.year_name||'';
     /* "Dates suggest now" hint: only for the ACTIVE year, only when today
@@ -1505,13 +1505,13 @@ async function saveTerm(termId){
     const fd=new FormData();fd.append('action','save_term');fd.append('term_id',termId);fd.append('academic_year_id',window._termYearId);
     fd.append('term_name',name);fd.append('term_number',document.getElementById('termNumber').value||1);
     fd.append('start_date',document.getElementById('termStart').value);fd.append('end_date',document.getElementById('termEnd').value);fd.append('csrf_token',CSRF);
-    try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
+    try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();
     if(d.status==='success'){toast('Semester saved!','s');document.getElementById('termModal')?.remove();viewTerms(window._termYearId);loadYears();}
     else toast(d.message||'Failed','e');}catch(e){toast('Network error','e');}
 }
-async function reopenTerm(id,open){const dc=await dcAsk(open?{tier:'medium',title:'Reopen this semester for corrections?',summary:'A closed semester is opened again so marks can be corrected.',intent:'I want to reopen this semester',consequences:['Teachers can change marks of this semester again.','Report cards for this semester may change until you close it again.'],keeps:['No records are deleted.'],phrase:'REOPEN SEMESTER',confirmLabel:'Reopen semester'}:{tier:'low',title:'Close this semester again?',summary:'Marks of this semester become read-only again.',confirmLabel:'Close semester'});if(!dc)return;const fd=new FormData();fd.append('action',open?'reopen_term':'close_term_reopen');fd.append('term_id',id);fd.append('csrf_token',CSRF);try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Updated':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
-async function setCurrentTerm(id){const dc=await dcAsk({tier:'medium',title:'Make this the current semester?',summary:'The current semester decides where new work is recorded.',intent:'I want to change the current semester',consequences:['New assessments and grades are recorded in this semester.','Teachers, report cards and the mobile app switch to this semester.'],keeps:['No records are deleted or moved.'],phrase:'SET SEMESTER',confirmLabel:'Set current semester'});if(!dc)return;const fd=new FormData();fd.append('action','set_current_term');fd.append('term_id',id);fd.append('csrf_token',CSRF);try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Updated':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
-async function deleteTerm(id){const dc=await dcAsk({tier:'high',title:'Delete this semester?',summary:'The semester is removed from the academic year.',intent:'I want to delete this semester',consequences:()=>fetch('/admin/api_education.php?action=impact_delete_term&term_id='+id,{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(!d||d.status!=='success')throw new Error('x');const c=d.counts||{};if(d.blocked)return['This semester has '+c.assessments+' assessment(s), '+c.grades+' grade record(s) and '+c.grade_submissions+' mark list(s). The system will REFUSE to delete it to protect that history.'];return['The semester is deleted permanently.','It has no assessments, grades or mark lists.'];}),fallbackConsequences:['If the semester has assessments, grades or mark lists, the system refuses.','Otherwise the semester is deleted permanently.'],irreversible:true,phrase:'DELETE SEMESTER',confirmLabel:'Delete semester'});if(!dc)return;const fd=new FormData();fd.append('action','delete_term');fd.append('term_id',id);fd.append('confirm_phrase',dc.phrase);fd.append('csrf_token',CSRF);try{const r=await fetch('/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Deleted':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
+async function reopenTerm(id,open){const dc=await dcAsk(open?{tier:'medium',title:'Reopen this semester for corrections?',summary:'A closed semester is opened again so marks can be corrected.',intent:'I want to reopen this semester',consequences:['Teachers can change marks of this semester again.','Report cards for this semester may change until you close it again.'],keeps:['No records are deleted.'],phrase:'REOPEN SEMESTER',confirmLabel:'Reopen semester'}:{tier:'low',title:'Close this semester again?',summary:'Marks of this semester become read-only again.',confirmLabel:'Close semester'});if(!dc)return;const fd=new FormData();fd.append('action',open?'reopen_term':'close_term_reopen');fd.append('term_id',id);fd.append('csrf_token',CSRF);try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Updated':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
+async function setCurrentTerm(id){const dc=await dcAsk({tier:'medium',title:'Make this the current semester?',summary:'The current semester decides where new work is recorded.',intent:'I want to change the current semester',consequences:['New assessments and grades are recorded in this semester.','Teachers, report cards and the mobile app switch to this semester.'],keeps:['No records are deleted or moved.'],phrase:'SET SEMESTER',confirmLabel:'Set current semester'});if(!dc)return;const fd=new FormData();fd.append('action','set_current_term');fd.append('term_id',id);fd.append('csrf_token',CSRF);try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Updated':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
+async function deleteTerm(id){const dc=await dcAsk({tier:'high',title:'Delete this semester?',summary:'The semester is removed from the academic year.',intent:'I want to delete this semester',consequences:()=>fetch('/sms/admin/api_education.php?action=impact_delete_term&term_id='+id,{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(!d||d.status!=='success')throw new Error('x');const c=d.counts||{};if(d.blocked)return['This semester has '+c.assessments+' assessment(s), '+c.grades+' grade record(s) and '+c.grade_submissions+' mark list(s). The system will REFUSE to delete it to protect that history.'];return['The semester is deleted permanently.','It has no assessments, grades or mark lists.'];}),fallbackConsequences:['If the semester has assessments, grades or mark lists, the system refuses.','Otherwise the semester is deleted permanently.'],irreversible:true,phrase:'DELETE SEMESTER',confirmLabel:'Delete semester'});if(!dc)return;const fd=new FormData();fd.append('action','delete_term');fd.append('term_id',id);fd.append('confirm_phrase',dc.phrase);fd.append('csrf_token',CSRF);try{const r=await fetch('/sms/admin/api_education.php',{method:'POST',body:fd,credentials:'same-origin'});const d=await r.json();toast(d.message||(d.status==='success'?'Deleted':'Failed'),d.status==='success'?'s':'e');if(d.status==='success')viewTerms(window._termYearId);}catch(e){toast('Error','e');}}
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');}
 function toast(msg,type){const t=document.getElementById('toast'),i=document.createElement('i'),s=document.createElement('span');t.className='toast '+(type==='s'?'ts':'te')+' show';i.className='fa-solid fa-'+(type==='s'?'check-circle':'exclamation-circle');s.textContent=String(msg||'');t.replaceChildren(i,s);setTimeout(()=>t.classList.remove('show'),3500);}
 function dlFile(content,filename,mime){const b=new Blob([content],{type:mime+';charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;a.click();URL.revokeObjectURL(a.href);}
@@ -1561,7 +1561,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelect
       h+='</div>'; return h;}).join('');
   }
   window.loadAttPolicy=function(){
-    fetch('/admin/api_attendance_policy.php?action=get',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
+    fetch('/sms/admin/api_attendance_policy.php?action=get',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
       if(d.status!=='success'){grid.innerHTML='<div style="font-size:.75rem;color:var(--danger,#f87171)">'+esc(d.message||'Unavailable')+'</div>';return;}
       loaded=true; render(d);
     }).catch(()=>{grid.innerHTML='<div style="font-size:.75rem">Could not load the attendance policy.</div>';});
@@ -1571,7 +1571,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelect
     if(!dc)return;
     const body={action:'save',department:dep,csrf_token:CSRF};
     grid.querySelectorAll('[data-pol="'+dep+'"]').forEach(el=>{body[el.getAttribute('data-f')]=el.type==='checkbox'?(el.checked?1:0):el.value;});
-    fetch('/admin/api_attendance_policy.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)})
+    fetch('/sms/admin/api_attendance_policy.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify(body)})
       .then(r=>r.json()).then(d=>{toast(d.message||(d.status==='success'?'Saved':'Error'),d.status==='success'?'s':'e'); if(d.status==='success') render(Object.assign({can_edit:true,available:true},d));})
       .catch(()=>toast('Network error','e'));
   };
